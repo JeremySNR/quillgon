@@ -57,6 +57,7 @@ export async function runJob<T = any>(path: string, body: unknown = {}, onProgre
       if (done) return;
       if (j.state === 'done') (done = true), off(), clearInterval(poll), resolve(j.result as T);
       else if (j.state === 'error') (done = true), off(), clearInterval(poll), reject(new ApiError(400, j.error ?? 'failed'));
+      else if (j.state === 'gone') (done = true), off(), clearInterval(poll), reject(new ApiError(410, j.error ?? 'Job disappeared'));
       else onProgress?.(j);
     };
     const off = subscribe((type, data) => {

@@ -57,18 +57,18 @@ export function BlastRadius({
       </text>
       {/* edges from the change outwards */}
       {affected.map((it) => {
-        const p = at(it.scene, rings[it.hop] || rings[3]);
-        const mid = at(it.scene, (rings[it.hop] || rings[3]) * 0.45);
+        const p = at(it.scene, rings[it.hop] ?? rings[3]);
+        const mid = at(it.scene, (rings[it.hop] ?? rings[3]) * 0.45);
         return <path key={`e-${it.scene}`} d={`M ${c} ${c} Q ${mid.x} ${mid.y} ${p.x} ${p.y}`} className="blast-edge" style={{ stroke: colour(it), opacity: it.hop >= 3 ? 0.25 : it.hop === 2 ? 0.45 : 0.7 }} />;
       })}
       {affected.map((it) => {
-        const r = rings[it.hop] || rings[3];
+        const r = rings[it.hop] ?? rings[3];
         const p = at(it.scene, r);
         const q = at(it.scene, outer);
         return <line key={`s-${it.scene}`} x1={p.x} y1={p.y} x2={q.x} y2={q.y} className="blast-spoke" />;
       })}
       {affected.map((it) => {
-        const p = at(it.scene, rings[it.hop] || rings[3]);
+        const p = at(it.scene, rings[it.hop] ?? rings[3]);
         const sel = it.scene === selected;
         return (
           <g key={it.scene} className="blast-node" transform={`translate(${p.x} ${p.y})`} onClick={() => onSelect(it.scene)} role="button" tabIndex={-1} aria-label={`${it.scene} ${titles[it.scene] ?? ''}`}>

@@ -122,6 +122,8 @@ const LABELS: Partial<Record<keyof SceneCard, string>> = {
   reveals: 'Reveals',
   mentions: 'Who speaks of what',
   deltas: 'State changes',
+  sets_up: 'Sets up',
+  pays_off: 'Pays off',
   outcome: 'Outcome',
 };
 

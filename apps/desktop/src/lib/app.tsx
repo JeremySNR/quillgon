@@ -59,18 +59,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const seq = useRef(0);
   const refreshTimer = useRef<number | null>(null);
 
+  const dismiss = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
+  const toast = useCallback(
+    (t: Omit<Toast, 'id'>) => {
+      const id = ++seq.current;
+      setToasts((ts) => [...ts.slice(-3), { ...t, id }]);
+      window.setTimeout(() => dismiss(id), t.action ? 6500 : t.kind === 'error' ? 8000 : 3500);
+    },
+    [dismiss],
+  );
+
   const refresh = useCallback(async () => {
-    const h = await get<{ open: string | null }>('/health').catch(() => ({ open: null }));
+    let h: { open: string | null };
+    try {
+      h = await get<{ open: string | null }>('/health');
+    } catch {
+      toast({ kind: 'error', message: 'Could not reach the server' });
+      setLoading(false);
+      return;
+    }
     setOpenDir(h.open);
     if (!h.open) {
       setProject(null);
       setLoading(false);
       return;
     }
-    const p = await get<Snapshot>('/project').catch(() => null);
-    setProject(p);
+    try {
+      setProject(await get<Snapshot>('/project'));
+    } catch {
+      toast({ kind: 'error', message: 'Could not reload the project' });
+    }
     setLoading(false);
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     refresh();
@@ -98,16 +118,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const next = typeof r === 'string' ? { view: r, id } : r;
     location.hash = `/${next.view}${next.id ? `/${encodeURIComponent(next.id)}` : ''}`;
   }, []);
-
-  const dismiss = useCallback((id: number) => setToasts((t) => t.filter((x) => x.id !== id)), []);
-  const toast = useCallback(
-    (t: Omit<Toast, 'id'>) => {
-      const id = ++seq.current;
-      setToasts((ts) => [...ts.slice(-3), { ...t, id }]);
-      window.setTimeout(() => dismiss(id), t.action ? 6500 : t.kind === 'error' ? 8000 : 3500);
-    },
-    [dismiss],
-  );
 
   const job = useCallback(
     async <T,>(path: string, body: unknown = {}, label?: string): Promise<T> => {
