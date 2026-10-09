@@ -79,6 +79,7 @@ export class ProjectIndex {
     for (const c of p.characters.values()) ins.run(key('character', c.id), 'character', c.id, paths.bio(c.id), c.bio.name, null);
     for (const t of p.threads.values()) ins.run(key('thread', t.id), 'thread', t.id, paths.thread(t.id), t.title, null);
     for (const pp of p.plotPoints.values()) ins.run(key('plot', pp.id), 'plot', pp.id, paths.plotPoint(pp.id), pp.title || pp.description, null);
+    for (const o of p.obligations.values()) ins.run(key('obligation', o.id), 'obligation', o.id, paths.obligation(o.id), o.description, null);
     for (const l of p.locations.locations) ins.run(key('location', l.id), 'location', l.id, paths.locations, l.name, null);
     for (const f of p.factGlossary.facts) ins.run(key('fact', f.id), 'fact', f.id, paths.factGlossary, f.statement, null);
   }

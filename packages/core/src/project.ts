@@ -8,8 +8,11 @@ import {
   CharacterVoice,
   FactGlossary,
   Intent,
+  IdeaBoard,
   Locations,
+  Obligation,
   PlotPoint,
+  StyleSheet,
   ProseMeta,
   SceneCard,
   SceneFacts,
@@ -43,6 +46,7 @@ export interface StyleFiles {
   samples: string;
   bannedRaw: string;
   banned: BannedPattern[];
+  sheet: StyleSheet;
 }
 
 export interface Project {
@@ -51,6 +55,7 @@ export interface Project {
   intent: Intent;
   plotPoints: Map<string, PlotPoint>;
   threads: Map<string, Thread>;
+  obligations: Map<string, Obligation>;
   characters: Map<string, CharacterEntry>;
   timeline: Timeline;
   structure: Structure;
@@ -58,6 +63,7 @@ export interface Project {
   style: StyleFiles;
   locations: Locations;
   factGlossary: FactGlossary;
+  idea: IdeaBoard;
 }
 
 export interface Issue {
@@ -79,6 +85,9 @@ export const paths = {
   factGlossary: 'facts.yaml',
   plotPoint: (id: string) => `plot-points/${id}.yaml`,
   thread: (id: string) => `threads/${id}.yaml`,
+  obligation: (id: string) => `obligations/${id}.yaml`,
+  idea: 'idea.yaml',
+  styleSheet: 'style/style.yaml',
   bio: (id: string) => `characters/${id}/bio.md`,
   voice: (id: string) => `characters/${id}/voice.md`,
   state: (id: string) => `characters/${id}/state.yaml`,
@@ -238,6 +247,7 @@ export function loadProject(dir: string): LoadResult {
   const timeline = yamlFile(Timeline, paths.timeline, {}) ?? Timeline.parse({});
   const locations = yamlFile(Locations, paths.locations, {}) ?? Locations.parse({});
   const factGlossary = yamlFile(FactGlossary, paths.factGlossary, {}) ?? FactGlossary.parse({});
+  const idea = yamlFile(IdeaBoard, paths.idea, {}) ?? IdeaBoard.parse({});
 
   const plotPoints = new Map<string, PlotPoint>();
   for (const f of listFiles(path.join(root, 'plot-points'), '.yaml')) {
@@ -259,6 +269,17 @@ export function loadProject(dir: string): LoadResult {
       issues.push({ severity: 'error', file: rel, path: 'id', message: `id "${t.id}" does not match file name` });
     }
     threads.set(t.id, t);
+  }
+
+  const obligations = new Map<string, Obligation>();
+  for (const f of listFiles(path.join(root, 'obligations'), '.yaml')) {
+    const rel = `obligations/${f}`;
+    const o = yamlFile(Obligation, rel, null);
+    if (!o) continue;
+    if (o.id !== f.replace(/\.yaml$/, '')) {
+      issues.push({ severity: 'error', file: rel, path: 'id', message: `id "${o.id}" does not match file name` });
+    }
+    obligations.set(o.id, o);
   }
 
   const characters = new Map<string, CharacterEntry>();
@@ -291,6 +312,7 @@ export function loadProject(dir: string): LoadResult {
     scenes.set(id, { id, card, prose, facts });
   }
 
+  const sheet = yamlFile(StyleSheet, paths.styleSheet, {}) ?? StyleSheet.parse({});
   const samples = readIf(root, paths.samples) ?? '';
   const bannedRaw = readIf(root, paths.banned) ?? '';
   let banned: BannedPattern[] = [];
@@ -306,13 +328,15 @@ export function loadProject(dir: string): LoadResult {
     intent,
     plotPoints,
     threads,
+    obligations,
     characters,
     timeline,
     structure,
     scenes,
-    style: { samples, bannedRaw, banned },
+    style: { samples, bannedRaw, banned, sheet },
     locations,
     factGlossary,
+    idea,
   };
   issues.push(...validateReferences(project));
   return { project, issues };
@@ -354,6 +378,8 @@ export function validateReferences(p: Project): Issue[] {
     c.threads_touched.forEach((t, i) => !p.threads.has(t) && err(f, `threads_touched.${i}`, `thread "${t}" does not exist`));
     c.plot_points.forEach((t, i) => !p.plotPoints.has(t) && err(f, `plot_points.${i}`, `plot point "${t}" does not exist`));
     c.mentions.forEach((m, i) => !hasChar(m.character) && err(f, `mentions.${i}.character`, `character "${m.character}" does not exist`));
+    c.sets_up.forEach((o, i) => !p.obligations.has(o) && err(f, `sets_up.${i}`, `obligation "${o}" does not exist`));
+    c.pays_off.forEach((o, i) => !p.obligations.has(o) && err(f, `pays_off.${i}`, `obligation "${o}" does not exist`));
     c.deltas.forEach((d, i) => !hasChar(d.character) && err(f, `deltas.${i}.character`, `character "${d.character}" does not exist`));
   }
 
@@ -362,6 +388,15 @@ export function validateReferences(p: Project): Issue[] {
     if (t.setup_scene && !p.scenes.has(t.setup_scene)) err(f, 'setup_scene', `scene "${t.setup_scene}" does not exist`);
     if (t.payoff_scene && !p.scenes.has(t.payoff_scene)) err(f, 'payoff_scene', `scene "${t.payoff_scene}" does not exist`);
     t.beats.forEach((b, i) => !p.scenes.has(b.scene) && err(f, `beats.${i}.scene`, `scene "${b.scene}" does not exist`));
+  }
+
+  for (const o of p.obligations.values()) {
+    const f = paths.obligation(o.id);
+    for (const k of ['setup_scene', 'eligible_from', 'payoff_scene'] as const) {
+      const s = o[k];
+      if (s && !p.scenes.has(s)) err(f, k, `scene "${s}" does not exist`);
+    }
+    o.threads.forEach((t, i) => !p.threads.has(t) && err(f, `threads.${i}`, `thread "${t}" does not exist`));
   }
 
   for (const pp of p.plotPoints.values()) {

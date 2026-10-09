@@ -14,6 +14,9 @@ export const extractor = defineAgent({
       json('Locations', i.locations),
       json('State of each character as the scene opens', i.states_before),
       json('Scene card (report any disagreement with the prose)', i.card),
+      i.obligations.length ? json('Obligations (setups and payoffs) in play', i.obligations.map((o) => ({ id: o.id, kind: o.kind, description: o.description }))) : '',
       `## Prose\n${i.prose}`,
-    ].join('\n\n'),
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
 });

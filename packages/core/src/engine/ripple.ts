@@ -439,6 +439,7 @@ export class Ripple {
         }
       } else if (c.kind === 'thread') c.before ? this.store.saveThread(c.before) : c.after && this.store.deleteThread(c.after.id);
       else if (c.kind === 'plot') c.before ? this.store.savePlotPoint(c.before) : c.after && this.store.deletePlotPoint(c.after.id);
+      else if (c.kind === 'obligation') c.before ? this.store.saveObligation(c.before) : c.after && this.store.deleteObligation(c.after.id);
       else if (c.kind === 'reorder') {
         const st = structuredClone(this.store.project.structure);
         let i = 0;

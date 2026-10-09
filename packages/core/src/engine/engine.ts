@@ -8,6 +8,10 @@ import { runContinuity } from '../quality/continuity.js';
 import { runVoiceReport } from '../quality/voice.js';
 import { runReader } from '../quality/reader.js';
 import { estimate } from './estimate.js';
+import { Ideation } from './ideation.js';
+import { critiquePlan, critiqueAlternatives, predictability } from './critics.js';
+import { runStyleCheck } from '../style-report.js';
+import type { StructureAlternative } from '../agents/contracts.js';
 import { sceneOrder } from '../project.js';
 import type { StateSnapshot } from '../schemas/index.js';
 import { uniq } from '../util.js';
@@ -15,11 +19,29 @@ import { uniq } from '../util.js';
 /** One object the CLI and server hold: the store, the agents, and every pipeline. */
 export class Engine {
   readonly pipeline: Pipeline;
+  readonly ideation: Ideation;
   constructor(
     readonly store: GraphStore,
     readonly agents: AgentSuite,
   ) {
     this.pipeline = new Pipeline(store, agents);
+    this.ideation = new Ideation(store, agents);
+  }
+
+  critique() {
+    return critiquePlan(this.store, this.agents);
+  }
+
+  critiqueAlternatives(alts: StructureAlternative[]) {
+    return critiqueAlternatives(this.store, this.agents, alts);
+  }
+
+  predictability(scene: string) {
+    return predictability(this.store, this.agents, scene);
+  }
+
+  styleCheck() {
+    return runStyleCheck(this.store);
   }
 
   /**

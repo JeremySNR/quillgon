@@ -33,6 +33,9 @@ deltas:
     learns:
       - walter-letter
     forgets: []
+sets_up:
+  - walter-letter-sent
+pays_off: []
 outcome: Eliza had a motive. Mara now suspects her.
 status: approved
 lock: none

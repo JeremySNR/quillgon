@@ -7,4 +7,7 @@ export { voice } from './voice/index.js';
 export { humaniser } from './humaniser/index.js';
 export { reader } from './reader/index.js';
 export { continuity } from './continuity/index.js';
+export { museDiverge, museExpand } from './muse/index.js';
+export { critic, sampler } from './critic/index.js';
+export { judge } from './judge/index.js';
 export { builtinPrompt, loadPrompt, intentBlock, type AgentDef } from './define.js';

@@ -10,12 +10,21 @@ import {
   GraphStore,
   initProject,
   paths,
+  checkStyle,
+  fingerprint,
+  obligationIssues,
+  readEdits,
   readerMarkdown,
+  recordEdit,
   Ripple,
+  runStyleCheck,
+  suggestRules,
+  suggestSheet,
   SchemaError,
   sceneOrder,
   type Change,
   type ReaderReport,
+  type StructureAlternative,
 } from '@novel/core';
 import { builtinPrompt, createSuite, loadPrompt } from '@novel/agents';
 import { projectSnapshot, sceneDetail } from './snapshot.js';
@@ -268,7 +277,10 @@ export class NovelServer {
       return { scene: sceneDetail(engine.store, params.id), change, impact };
     });
     r('PUT', '/api/scenes/:id/prose', ({ engine, params, body }) => {
+      const before = engine.store.scene(params.id).prose?.body;
       engine.store.saveProse(params.id, String(body.body ?? ''), 'author');
+      // Every hand edit teaches the style sheet (see style-learn.ts).
+      if (before) recordEdit(engine.store, params.id, before, String(body.body ?? ''));
       return sceneDetail(engine.store, params.id);
     });
     r('POST', '/api/scenes/:id/status', async ({ engine, params, body }) => {
@@ -417,6 +429,7 @@ export class NovelServer {
         interview: P.get('interview'),
         structures: P.get('structures'),
         cast: P.get('cast'),
+        structureCritiques: P.get('structure-critiques'),
         cards: Object.fromEntries(P.list().filter((n) => n.startsWith('cards-')).map((n) => [n.slice(6), P.get(n)])),
         extractions: P.list().filter((n) => n.startsWith('extract-')).map((n) => n.slice(8)),
       };
@@ -450,8 +463,91 @@ export class NovelServer {
     );
     r('POST', '/api/pipeline/approve', async ({ engine, body }) => (pl(engine).approve(body.scenes), await engine.store.commit(`Approve ${body.scenes.join(', ')}`), { ok: true }));
 
+
+    // --- obligations ledger
+    r('GET', '/api/obligations', ({ engine }) => ({ obligations: [...engine.store.project.obligations.values()], issues: obligationIssues(engine.store.project) }));
+    r('PUT', '/api/obligations/:id', async ({ engine, params, body }) => {
+      const o = engine.store.saveObligation({ ...body.obligation, id: params.id });
+      // Keep the cards that plant and pay it in step with the ledger.
+      for (const s of engine.store.project.scenes.values()) {
+        const c = s.card;
+        const sets = (c.id === o.setup_scene) !== c.sets_up.includes(o.id);
+        const pays = (c.id === o.payoff_scene) !== c.pays_off.includes(o.id);
+        if (sets || pays)
+          engine.store.saveCard({
+            ...c,
+            sets_up: c.id === o.setup_scene ? [...new Set([...c.sets_up, o.id])] : c.sets_up.filter((x) => x !== o.id),
+            pays_off: c.id === o.payoff_scene ? [...new Set([...c.pays_off, o.id])] : c.pays_off.filter((x) => x !== o.id),
+          });
+      }
+      await engine.store.commit(`Ledger: ${o.description}`);
+      return o;
+    });
+    r('DELETE', '/api/obligations/:id', async ({ engine, params }) => (engine.store.deleteObligation(params.id), await engine.store.commit(`Ledger: remove ${params.id}`), { ok: true }));
+
+    // --- style sheet: dials, live checking, learning from edits
+    r('GET', '/api/style/sheet', ({ engine }) => engine.store.project.style.sheet);
+    r('PUT', '/api/style/sheet', async ({ engine, body }) => {
+      const sheet = engine.store.saveStyleSheet({ ...engine.store.project.style.sheet, ...body.sheet });
+      await engine.store.commit('Edit style sheet');
+      return sheet;
+    });
+    r('POST', '/api/style/check', ({ engine, body }) => {
+      const p = engine.store.project;
+      return checkStyle(String(body.text ?? ''), p.style.sheet, { book: p.book, banned: p.style.banned });
+    });
+    r('POST', '/api/style/check-all', ({ engine }) => runStyleCheck(engine.store));
+    r('POST', '/api/style/fingerprint', ({ engine, body }) => {
+      const text = String(body.text ?? engine.store.project.style.samples);
+      const fp = fingerprint(text);
+      return { fingerprint: fp, suggested: suggestSheet(fp, engine.store.project.style.sheet) };
+    });
+    const dismissed = (e: Engine): string[] => JSON.parse(e.store.readReport('style-dismissed.json') ?? '[]');
+    const suggestions = (e: Engine) => suggestRules(readEdits(e.store), e.store.project.style.sheet, dismissed(e));
+    r('GET', '/api/style/suggestions', ({ engine }) => ({ edits: readEdits(engine.store).length, suggestions: suggestions(engine) }));
+    r('POST', '/api/style/suggestions/accept', async ({ engine, body }) => {
+      const s = suggestions(engine).find((x) => x.id === body.id);
+      if (!s) throw new HttpError(404, `no suggestion ${body.id}`);
+      engine.store.saveStyleSheet({ ...engine.store.project.style.sheet, ...s.patch });
+      await engine.store.commit(`Style: ${s.title}`);
+      return { suggestions: suggestions(engine) };
+    });
+    r('POST', '/api/style/suggestions/dismiss', ({ engine, body }) => {
+      engine.store.writeReport('style-dismissed.json', JSON.stringify([...new Set([...dismissed(engine), String(body.id)])]));
+      return { suggestions: suggestions(engine) };
+    });
+
+    // --- plan-level critics
+    r('POST', '/api/critique', ({ engine, server }) => server.job('critique', () => engine.critique()));
+    r('GET', '/api/reports/critique', ({ engine }) => JSON.parse(engine.store.readReport('critique-latest.json') ?? 'null'));
+    r('POST', '/api/pipeline/critique-structures', ({ engine, server }) =>
+      server.job('critique', async () => {
+        const alts = pl(engine).proposals.get<{ alternatives: StructureAlternative[] }>('structures')?.alternatives ?? [];
+        const critiques = await engine.critiqueAlternatives(alts);
+        pl(engine).proposals.set('structure-critiques', critiques);
+        return critiques;
+      }),
+    );
+    r('POST', '/api/scenes/:id/predictability', ({ engine, params, server }) => server.job('predictability', () => engine.predictability(params.id)));
+
+    // --- idea → premise (Spark)
+    const idea = (e: Engine) => e.ideation;
+    r('GET', '/api/idea', ({ engine }) => idea(engine).board);
+    r('POST', '/api/idea/start', ({ engine, body }) => idea(engine).start(String(body.seed ?? ''), String(body.genre ?? '')));
+    r('POST', '/api/idea/diverge', ({ engine, body, server }) => server.job('diverge', () => idea(engine).diverge({ kinds: body.kinds, personas: body.personas })));
+    r('POST', '/api/idea/mark', ({ engine, body }) => idea(engine).mark(body.id, body.status));
+    r('POST', '/api/idea/own', ({ engine, body }) => idea(engine).addOwn(String(body.text), body.kind));
+    r('POST', '/api/idea/expand', ({ engine, body, server }) => server.job('expand', () => idea(engine).expand(body.step)));
+    r('POST', '/api/idea/choose', ({ engine, body }) => idea(engine).choose(body.step, String(body.text)));
+    r('POST', '/api/idea/finish', async ({ engine }) => idea(engine).finish());
+    r('POST', '/api/idea/skip', async ({ engine }) => {
+      if (engine.store.book.stage === 'idea') engine.store.updateBook({ stage: 'intent' });
+      await engine.store.commit('Skip the idea stage');
+      return { ok: true };
+    });
+
     // --- quality
-    r('POST', '/api/quality/reader', ({ engine, body, server }) => server.job('reader', (progress) => engine.reader({ act: body.act, progress })));
+    r('POST', '/api/quality/reader', ({ engine, body, server }) => server.job('reader', (progress) => engine.reader({ act: body.act, mode: body.mode === 'outline' ? 'outline' : 'prose', progress })));
     r('POST', '/api/quality/continuity', ({ engine, body, server }) => server.job('continuity', (progress) => engine.continuity({ model: body.model !== false, progress })));
     r('POST', '/api/quality/voice', async ({ engine }) => engine.voice());
     r('GET', '/api/reports/reader', ({ engine }) =>

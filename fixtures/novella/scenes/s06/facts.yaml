@@ -25,3 +25,6 @@ facts:
     object: cottage
     confidence: 0.95
 contradictions: []
+obligations:
+  - id: walter-letter-sent
+    action: planted

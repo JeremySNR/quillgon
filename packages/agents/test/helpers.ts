@@ -34,6 +34,7 @@ export function fixtureExtractor(store: GraphStore): AgentSuite['extract'] {
       timeline: [],
       new_facts: [],
       contradictions: [],
+      obligations: s.facts?.obligations ?? [],
     };
   };
 }

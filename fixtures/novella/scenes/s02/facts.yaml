@@ -9,3 +9,6 @@ facts:
     object: harbour-office
     confidence: 0.95
 contradictions: []
+obligations:
+  - id: storm-entry
+    action: planted

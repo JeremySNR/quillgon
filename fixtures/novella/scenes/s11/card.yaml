@@ -40,6 +40,9 @@ deltas:
       - jory-forged-ledger
       - eliza-knew
     forgets: []
+sets_up: []
+pays_off:
+  - walter-letter-sent
 outcome: Eliza is given the choice Walter would have given her.
 status: approved
 lock: none

@@ -14,7 +14,9 @@ import { paths, sceneOrder } from '../project.js';
 import { canGenerate, sceneSync } from '../sync.js';
 import { writerContext } from '../context.js';
 import { fromYaml, slugify, uniq } from '../util.js';
-import { runStylePasses, type Progress, type StyleReport } from './style-passes.js';
+import { runStylePasses, type Progress, type StylePassReport } from './style-passes.js';
+import { resolveObligationScenes } from '../obligations.js';
+import { recordStyleReport } from '../style-report.js';
 import { applyExtraction, runExtraction, type ExtractionResult } from './extraction.js';
 
 /** Transient planner output awaiting the author's choice. Lives in .engine/ (not committed). */
@@ -52,12 +54,12 @@ export interface InterviewState {
 export interface WriteResult {
   scene: string;
   words: number;
-  style: StyleReport | null;
+  style: StylePassReport | null;
   extraction: ExtractionResult;
   needs_decision: string[];
 }
 
-const STAGES: PipelineStage[] = ['intent', 'plot-points', 'structure', 'cards', 'prose', 'complete'];
+const STAGES: PipelineStage[] = ['idea', 'intent', 'plot-points', 'structure', 'cards', 'prose', 'complete'];
 
 /**
  * The generation pipeline. Five layers, top-down, each a gate the author passes:
@@ -162,6 +164,7 @@ export class Pipeline {
     });
     const merged: StructureOutput = { alternatives: [...previous, ...out.alternatives], needs_decision: out.needs_decision };
     this.proposals.set('structures', merged);
+    this.proposals.delete('structure-critiques');
     return merged;
   }
 
@@ -190,6 +193,7 @@ export class Pipeline {
       if (involves.length !== pp.involves.length || threads.length !== pp.threads.length) this.store.savePlotPoint({ ...pp, involves, threads });
     }
     this.proposals.delete('structures');
+    this.proposals.delete('structure-critiques');
     this.proposals.delete('cast');
     this.advance('cards');
     await this.store.commit(`Structure: ${alt.label}`);
@@ -227,6 +231,7 @@ export class Pipeline {
       })),
       locations: this.p.locations.locations.map((l) => ({ id: l.id, name: l.name })),
       facts: this.p.factGlossary.facts,
+      obligations: [...this.p.obligations.values()].filter((o) => o.status !== 'paid' && o.status !== 'dropped'),
       previous_cards: before.slice(-3).map((id) => this.store.scene(id).card),
       words_per_scene: Math.round(this.p.book.target_words / plannedTotal / 50) * 50 || 1200,
     };
@@ -244,6 +249,10 @@ export class Pipeline {
     if (!alt) throw new Error(`no card alternative #${index} for ${chapterId}`);
     this.store.addFacts(alt.new_facts);
     this.store.addLocations(alt.new_locations);
+    for (const o of alt.new_obligations ?? []) {
+      if (this.p.obligations.has(o.id)) continue;
+      this.store.saveObligation({ id: o.id, kind: o.kind, description: o.description, notes: o.payoff_hint, status: 'planned' });
+    }
     const ids: string[] = [];
     for (const card of alt.cards) {
       const id = this.p.scenes.has(card.id) ? this.freeId(card.id, (x) => this.p.scenes.has(x) || ids.includes(x)) : card.id;
@@ -254,6 +263,8 @@ export class Pipeline {
         threads_touched: card.threads_touched.filter((t) => this.p.threads.has(t)),
         plot_points: card.plot_points.filter((t) => this.p.plotPoints.has(t)),
         mentions: card.mentions.filter((m) => this.p.characters.has(m.character)),
+        sets_up: (card.sets_up ?? []).filter((o) => this.p.obligations.has(o)),
+        pays_off: (card.pays_off ?? []).filter((o) => this.p.obligations.has(o)),
         deltas: card.deltas.filter((d) => this.p.characters.has(d.character)),
         status: 'draft',
         lock: 'none',
@@ -266,6 +277,7 @@ export class Pipeline {
     for (const a of st.acts) for (const c of a.chapters) if (c.id === chapterId) c.scenes = ids;
     this.store.saveStructure(st);
     this.resolveThreadEnds(chapterId, ids);
+    for (const o of resolveObligationScenes(this.p)) this.store.saveObligation(o);
     this.planStates(ids);
     this.proposals.delete(`cards-${chapterId}`);
     if (this.chapters().every((c) => c.scenes.length > 0)) this.advance('prose');
@@ -349,11 +361,12 @@ export class Pipeline {
     progress('write', `Writing ${scene.card.title || sceneId}`);
     const out = await this.agents.write(writerContext(this.p, sceneId, this.store.index));
     let prose = out.prose;
-    let style: StyleReport | null = null;
+    let style: StylePassReport | null = null;
     if (opts.style !== false) {
       const r = await runStylePasses(this.store, this.agents, sceneId, prose, progress);
       prose = r.prose;
       style = r.report;
+      recordStyleReport(this.store, sceneId, r.report);
     }
     this.store.saveProse(sceneId, prose, 'generated', { status: 'draft' });
     progress('extract', 'Reading the prose back into the graph');

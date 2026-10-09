@@ -4,7 +4,7 @@ import type { Project } from './project.js';
  * Typed entity keys used across the index and impact analyser.
  * "scene:s04", "character:mara", "thread:ledger", "plot:pp-drowning", "fact:ink-mismatch", "location:quay".
  */
-export type EntityKind = 'scene' | 'character' | 'thread' | 'plot' | 'fact' | 'location' | 'act' | 'chapter';
+export type EntityKind = 'scene' | 'character' | 'thread' | 'plot' | 'fact' | 'location' | 'act' | 'chapter' | 'obligation';
 export const key = (kind: EntityKind, id: string) => `${kind}:${id}`;
 export function parseKey(k: string): { kind: EntityKind; id: string } {
   const i = k.indexOf(':');
@@ -45,6 +45,15 @@ export function collectRefs(p: Project): Ref[] {
       add(from, key('fact', m.fact), 'mentions');
       add(from, key('character', m.character), 'mentions');
     }
+    for (const o of c.sets_up) add(from, key('obligation', o), 'sets_up');
+    for (const o of c.pays_off) add(from, key('obligation', o), 'pays_off');
+  }
+  for (const o of p.obligations.values()) {
+    const from = key('obligation', o.id);
+    if (o.setup_scene) add(from, key('scene', o.setup_scene), 'setup_scene');
+    if (o.payoff_scene) add(from, key('scene', o.payoff_scene), 'payoff_scene');
+    for (const t of o.threads) add(from, key('thread', t), 'threads');
+    for (const f of o.facts) add(from, key('fact', f), 'facts');
   }
   for (const t of p.threads.values()) {
     const from = key('thread', t.id);

@@ -3,6 +3,8 @@ import {
   costSummary,
   latestReaderReport,
   mechanicalContinuity,
+  obligationIssues,
+  readStyleStatus,
   Ripple,
   sceneOrder,
   scenePlaces,
@@ -32,6 +34,8 @@ export async function projectSnapshot(engine: Engine) {
   const reader = latestReaderReport(store);
   const voice = readJson<{ ran_at: string; warnings: number; repeated_phrases: unknown[]; banned: { scene: string }[] }>(store, 'voice-latest.json');
   const ripple = Ripple.current(store, engine.agents);
+  const styleStatus = readStyleStatus(store);
+  const critique = readJson<{ ran_at: string; findings: unknown[]; mechanical: unknown[] }>(store, 'critique-latest.json');
   const branches = await store.repo.branches().catch(() => ({ current: 'main', all: ['main'] }));
 
   const scenes = order.map((id) => {
@@ -49,6 +53,7 @@ export async function projectSnapshot(engine: Engine) {
       contradictions: s.facts?.contradictions ?? [],
       issues: issuesByScene.get(id) ?? [],
       engagement: reader?.engagement.find((e) => e.scene === id)?.engagement ?? null,
+      style: styleStatus[id] ?? null,
     };
   });
   const unplaced = [...p.scenes.keys()].filter((id) => !order.includes(id));
@@ -63,11 +68,15 @@ export async function projectSnapshot(engine: Engine) {
     unplaced,
     plotPoints: [...p.plotPoints.values()],
     threads: [...p.threads.values()],
+    obligations: [...p.obligations.values()],
+    obligationIssues: obligationIssues(p),
+    idea: p.idea,
     characters: [...p.characters.values()].map((c) => ({ id: c.id, bio: c.bio, voice: c.voice, state: c.state })),
     timeline: p.timeline,
     locations: p.locations.locations,
     facts: p.factGlossary.facts,
-    style: { samples: p.style.samples, banned: p.style.bannedRaw },
+    style: { samples: p.style.samples, banned: p.style.bannedRaw, sheet: p.style.sheet },
+    critique: critique ? { ran_at: critique.ran_at, findings: critique.findings.length + critique.mechanical.length } : null,
     issues: store.issues,
     continuity: { mechanical: mech, model: latestContinuity?.model ?? [], ran_at: latestContinuity?.ran_at ?? null },
     voice: voice ? { ran_at: voice.ran_at, warnings: voice.warnings } : null,

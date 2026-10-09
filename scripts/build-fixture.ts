@@ -323,6 +323,7 @@ const cards: CardIn[] = [
     beats: ["The office as he left it", "Mara sits in his chair; memory of ruling the columns", 'The entry for 3 March: force 8, heavy sea', 'Contradiction with the telegram and the coroner'],
     characters: ['mara'], threads_touched: ['ledger'], plot_points: ['pp-drowning'], reveals: ['ledger-storm-entry'],
     deltas: [{ character: 'mara', learns: ['ledger-storm-entry'], forgets: [], location: 'harbour-office' }],
+    sets_up: ['storm-entry'], pays_off: [],
     outcome: 'Mara knows the ledger and the weather disagree.', status: 'approved',
   },
   {
@@ -332,6 +333,7 @@ const cards: CardIn[] = [
     characters: ['mara', 'tom'], threads_touched: ['ledger'], reveals: ['no-storm-that-night'],
     mentions: [{ character: 'mara', fact: 'ledger-storm-entry' }, { character: 'tom', fact: 'no-storm-that-night' }],
     deltas: [{ character: 'mara', learns: ['no-storm-that-night'], forgets: [], location: 'quay' }, { character: 'tom', learns: ['ledger-storm-entry'], forgets: [] }],
+    sets_up: ['tom-holds-back'], pays_off: [],
     outcome: 'Mara is sure the entry is false and that Tom knows more.', status: 'approved',
   },
   {
@@ -350,6 +352,7 @@ const cards: CardIn[] = [
     characters: ['mara', 'jory'], threads_touched: ['ledger', 'mara-jory'], reveals: ['ink-mismatch'],
     mentions: [{ character: 'mara', fact: 'ledger-storm-entry' }, { character: 'mara', fact: 'no-storm-that-night' }, { character: 'jory', fact: 'walter-drowned' }],
     deltas: [{ character: 'mara', learns: ['ink-mismatch'], forgets: [], location: 'harbour-office' }, { character: 'jory', learns: ['ink-mismatch'], forgets: [] }],
+    sets_up: ['two-inks'], pays_off: [],
     outcome: 'Mara knows someone else wrote the entry. The rift with Jory widens.', status: 'approved',
   },
   {
@@ -359,6 +362,7 @@ const cards: CardIn[] = [
     characters: ['mara', 'tom'], threads_touched: ['cannery-debt'], reveals: ['walter-letter'],
     mentions: [{ character: 'mara', fact: 'eliza-holds-debts' }, { character: 'tom', fact: 'walter-drowned' }],
     deltas: [{ character: 'mara', learns: ['walter-letter'], forgets: [], location: 'cottage' }, { character: 'tom', learns: ['walter-letter'], forgets: [] }],
+    sets_up: ['walter-letter-sent'], pays_off: [],
     outcome: 'Eliza had a motive. Mara now suspects her.', status: 'approved',
   },
   {
@@ -368,6 +372,7 @@ const cards: CardIn[] = [
     characters: ['tom', 'jory'], threads_touched: ['ledger', 'mara-jory'],
     mentions: [{ character: 'tom', fact: 'jory-boat-lost' }, { character: 'jory', fact: 'jory-boat-lost' }],
     deltas: [{ character: 'tom', learns: [], forgets: [], location: 'ship-inn' }],
+    sets_up: ['kittiwake'], pays_off: [],
     outcome: "Jory is cornered. The reader knows about the boat; Mara doesn't.", status: 'approved',
   },
   {
@@ -386,6 +391,7 @@ const cards: CardIn[] = [
     characters: ['mara', 'tom'], threads_touched: ['ledger'], reveals: ['jory-boat-lost'],
     mentions: [{ character: 'mara', fact: 'ink-mismatch' }, { character: 'tom', fact: 'jory-boat-lost' }],
     deltas: [{ character: 'mara', learns: ['jory-boat-lost'], forgets: [], location: 'quay' }],
+    sets_up: [], pays_off: ['tom-holds-back', 'kittiwake'],
     outcome: 'Mara knows how her father died. She has not yet put Jory and the ink together aloud.', status: 'approved',
   },
   {
@@ -395,6 +401,7 @@ const cards: CardIn[] = [
     characters: ['mara', 'jory'], threads_touched: ['ledger', 'mara-jory'], plot_points: ['pp-confession'], reveals: ['jory-forged-ledger'],
     mentions: [{ character: 'mara', fact: 'jory-boat-lost' }, { character: 'mara', fact: 'ink-mismatch' }, { character: 'jory', fact: 'jory-forged-ledger' }],
     deltas: [{ character: 'mara', learns: ['jory-forged-ledger'], forgets: [], location: 'harbour-office' }],
+    sets_up: [], pays_off: ['storm-entry', 'two-inks'],
     outcome: 'The truth, and the beginning of forgiveness.', status: 'locked', lock: 'both',
   },
   {
@@ -404,6 +411,7 @@ const cards: CardIn[] = [
     characters: ['mara', 'eliza', 'tom'], threads_touched: ['cannery-debt', 'ledger'], reveals: ['eliza-knew'],
     mentions: [{ character: 'mara', fact: 'walter-letter' }, { character: 'mara', fact: 'eliza-holds-debts' }, { character: 'mara', fact: 'jory-forged-ledger' }, { character: 'eliza', fact: 'jory-forged-ledger' }],
     deltas: [{ character: 'mara', learns: ['eliza-knew'], forgets: [], location: 'cannery' }, { character: 'tom', learns: ['jory-forged-ledger', 'eliza-knew'], forgets: [] }],
+    sets_up: [], pays_off: ['walter-letter-sent'],
     outcome: 'Eliza is given the choice Walter would have given her.', status: 'approved',
   },
   {
@@ -418,6 +426,16 @@ const cards: CardIn[] = [
 ];
 
 for (const c of cards) store.saveCard(c);
+
+// The obligations ledger: what the book plants and where it pays each one off.
+const obligations = [
+  { id: 'storm-entry', kind: 'question', description: 'Why does the ledger record a storm on a calm night?', setup_scene: 's02', payoff_scene: 's10', status: 'paid', threads: ['ledger'], facts: ['ledger-storm-entry'] },
+  { id: 'tom-holds-back', kind: 'promise', description: 'Tom knows more about that night than he will say', setup_scene: 's03', payoff_scene: 's09', status: 'paid', threads: ['ledger'], facts: ['jory-boat-lost'] },
+  { id: 'two-inks', kind: 'clue', description: 'The storm entry is in blue-black shop ink, not Walter\'s iron-gall', setup_scene: 's05', eligible_from: 's09', payoff_scene: 's10', status: 'paid', threads: ['ledger'], facts: ['ink-mismatch', 'jory-forged-ledger'] },
+  { id: 'walter-letter-sent', kind: 'chekhov', description: "Walter's unsent letter to the Fisheries Committee", setup_scene: 's06', payoff_scene: 's11', status: 'paid', threads: ['cannery-debt'], facts: ['walter-letter'] },
+  { id: 'kittiwake', kind: 'foreshadowing', description: "The Kittiwake slipped her mooring that night", setup_scene: 's07', payoff_scene: 's09', status: 'paid', threads: ['ledger', 'mara-jory'], facts: ['jory-boat-lost'] },
+];
+for (const o of obligations) store.saveObligation(o);
 
 store.saveStructure({
   acts: [
@@ -446,7 +464,11 @@ for (const c of cards) {
     ...card.deltas.flatMap((d) => d.learns.map((f) => ({ subject: d.character, predicate: 'knows' as const, object: f, confidence: 0.9 }))),
     ...card.characters.map((ch) => ({ subject: ch, predicate: 'located_at' as const, object: card.location, confidence: 0.95 })),
   ];
-  store.markExtracted(c.id, { facts });
+  const obligationActions = [
+    ...card.sets_up.map((id) => ({ id, action: 'planted' as const })),
+    ...card.pays_off.map((id) => ({ id, action: 'paid' as const })),
+  ];
+  store.markExtracted(c.id, { facts, obligations: obligationActions });
 }
 
 const errors = store.errors();

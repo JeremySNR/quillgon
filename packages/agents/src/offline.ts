@@ -1,5 +1,11 @@
 import type {
   AgentSuite,
+  CritiqueOutput,
+  DivergeOutput,
+  ExpandOutput,
+  JudgeOutput,
+  LineEditOutput,
+  SampleTurnsOutput,
   CardsOutput,
   ExtractOutput,
   InterviewOutput,
@@ -95,7 +101,7 @@ export class OfflineSuite implements AgentSuite {
           { id: `${people[0]?.id ?? 'lead'}-arc`, title: `${people[0]?.name ?? 'The lead'}'s change`, kind: 'arc', description: `What ${people[0]?.name ?? 'the lead'} must give up to see clearly.`, status: 'planned', setup_chapter: 'ch-1', payoff_chapter: last },
         ],
         characters: people.map((p, i) => ({
-          bio: { id: p.id, name: p.name, role: p.role || (i === 0 ? 'protagonist' : 'supporting'), goals: [], aliases: [], background: '' },
+          bio: { id: p.id, name: p.name, role: p.role || (i === 0 ? 'protagonist' : 'supporting'), goals: [], aliases: [], background: '', want: '', need: '', wound: '', lie: '', arc: '' },
           voice: { speech_patterns: i === 0 ? ['direct questions', 'short sentences'] : ['deflects', 'answers with a question'], sample_lines: [], avoid: [], notes: '' },
         })),
       };
@@ -116,6 +122,8 @@ export class OfflineSuite implements AgentSuite {
     const ppForChapter = plot_points.filter((pp) => chapter.summary.includes(pp.description)).map((p) => p.id);
     const touch = threads.filter((t) => t.setup_chapter === chapter.id || t.payoff_chapter === chapter.id || t.status === 'open').map((t) => t.id).slice(0, 2);
     const sentences = chapter.summary.split(/(?<=[.?!])\s+/).filter(Boolean);
+    const promise = `${chapter.id}-promise`;
+    const openFromBefore = (input.obligations ?? []).filter((o) => o.status !== 'paid').map((o) => o.id);
     const mkCards = (swap: boolean) =>
       Array.from({ length: chapter.scene_count }, (_, i) => {
         const id = `s${String(first_scene_number + i).padStart(3, '0')}`;
@@ -140,13 +148,15 @@ export class OfflineSuite implements AgentSuite {
           reveals: [fact],
           mentions: [],
           deltas: [{ character: who, learns: [fact], forgets: [] }],
+          sets_up: i === 0 && chapter.scene_count > 1 ? [promise] : [],
+          pays_off: i === chapter.scene_count - 1 ? [...(chapter.scene_count > 1 ? [promise] : []), ...openFromBefore] : [],
           outcome: `${nameOf(characters, who)} knows more, and wants more.`,
         };
       });
     return {
       alternatives: [
-        { label: 'In order', kind: 'obvious', rationale: 'Each scene follows the last; the chapter summary told straight.', cards: mkCards(false), new_facts: Array.from({ length: chapter.scene_count }, (_, i) => ({ id: `${chapter.id}-clue-${i + 1}`, statement: `A clue found in ${chapter.title}, part ${i + 1}.` })), new_locations: locations.length ? [] : [{ id: 'home', name: 'Home', description: '' }] },
-        { label: 'Other eyes', kind: 'unexpected', rationale: 'The same events seen by the other person in the room.', cards: mkCards(true), new_facts: Array.from({ length: chapter.scene_count }, (_, i) => ({ id: `${chapter.id}-clue-${i + 1}`, statement: `A clue found in ${chapter.title}, part ${i + 1}.` })), new_locations: locations.length ? [] : [{ id: 'home', name: 'Home', description: '' }] },
+        { label: 'In order', kind: 'obvious', rationale: 'Each scene follows the last; the chapter summary told straight.', cards: mkCards(false), new_obligations: chapter.scene_count > 1 ? [{ id: promise, kind: 'promise' as const, description: `A promise made in ${chapter.title}`, payoff_hint: 'end of the chapter' }] : [], new_facts: Array.from({ length: chapter.scene_count }, (_, i) => ({ id: `${chapter.id}-clue-${i + 1}`, statement: `A clue found in ${chapter.title}, part ${i + 1}.` })), new_locations: locations.length ? [] : [{ id: 'home', name: 'Home', description: '' }] },
+        { label: 'Other eyes', kind: 'unexpected', rationale: 'The same events seen by the other person in the room.', cards: mkCards(true), new_obligations: chapter.scene_count > 1 ? [{ id: promise, kind: 'promise' as const, description: `A promise made in ${chapter.title}`, payoff_hint: 'end of the chapter' }] : [], new_facts: Array.from({ length: chapter.scene_count }, (_, i) => ({ id: `${chapter.id}-clue-${i + 1}`, statement: `A clue found in ${chapter.title}, part ${i + 1}.` })), new_locations: locations.length ? [] : [{ id: 'home', name: 'Home', description: '' }] },
       ],
       needs_decision: [],
     };
@@ -166,6 +176,8 @@ export class OfflineSuite implements AgentSuite {
       const f = input.facts.find((x) => x.id === m.fact);
       paras.push(`'${f?.statement ?? m.fact.replace(/-/g, ' ')}' ${nameOfId(m.character)} said.`);
     }
+    for (const o of input.obligations?.plant ?? []) paras.push(`Something was set in motion: ${o.description.toLowerCase()}.`);
+    for (const o of input.obligations?.pay ?? []) paras.push(`At last it came due: ${o.description.toLowerCase()}.`);
     paras.push(capitalise(c.outcome || 'The scene ended.'));
     return { prose: paras.join('\n\n'), needs_decision: [] };
   }
@@ -178,10 +190,23 @@ export class OfflineSuite implements AgentSuite {
     return { prose, summary: '', needs_decision: [] };
   }
 
-  async humanise({ prose, banned_hits }: Parameters<AgentSuite['humanise']>[0]) {
-    let out = prose;
-    for (const h of banned_hits) out = out.split(h.text).join(h.text === '—' ? ', ' : '');
-    return { prose: out.replace(/ {2,}/g, ' '), summary: banned_hits.length ? `removed ${banned_hits.length} banned pattern(s)` : '', needs_decision: [] };
+  /** Offline line edit: remove banned hits and flagged words where the fix is unambiguous. */
+  async humanise({ prose, banned_hits, violations }: Parameters<AgentSuite['humanise']>[0]): Promise<LineEditOutput> {
+    const edits: LineEditOutput['edits'] = [];
+    const seen = new Set<string>();
+    const removable = [...banned_hits.map((h) => ({ text: h.text, rule: 'banned' })), ...violations.filter((v) => ['never', 'adverb', 'banned', 'em-dash', 'exclamation'].includes(v.rule))];
+    for (const h of removable) {
+      if (!h.text || seen.has(h.text)) continue;
+      seen.add(h.text);
+      // Widen to a unique span: the hit plus the following space.
+      const at = prose.indexOf(h.text);
+      if (at < 0) continue;
+      const find = prose.slice(Math.max(0, at - 12), at + h.text.length + 1);
+      if (prose.indexOf(find) !== prose.lastIndexOf(find)) continue;
+      const replacement = h.text === '—' ? ', ' : h.text === '!' ? '.' : '';
+      edits.push({ find, replace: find.replace(h.text + ' ', replacement ? replacement + ' ' : '').replace(h.text, replacement), category: 'style-rule', reason: `${h.rule}: ${h.text}` });
+    }
+    return { edits };
   }
 
   async extract(input: Parameters<AgentSuite['extract']>[0]): Promise<ExtractOutput> {
@@ -207,6 +232,13 @@ export class OfflineSuite implements AgentSuite {
       timeline: [],
       new_facts: [],
       contradictions: card.characters.filter((c) => !present.includes(c)).map((c) => ({ field: 'characters', card_says: `${c} is present`, prose_says: `${c} is never named` })),
+      obligations: (input.obligations ?? []).flatMap((o) => {
+        const words = (o.description.toLowerCase().match(/[a-z]{4,}/g) ?? []).slice(0, 6);
+        const present2 = words.filter((w) => prose.toLowerCase().includes(w)).length >= Math.min(2, words.length);
+        if (!present2) return [];
+        const action = card.pays_off.includes(o.id) ? ('paid' as const) : card.sets_up.includes(o.id) ? ('planted' as const) : ('referenced' as const);
+        return [{ id: o.id, action }];
+      }),
     };
   }
 
@@ -257,11 +289,65 @@ export class OfflineSuite implements AgentSuite {
       resolved_confusions: [],
       engagement,
       predictions: [],
+      fairness: input.fairness_question ? 4 : null,
     };
   }
 
   async continuity() {
     return { contradictions: [] };
+  }
+
+  /** Offline judge: prefers the tighter version when the two are close in length. */
+  async judge(input: Parameters<AgentSuite['judge']>[0]): Promise<JudgeOutput> {
+    const a = input.a.length;
+    const b = input.b.length;
+    if (Math.abs(a - b) / Math.max(a, b, 1) > 0.25) return { winner: 'tie', reason: 'The versions differ too much in length to compare offline.' };
+    if (a === b) return { winner: 'tie', reason: 'Equivalent.' };
+    return { winner: b < a ? 'b' : 'a', reason: 'The tighter version, offline heuristic.' };
+  }
+
+  async critique(): Promise<CritiqueOutput> {
+    return { findings: [], strengths: ['Offline critic: only the structural checks that need no model were run.'] };
+  }
+
+  async sampleTurns(input: Parameters<AgentSuite['sampleTurns']>[0]): Promise<SampleTurnsOutput> {
+    const who = input.setup.match(/Present: ([^.]+)/)?.[1]?.split(',')[0]?.trim() ?? 'They';
+    const turns = ['learns something new and keeps it to themselves', 'is confronted and denies everything', 'makes a choice that costs them', 'is interrupted before they can act', 'discovers they were wrong', 'walks away'];
+    return { turns: turns.slice(0, input.k).map((t) => ({ text: `${who} ${t}.`, probability: 1 / Math.min(input.k, turns.length) })) };
+  }
+
+  async diverge(input: Parameters<AgentSuite['diverge']>[0]): Promise<DivergeOutput> {
+    // Nouns, roughly: long words that are not verb forms or plurals.
+    const nouns = [...new Set((input.seed.match(/\b[a-z]{5,}\b/gi) ?? []).map((w) => w.toLowerCase()))].filter((w) => !/(?:ing|ed|[^s]s)$/.test(w)).slice(0, 6);
+    const pick = (i: number) => nouns[i % Math.max(1, nouns.length)] ?? 'the secret';
+    const persona = input.persona.split(' ').slice(0, 3).join(' ');
+    const templates: Record<string, (i: number) => string> = {
+      'what-if': (i) => `What if the ${pick(i)} was never lost, only hidden by the person who reported it missing?`,
+      logline: (i) => `Someone who has spent years avoiding the ${pick(i)} must now protect it from the one person who understands it.`,
+      character: (i) => `A witness who lies about small things to protect one large truth about the ${pick(i)}.`,
+      twist: (i) => `The ${pick(i)} was the cause, not the clue.`,
+      setting: (i) => `A place organised entirely around the ${pick(i)}, where everyone knows the rules but nobody says them.`,
+      theme: (i) => `What we owe to people who kept the ${pick(i)} from us for our own good.`,
+      image: (i) => `A ${pick(i)} left exactly where it should not be, in plain view.`,
+    };
+    const candidates = Array.from({ length: input.k }, (_, i) => {
+      const kind = input.kinds[i % input.kinds.length];
+      return { kind, text: (templates[kind] ?? templates['what-if'])(i + input.persona.length), probability: Math.round((0.05 + ((i * 37 + input.persona.length) % 60) / 100) * 100) / 100, persona };
+    });
+    return { cliches: ['A chosen one with a hidden power', 'The mentor dies at the midpoint', 'A character named Elara'], candidates };
+  }
+
+  async expand(input: Parameters<AgentSuite['expand']>[0]): Promise<ExpandOutput> {
+    const kept = input.kept.map((k) => k.replace(/^[a-z-]+:\s*/, ''));
+    const core = input.logline || input.seed.split(/(?<=[.?!])\s/)[0];
+    if (input.step === 'logline') return { options: [core, ...kept.slice(0, 2)].filter(Boolean).slice(0, 3), cast: [] };
+    if (input.step === 'paragraph') return { options: [`${core} ${kept.join(' ')} Each attempt to put it right makes it worse, until the only way out costs the thing they came to save.`], cast: [] };
+    if (input.step === 'synopsis') return { options: [`${input.paragraph || core}\n\nThe story opens on the day everything changes, follows three escalating attempts to fix it, and ends with a choice that cannot be undone.`], cast: [] };
+    const people = namesFrom(input.seed);
+    return {
+      options: [],
+      cast: people.map((p, i) => ({ id: p.id, name: p.name, role: i === 0 ? 'protagonist' : 'supporting', want: i === 0 ? 'to put things back as they were' : 'to keep what they know hidden', need: i === 0 ? 'to accept what cannot be undone' : 'to be forgiven', wound: 'an old failure nobody mentions', lie: i === 0 ? 'that knowing the truth will make it bearable' : 'that silence is a kind of kindness', arc: i === 0 ? 'from control to acceptance' : 'refuses to change, at a cost' })),
+    };
   }
 }
 
@@ -319,7 +405,7 @@ export class ScriptedSuite extends OfflineSuite {
   constructor(overrides: Partial<AgentSuite> = {}) {
     super();
     const self = this as unknown as Record<string, (i: unknown) => Promise<unknown>>;
-    for (const m of ['interview', 'plotPoints', 'structures', 'cards', 'write', 'voice', 'reviseLines', 'humanise', 'extract', 'reviseCard', 'reviseProse', 'read', 'continuity'] as const) {
+    for (const m of ['interview', 'plotPoints', 'structures', 'cards', 'write', 'voice', 'reviseLines', 'humanise', 'extract', 'reviseCard', 'reviseProse', 'read', 'continuity', 'judge', 'critique', 'sampleTurns', 'diverge', 'expand'] as const) {
       const base = (overrides[m] as ((i: unknown) => Promise<unknown>) | undefined) ?? self[m].bind(this);
       self[m] = (i: unknown) => {
         this.calls.push({ method: m, input: i });

@@ -3,6 +3,7 @@ import type { GraphStore } from '../store.js';
 import { sceneOrder, scenePlaces } from '../project.js';
 import { cosine, LocalEmbedder } from '../embed.js';
 import { timestamp } from '../util.js';
+import { synopsis } from '../engine/critics.js';
 
 export interface PredictionHit {
   prediction: string;
@@ -15,10 +16,22 @@ export interface PredictionHit {
   score: number;
 }
 
+export interface TwistCheck {
+  scene: string;
+  what: string;
+  /** Guessed before the reveal? */
+  guessed: PredictionHit | null;
+  /** 1-5: did it feel earned in hindsight? */
+  fairness: number | null;
+  verdict: 'good' | 'guessable' | 'unearned' | 'guessable-and-unearned' | 'unknown';
+}
+
 export interface ReaderReport {
   id: string;
   ran_at: string;
   scope: string;
+  mode: 'prose' | 'outline';
+  twists: TwistCheck[];
   scenes: string[];
   log: ReaderLogEntry[];
   engagement: { scene: string; title: string; engagement: number }[];
@@ -49,8 +62,13 @@ export function predictionMatch(prediction: string, statement: string, names: st
   const sk = keywords(statement);
   const overlap = [...sk].filter((w) => pk.has(w)).length / Math.max(1, Math.min(sk.size, 6));
   // A prediction about the twist has to name who: require a shared character name when the fact names one.
-  const named = names.filter((n) => statement.toLowerCase().includes(n.toLowerCase()));
-  const nameOk = !named.length || named.some((n) => prediction.toLowerCase().includes(n.toLowerCase()));
+  // The fact's subject (the first person it names) must be the person the prediction is about.
+  const lower = statement.toLowerCase();
+  const subject = names
+    .map((n) => ({ n, at: lower.search(new RegExp(`\\b${n.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`)) }))
+    .filter((x) => x.at >= 0)
+    .sort((a, b) => a.at - b.at)[0]?.n;
+  const nameOk = !subject || prediction.toLowerCase().includes(subject.toLowerCase());
   return nameOk ? Math.max(sim, overlap) : 0;
 }
 
@@ -61,16 +79,32 @@ export function predictionMatch(prediction: string, statement: string, names: st
 export async function runReader(
   store: GraphStore,
   agents: AgentSuite,
-  opts: { act?: string; progress?: (stage: string, detail?: string) => void; threshold?: number } = {},
+  opts: { act?: string; mode?: 'prose' | 'outline'; progress?: (stage: string, detail?: string) => void; threshold?: number } = {},
 ): Promise<ReaderReport> {
   const p = store.project;
+  const mode = opts.mode ?? 'prose';
   const places = scenePlaces(p);
-  const order = sceneOrder(p).filter((s) => p.scenes.get(s)?.prose && (!opts.act || places.get(s)?.act === opts.act));
+  const order = sceneOrder(p).filter((s) => (mode === 'outline' || p.scenes.get(s)?.prose) && (!opts.act || places.get(s)?.act === opts.act));
   const log: ReaderLogEntry[] = [];
+  const revealsIn = (sid: string) => {
+    const c = p.scenes.get(sid)!.card;
+    const facts = c.reveals.map((f) => p.factGlossary.facts.find((x) => x.id === f)?.statement ?? f.replace(/-/g, ' '));
+    const paid = c.pays_off.map((o) => p.obligations.get(o)?.description).filter((x): x is string => !!x).map((d) => `pays off: ${d}`);
+    return [...facts, ...paid];
+  };
   for (let i = 0; i < order.length; i++) {
     const sid = order[i];
-    opts.progress?.('read', `Reading scene ${i + 1} of ${order.length}`);
-    const out = await agents.read({ scene: sid, scene_number: i + 1, prose: p.scenes.get(sid)!.prose!.body, log });
+    opts.progress?.('read', `Reading ${mode === 'outline' ? 'the outline of ' : ''}scene ${i + 1} of ${order.length}`);
+    const text = mode === 'outline' ? synopsis(p, sid) : p.scenes.get(sid)!.prose!.body;
+    const reveals = i > 0 ? revealsIn(sid) : [];
+    const out = await agents.read({
+      scene: sid,
+      scene_number: i + 1,
+      prose: text,
+      log,
+      mode,
+      fairness_question: reveals.length ? `This scene revealed: ${reveals.join('; ')}. Looking back at everything you read before it, how earned did that feel? 1 = out of nowhere, 5 = surprising but inevitable.` : null,
+    });
     log.push({ ...out, scene: sid });
   }
 
@@ -89,7 +123,9 @@ export async function runReader(
   // Twists: facts revealed by a scene. A prediction counts if made before the reveal and matches it.
   const threshold = opts.threshold ?? 0.34;
   const names = [...p.characters.values()].flatMap((c) => [c.bio.name.split(' ')[0], ...c.bio.aliases]);
-  const reveals = order.flatMap((sid) => p.scenes.get(sid)!.card.reveals.map((f) => ({ fact: f, scene: sid, statement: p.factGlossary.facts.find((x) => x.id === f)?.statement ?? f.replace(/-/g, ' ') })));
+  const reveals = [
+    ...order.flatMap((sid) => p.scenes.get(sid)!.card.reveals.map((f) => ({ fact: f, scene: sid, statement: p.factGlossary.facts.find((x) => x.id === f)?.statement ?? f.replace(/-/g, ' ') }))),
+  ];
   const predictions: PredictionHit[] = [];
   for (const r of reveals) {
     const revealIdx = order.indexOf(r.scene);
@@ -114,11 +150,24 @@ export async function runReader(
   for (const e of log) (e.engagement <= 2 ? run.push(e.scene) : flush());
   flush();
 
+  // Twists, two-sided: not guessed early, and fair in hindsight.
+  const twists: TwistCheck[] = order
+    .filter((sid, i) => i > 0 && revealsIn(sid).length)
+    .map((sid) => {
+      const guessed = predictions.find((x) => x.revealed_in === sid) ?? null;
+      const fairness = log.find((e) => e.scene === sid)?.fairness ?? null;
+      const unearned = fairness !== null && fairness <= 2;
+      const verdict: TwistCheck['verdict'] = guessed && unearned ? 'guessable-and-unearned' : guessed ? 'guessable' : unearned ? 'unearned' : fairness === null ? 'unknown' : 'good';
+      return { scene: sid, what: revealsIn(sid).join('; '), guessed, fairness, verdict };
+    });
+
   const id = timestamp();
   const report: ReaderReport = {
     id,
     ran_at: new Date().toISOString(),
-    scope: opts.act ?? 'book',
+    scope: `${opts.act ?? 'book'}${mode === 'outline' ? ' (outline)' : ''}`,
+    mode,
+    twists,
     scenes: order,
     log,
     engagement,
@@ -129,7 +178,7 @@ export async function runReader(
   };
   store.writeReport(`reader-${id}.json`, JSON.stringify(report, null, 2));
   store.writeReport(`reader-${id}.md`, readerMarkdown(report));
-  store.updateBook({ health: { ...store.book.health, last_reader_run: report.ran_at, reader_mean_engagement: report.mean_engagement } });
+  if (mode === 'prose') store.updateBook({ health: { ...store.book.health, last_reader_run: report.ran_at, reader_mean_engagement: report.mean_engagement } });
   return report;
 }
 
@@ -141,6 +190,9 @@ export function readerMarkdown(r: ReaderReport): string {
     '',
     '## Engagement by scene',
     ...r.engagement.map((e) => `- ${e.scene} ${'●'.repeat(e.engagement)}${'○'.repeat(5 - e.engagement)} ${e.title}`),
+    '',
+    '## Twists (two-sided: not guessed early, fair in hindsight)',
+    ...(r.twists?.length ? r.twists.map((t) => `- ${t.scene}: ${t.verdict}${t.fairness !== null ? ` (fairness ${t.fairness}/5)` : ''}${t.guessed ? `; guessed in ${t.guessed.guessed_in}` : ''} — ${t.what}`) : ['None.']),
     '',
     '## Predictions that landed early',
     ...(r.predictions.length ? r.predictions.map((p) => `- Guessed in ${p.guessed_in}, revealed in ${p.revealed_in} (${p.early_by} scenes early): "${p.prediction}" → ${p.statement}`) : ['None. No twist was called before its reveal.']),

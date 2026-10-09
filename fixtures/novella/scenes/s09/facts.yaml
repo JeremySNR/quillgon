@@ -21,3 +21,8 @@ facts:
     object: quay
     confidence: 0.95
 contradictions: []
+obligations:
+  - id: tom-holds-back
+    action: paid
+  - id: kittiwake
+    action: paid

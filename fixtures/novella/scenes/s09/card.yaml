@@ -29,6 +29,10 @@ deltas:
       - jory-boat-lost
     forgets: []
     location: quay
+sets_up: []
+pays_off:
+  - tom-holds-back
+  - kittiwake
 outcome: Mara knows how her father died. She has not yet put Jory and the ink together aloud.
 status: approved
 lock: none

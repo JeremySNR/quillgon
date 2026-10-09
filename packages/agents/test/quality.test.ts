@@ -4,13 +4,14 @@ import { fixtureEngine } from './helpers.js';
 
 /** A scripted reader: engagement and predictions per scene number. */
 function reader(script: Record<number, Partial<ReaderOutput>>) {
-  return async (i: { scene_number: number; prose: string }) => ({
+  return async (i: { scene_number: number; prose: string }): Promise<ReaderOutput> => ({
     believes: i.prose.slice(0, 80),
     expects: 'more',
     confusions: [],
     resolved_confusions: [],
     engagement: 3,
     predictions: [],
+    fairness: null,
     ...script[i.scene_number],
   });
 }

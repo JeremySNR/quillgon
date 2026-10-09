@@ -1,0 +1,12 @@
+id: storm-entry
+kind: question
+description: Why does the ledger record a storm on a calm night?
+setup_scene: s02
+eligible_from: null
+payoff_scene: s10
+status: paid
+threads:
+  - ledger
+facts:
+  - ledger-storm-entry
+notes: ""

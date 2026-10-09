@@ -15,4 +15,6 @@ Return:
 - `new_facts`: facts the prose establishes that have no id yet (id + one-line statement). Only for things that matter to plot or continuity.
 - `contradictions`: wherever the prose disagrees with the card (`field`, what the card says, what the prose says). Report every one; do not resolve them.
 
+- `obligations`: for each obligation in the inputs that this scene touches: `planted` (a reader could now notice the setup), `paid` (the payoff lands here), or `referenced` (kept alive, not resolved). Leave out the ones the prose does not touch.
+
 Use only ids from the inputs (or your `new_facts`). Match characters by name and alias.

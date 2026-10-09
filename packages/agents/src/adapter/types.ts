@@ -19,6 +19,9 @@ export interface RawResponse {
   text: string;
   inputTokens: number;
   outputTokens: number;
+  /** Prompt-cache tokens (priced differently: writes ~1.25×, reads ~0.1× input). */
+  cacheWriteTokens?: number;
+  cacheReadTokens?: number;
   model: string;
 }
 
@@ -37,6 +40,8 @@ export interface UsageRecord {
   model: string;
   input_tokens: number;
   output_tokens: number;
+  cache_read_tokens?: number;
+  cache_write_tokens?: number;
   cost_usd: number;
   attempts: number;
   ok: boolean;

@@ -56,4 +56,9 @@ export class ModelSuite implements AgentSuite {
   reviseProse: AgentSuite['reviseProse'] = (i) => this.run(A.reviseProse, i, i.new_card.id);
   read: AgentSuite['read'] = (i) => this.run(A.reader, i, i.scene);
   continuity: AgentSuite['continuity'] = (i) => this.run(A.continuity, i, i.b.id);
+  judge: AgentSuite['judge'] = (i) => this.run(A.judge, i);
+  critique: AgentSuite['critique'] = (i) => this.run(A.critic, i);
+  sampleTurns: AgentSuite['sampleTurns'] = (i) => this.run(A.sampler, i);
+  diverge: AgentSuite['diverge'] = (i) => this.run(A.museDiverge, i);
+  expand: AgentSuite['expand'] = (i) => this.run(A.museExpand, i);
 }

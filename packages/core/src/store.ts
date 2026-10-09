@@ -4,6 +4,9 @@ import {
   Book,
   FactGlossary,
   Locations,
+  Obligation,
+  StyleSheet,
+  IdeaBoard,
   CharacterBio,
   CharacterState,
   CharacterVoice,
@@ -201,6 +204,24 @@ export class GraphStore {
     this.after(`thread:${id}`);
   }
 
+  saveObligation(value: unknown) {
+    const o = parseOrThrow(Obligation, value, 'obligations/?.yaml');
+    this.write(paths.obligation(o.id), toYaml(o));
+    this.project.obligations.set(o.id, o);
+    this.after(`obligation:${o.id}`);
+    return o;
+  }
+
+  deleteObligation(id: string) {
+    this.remove(paths.obligation(id));
+    this.project.obligations.delete(id);
+    for (const s of this.project.scenes.values()) {
+      if (s.card.sets_up.includes(id) || s.card.pays_off.includes(id))
+        this.saveCard({ ...s.card, sets_up: s.card.sets_up.filter((x) => x !== id), pays_off: s.card.pays_off.filter((x) => x !== id) });
+    }
+    this.after(`obligation:${id}`);
+  }
+
   saveCharacter(value: { bio: unknown; voice?: unknown; state?: unknown }) {
     const bio = parseOrThrow(CharacterBio, value.bio, 'characters/?/bio.md');
     const prev = this.project.characters.get(bio.id);
@@ -271,6 +292,22 @@ export class GraphStore {
     for (const x of locs)
       if (!l.locations.some((y) => y.id === x.id)) (l.locations.push({ id: x.id, name: x.name, description: x.description ?? '', near: [] }), added++);
     if (added) this.saveLocations(l);
+  }
+
+  saveIdea(value: unknown) {
+    const idea = parseOrThrow(IdeaBoard, value, paths.idea);
+    this.write(paths.idea, toYaml(idea));
+    this.project.idea = idea;
+    this.after('idea');
+    return idea;
+  }
+
+  saveStyleSheet(value: unknown) {
+    const sheet = parseOrThrow(StyleSheet, value, paths.styleSheet);
+    this.write(paths.styleSheet, toYaml(sheet));
+    this.project.style.sheet = sheet;
+    this.after('style');
+    return sheet;
   }
 
   saveStyle(value: { samples?: string; banned?: string }) {

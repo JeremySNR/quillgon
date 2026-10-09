@@ -28,6 +28,9 @@ deltas:
     learns: []
     forgets: []
     location: ship-inn
+sets_up:
+  - kittiwake
+pays_off: []
 outcome: Jory is cornered. The reader knows about the boat; Mara doesn't.
 status: approved
 lock: none

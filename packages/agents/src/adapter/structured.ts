@@ -76,11 +76,15 @@ export class ModelAdapter {
     let lastText = '';
     let inTok = 0;
     let outTok = 0;
+    let cacheW = 0;
+    let cacheR = 0;
     let model = config.model;
     for (let attempt = 1; attempt <= 3; attempt++) {
       const res = await backend.call({ config, system, messages, jsonSchema, schemaName: opts.schemaName, maxTokens: opts.maxTokens ?? 32000 });
       inTok += res.inputTokens;
       outTok += res.outputTokens;
+      cacheW += res.cacheWriteTokens ?? 0;
+      cacheR += res.cacheReadTokens ?? 0;
       model = res.model;
       lastText = res.text;
       let parsed: unknown;
@@ -93,7 +97,7 @@ export class ModelAdapter {
       }
       const r = opts.schema.safeParse(parsed);
       if (r.success) {
-        this.log(opts, config, model, inTok, outTok, attempt, true);
+        this.log(opts, config, model, inTok, outTok, attempt, true, cacheW, cacheR);
         return r.data;
       }
       lastError = formatZodError(r.error);
@@ -102,12 +106,13 @@ export class ModelAdapter {
         { role: 'user', content: `Your JSON did not validate:\n${lastError}\n\nReply again with the corrected JSON object only. Change nothing else.` },
       );
     }
-    this.log(opts, config, model, inTok, outTok, 3, false);
+    this.log(opts, config, model, inTok, outTok, 3, false, cacheW, cacheR);
     throw new SchemaFailure(opts.agent, 3, lastError, lastText);
   }
 
-  private log(opts: CompleteOptions<unknown>, config: ModelConfig, model: string, inTok: number, outTok: number, attempts: number, ok: boolean) {
-    const cost = (inTok * (config.price_in ?? 0) + outTok * (config.price_out ?? 0)) / 1e6;
+  private log(opts: CompleteOptions<unknown>, config: ModelConfig, model: string, inTok: number, outTok: number, attempts: number, ok: boolean, cacheW = 0, cacheR = 0) {
+    const pin = config.price_in ?? 0;
+    const cost = (inTok * pin + cacheW * pin * 1.25 + cacheR * pin * 0.1 + outTok * (config.price_out ?? 0)) / 1e6;
     this.onUsage({
       ts: new Date().toISOString(),
       agent: opts.agent,
@@ -117,6 +122,7 @@ export class ModelAdapter {
       model,
       input_tokens: inTok,
       output_tokens: outTok,
+      ...(cacheW || cacheR ? { cache_write_tokens: cacheW, cache_read_tokens: cacheR } : {}),
       cost_usd: Math.round(cost * 1e6) / 1e6,
       attempts,
       ok,

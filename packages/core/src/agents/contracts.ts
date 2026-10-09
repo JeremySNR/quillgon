@@ -6,6 +6,7 @@ import {
   Fact,
   Id,
   Intent,
+  Obligation,
   PlotPoint,
   SceneCard,
   StateSnapshot,
@@ -102,6 +103,8 @@ export const CardsInput = z.object({
   characters: z.array(z.object({ id: Id, name: z.string(), role: z.string(), knows: z.array(Id) })),
   locations: z.array(z.object({ id: Id, name: z.string() })),
   facts: z.array(z.object({ id: Id, statement: z.string() })),
+  /** Open and planned obligations: setups waiting for a payoff. */
+  obligations: z.array(Obligation).default([]),
   previous_cards: z.array(SceneCard),
   words_per_scene: z.number(),
 });
@@ -120,6 +123,10 @@ export const CardsOutput = z.object({
         cards: z.array(CardDraft).min(1),
         new_facts: z.array(z.object({ id: Id, statement: z.string() })).default([]),
         new_locations: z.array(z.object({ id: Id, name: z.string(), description: z.string().default('') })).default([]),
+        /** Setups this chapter plants; reference them from cards' sets_up / pays_off. */
+        new_obligations: z
+          .array(z.object({ id: Id, kind: Obligation.shape.kind, description: z.string(), payoff_hint: z.string().default('') }))
+          .default([]),
       }),
     )
     .min(1)
@@ -144,6 +151,15 @@ export const WriterInput = z.object({
   banned_patterns: z.array(z.string()),
   similar_scenes: z.array(z.object({ id: Id, excerpt: z.string() })),
   target_words: z.number(),
+  obligations: z
+    .object({
+      plant: z.array(Obligation).default([]),
+      pay: z.array(Obligation).default([]),
+      keep_open: z.array(Obligation).default([]),
+    })
+    .default({ plant: [], pay: [], keep_open: [] }),
+  /** The style sheet rendered as rules. */
+  style_rules: z.array(z.string()).default([]),
 });
 export type WriterInput = z.infer<typeof WriterInput>;
 
@@ -210,8 +226,36 @@ export const HumaniseInput = z.object({
   prose: z.string(),
   skill: z.string(),
   banned_hits: z.array(z.object({ text: z.string(), rule: z.string() })).default([]),
+  /** Style violations found by code, each with the exact offending text. */
+  violations: z.array(z.object({ rule: z.string(), text: z.string(), message: z.string() })).default([]),
+  style_rules: z.array(z.string()).default([]),
+  style_samples: z.string().default(''),
 });
 export type HumaniseInput = z.infer<typeof HumaniseInput>;
+
+/** LAMP's seven categories of AI-writing habit, plus explicit style-sheet violations. */
+export const EditCategory = z.enum([
+  'cliche',
+  'unnecessary-exposition',
+  'purple-prose',
+  'poor-sentence-structure',
+  'lack-of-specificity',
+  'awkward-word-choice',
+  'tense-inconsistency',
+  'style-rule',
+]);
+
+export const SpanEdit = z.object({
+  /** Exact text from the prose to replace (must occur once). */
+  find: z.string().min(1),
+  replace: z.string(),
+  category: EditCategory,
+  reason: z.string().default(''),
+});
+export type SpanEdit = z.infer<typeof SpanEdit>;
+
+export const LineEditOutput = z.object({ edits: z.array(SpanEdit).max(40).default([]) });
+export type LineEditOutput = z.infer<typeof LineEditOutput>;
 
 // ------------------------------------------------------------------ extractor
 
@@ -222,6 +266,7 @@ export const ExtractInput = z.object({
   facts: z.array(z.object({ id: Id, statement: z.string() })),
   locations: z.array(z.object({ id: Id, name: z.string() })),
   states_before: z.array(z.object({ character: Id, snapshot: StateSnapshot.nullable() })),
+  obligations: z.array(Obligation).default([]),
 });
 export type ExtractInput = z.infer<typeof ExtractInput>;
 
@@ -241,6 +286,7 @@ export const ExtractOutput = z.object({
   timeline: z.array(z.object({ when: z.string(), description: z.string() })).default([]),
   new_facts: z.array(z.object({ id: Id, statement: z.string() })).default([]),
   contradictions: z.array(z.object({ field: z.string(), card_says: z.string(), prose_says: z.string() })).default([]),
+  obligations: z.array(z.object({ id: Id, action: z.enum(['planted', 'paid', 'referenced']) })).default([]),
 });
 export type ExtractOutput = z.infer<typeof ExtractOutput>;
 
@@ -254,6 +300,8 @@ export const ReaderLogEntry = z.object({
   resolved_confusions: z.array(z.string()).default([]),
   engagement: z.number().int().min(1).max(5),
   predictions: z.array(z.string()).default([]),
+  /** When asked: looking back, did this scene's reveal feel fair (1-5)? */
+  fairness: z.number().int().min(1).max(5).nullable().default(null),
 });
 export type ReaderLogEntry = z.infer<typeof ReaderLogEntry>;
 
@@ -262,6 +310,10 @@ export const ReaderInput = z.object({
   scene_number: z.number().int(),
   prose: z.string(),
   log: z.array(ReaderLogEntry),
+  /** Set when this scene reveals something: ask whether it was fair in hindsight. */
+  fairness_question: z.string().nullable().default(null),
+  /** 'prose' for the manuscript; 'outline' when reading scene synopses before anything is written. */
+  mode: z.enum(['prose', 'outline']).default('prose'),
 });
 export type ReaderInput = z.infer<typeof ReaderInput>;
 
@@ -282,6 +334,134 @@ export const ContinuityOutput = z.object({
 });
 export type ContinuityOutput = z.infer<typeof ContinuityOutput>;
 
+// ------------------------------------------------------------------ judge (pairwise)
+
+export const JudgeInput = z.object({
+  /** What the two texts are trying to be. */
+  task: z.string(),
+  criteria: z.array(z.string()),
+  a: z.string(),
+  b: z.string(),
+  /** Reference passages the winner should sound like (the author's own). */
+  reference: z.string().default(''),
+});
+export type JudgeInput = z.infer<typeof JudgeInput>;
+
+export const JudgeOutput = z.object({ winner: z.enum(['a', 'b', 'tie']), reason: z.string() });
+export type JudgeOutput = z.infer<typeof JudgeOutput>;
+
+// ------------------------------------------------------------------ critic (narrative shape)
+
+export const ShapeFinding = z.object({
+  kind: z.enum([
+    'theme-stated',
+    'single-track',
+    'flat-escalation',
+    'tidy-resolution',
+    'no-moral-ambiguity',
+    'archetype',
+    'rushed',
+    'sagging-middle',
+    'passive-protagonist',
+    'coincidence',
+    'unpaid-setup',
+    'other',
+  ]),
+  where: z.string(),
+  evidence: z.string(),
+  suggestion: z.string(),
+  severity: z.enum(['low', 'medium', 'high']),
+});
+export type ShapeFinding = z.infer<typeof ShapeFinding>;
+
+export const CritiqueInput = z.object({
+  intent: Intent,
+  level: z.enum(['structure', 'chapter', 'book']),
+  /** The plan being judged, as readable text (synopsis, chapters, beats). */
+  plan: z.string(),
+  characters: z.array(z.object({ id: Id, name: z.string(), want: z.string(), need: z.string(), arc: z.string() })).default([]),
+});
+export type CritiqueInput = z.infer<typeof CritiqueInput>;
+
+export const CritiqueOutput = z.object({ findings: z.array(ShapeFinding).default([]), strengths: z.array(z.string()).default([]) });
+export type CritiqueOutput = z.infer<typeof CritiqueOutput>;
+
+// ------------------------------------------------------------------ sameness sampling
+
+export const SampleTurnsInput = z.object({
+  intent: Intent,
+  /** The story so far, as card synopses. */
+  context: z.string(),
+  /** What the scene or chapter needs to do, without its chosen outcome. */
+  setup: z.string(),
+  k: z.number().int().min(3).max(10).default(6),
+});
+export type SampleTurnsInput = z.infer<typeof SampleTurnsInput>;
+
+export const SampleTurnsOutput = z.object({ turns: z.array(z.object({ text: z.string(), probability: z.number().min(0).max(1) })).min(1) });
+export type SampleTurnsOutput = z.infer<typeof SampleTurnsOutput>;
+
+// ------------------------------------------------------------------ muse (ideation)
+
+export const IdeaKind = z.enum(['logline', 'what-if', 'character', 'setting', 'twist', 'theme', 'image']);
+export const IdeaCandidate = z.object({
+  kind: IdeaKind,
+  text: z.string(),
+  /** The model's own estimate of how typical this idea is (verbalized sampling). */
+  probability: z.number().min(0).max(1),
+  persona: z.string().default(''),
+});
+export type IdeaCandidate = z.infer<typeof IdeaCandidate>;
+
+export const DivergeInput = z.object({
+  seed: z.string(),
+  genre: z.string().default(''),
+  persona: z.string(),
+  kinds: z.array(IdeaKind),
+  kept: z.array(z.string()).default([]),
+  discarded: z.array(z.string()).default([]),
+  avoid: z.array(z.string()).default([]),
+  k: z.number().int().min(3).max(12).default(8),
+});
+export type DivergeInput = z.infer<typeof DivergeInput>;
+
+export const DivergeOutput = z.object({
+  /** The genre's stock moves for this seed, listed first so the ideas can branch away from them. */
+  cliches: z.array(z.string()).default([]),
+  candidates: z.array(IdeaCandidate).min(1),
+});
+export type DivergeOutput = z.infer<typeof DivergeOutput>;
+
+export const ExpandInput = z.object({
+  step: z.enum(['logline', 'paragraph', 'synopsis', 'cast']),
+  seed: z.string(),
+  kept: z.array(z.string()).default([]),
+  logline: z.string().default(''),
+  paragraph: z.string().default(''),
+  synopsis: z.string().default(''),
+  avoid: z.array(z.string()).default([]),
+});
+export type ExpandInput = z.infer<typeof ExpandInput>;
+
+export const ExpandOutput = z.object({
+  options: z.array(z.string()).default([]),
+  cast: z
+    .array(
+      z.object({
+        id: Id,
+        name: z.string(),
+        role: z.string(),
+        want: z.string(),
+        need: z.string(),
+        wound: z.string(),
+        lie: z.string(),
+        arc: z.string(),
+      }),
+    )
+    .default([]),
+});
+export type ExpandOutput = z.infer<typeof ExpandOutput>;
+
 // ------------------------------------------------------------------ the suite the core calls
 
 export interface CallInfo {
@@ -301,12 +481,18 @@ export interface AgentSuite {
   write(input: WriterInput): Promise<WriterOutput>;
   voice(input: VoiceInput): Promise<VoiceOutput>;
   reviseLines(input: ReviseLinesInput): Promise<ProseOutput>;
-  humanise(input: HumaniseInput): Promise<ProseOutput>;
+  /** Span-level line edit (LAMP categories + style violations). Never rewrites wholesale. */
+  humanise(input: HumaniseInput): Promise<LineEditOutput>;
   extract(input: ExtractInput): Promise<ExtractOutput>;
   reviseCard(input: ReviseCardInput): Promise<ReviseCardOutput>;
   reviseProse(input: ReviseProseInput): Promise<ProseOutput>;
   read(input: ReaderInput): Promise<ReaderOutput>;
   continuity(input: ContinuityInput): Promise<ContinuityOutput>;
+  judge(input: JudgeInput): Promise<JudgeOutput>;
+  critique(input: CritiqueInput): Promise<CritiqueOutput>;
+  sampleTurns(input: SampleTurnsInput): Promise<SampleTurnsOutput>;
+  diverge(input: DivergeInput): Promise<DivergeOutput>;
+  expand(input: ExpandInput): Promise<ExpandOutput>;
 }
 
 export const Contracts = {
@@ -323,7 +509,11 @@ export const Contracts = {
     card: { input: ReviseCardInput, output: ReviseCardOutput },
     prose: { input: ReviseProseInput, output: ProseOutput },
   },
-  humaniser: { input: HumaniseInput, output: ProseOutput },
+  humaniser: { input: HumaniseInput, output: LineEditOutput },
+  judge: { input: JudgeInput, output: JudgeOutput },
+  critic: { input: CritiqueInput, output: CritiqueOutput },
+  sampler: { input: SampleTurnsInput, output: SampleTurnsOutput },
+  muse: { diverge: { input: DivergeInput, output: DivergeOutput }, expand: { input: ExpandInput, output: ExpandOutput } },
   extractor: { input: ExtractInput, output: ExtractOutput },
   reader: { input: ReaderInput, output: ReaderOutput },
   continuity: { input: ContinuityInput, output: ContinuityOutput },

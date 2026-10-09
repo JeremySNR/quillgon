@@ -34,6 +34,8 @@ deltas:
       - no-storm-that-night
       - ledger-storm-entry
     forgets: []
+sets_up: []
+pays_off: []
 outcome: Eliza becomes the obvious suspect.
 status: approved
 lock: none

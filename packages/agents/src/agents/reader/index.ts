@@ -16,6 +16,9 @@ export const reader = defineAgent({
             )
             .join('\n')}`
         : '## Your reading log so far\n(This is the first scene.)',
-      `## Scene ${i.scene_number}\n${i.prose}`,
-    ].join('\n\n'),
+      `## Scene ${i.scene_number}${i.mode === 'outline' ? ' (summary)' : ''}\n${i.prose}`,
+      i.fairness_question ? `## One question\n${i.fairness_question}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
 });

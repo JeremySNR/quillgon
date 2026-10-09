@@ -50,6 +50,9 @@ export const plannerCards = defineAgent({
       json('Characters (with what they know at the start of this chapter)', i.characters),
       json('Known locations', i.locations),
       json('Known facts', i.facts),
+      i.obligations.length ? json('Open setups awaiting payoff (pay these off; do not drop them)', i.obligations.map((o) => ({ id: o.id, kind: o.kind, description: o.description, set_up_in: o.setup_scene }))) : '',
       json('The last scene cards before this chapter', i.previous_cards),
-    ].join('\n\n'),
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
 });

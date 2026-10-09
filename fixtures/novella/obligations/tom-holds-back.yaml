@@ -1,0 +1,12 @@
+id: tom-holds-back
+kind: promise
+description: Tom knows more about that night than he will say
+setup_scene: s03
+eligible_from: null
+payoff_scene: s09
+status: paid
+threads:
+  - ledger
+facts:
+  - jory-boat-lost
+notes: ""

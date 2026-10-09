@@ -46,6 +46,11 @@ export const writer = defineAgent({
     if (i.threads.length) parts.push(`## Threads this scene touches\n${i.threads.map((t) => `- ${t.title || t.id} (${t.kind}): ${t.description}`).join('\n')}`);
     if (i.recent_cards.length) parts.push(`## The scenes just before (cards)\n${i.recent_cards.map((r) => `- ${r.id} ${r.title}: ${r.outcome}`).join('\n')}`);
     if (i.previous_prose) parts.push(`## The previous scene, in full\n${i.previous_prose}`);
+    const ob = i.obligations;
+    if (ob.plant.length) parts.push(`## Plant in this scene (setups the book must later pay off)\n${ob.plant.map((o) => `- [${o.kind}] ${o.description}`).join('\n')}`);
+    if (ob.pay.length) parts.push(`## Pay off in this scene\n${ob.pay.map((o) => `- [${o.kind}] ${o.description}`).join('\n')}`);
+    if (ob.keep_open.length) parts.push(`## Still open (keep alive, do not resolve)\n${ob.keep_open.map((o) => `- ${o.description}`).join('\n')}`);
+    if (i.style_rules.length) parts.push(`## Style sheet (checked by code)\n${i.style_rules.map((r) => `- ${r}`).join('\n')}`);
     if (i.style_samples) parts.push(`## Style samples\n${i.style_samples}`);
     if (i.banned_patterns.length) parts.push(`## Banned patterns (never use)\n${i.banned_patterns.map((b) => `- ${b}`).join('\n')}`);
     if (i.similar_scenes.length)

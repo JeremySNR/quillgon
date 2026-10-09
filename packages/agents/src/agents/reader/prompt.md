@@ -10,4 +10,8 @@ After this scene, write your entry for your reading log, in plain words:
 - `engagement`: 1 to 5. 1 = I'd put the book down; 3 = fine; 5 = I can't stop.
 - `predictions`: any guess about a twist, a secret, or how it ends. Be specific and commit to it; a vague guess is useless. Repeat a prediction if you still hold it.
 
+- `fairness`: only when you are asked about a reveal. Looking back over everything you read, how earned did it feel? 1 = out of nowhere, 3 = acceptable, 5 = surprising but inevitable. Otherwise null.
+
+Sometimes you are given scene summaries instead of finished prose (an outline). Read them the same way: you still only know what you have read so far.
+
 React as a reader, not a critic. Don't talk about craft, prose quality, structure or pacing in those words; say what you felt and thought.

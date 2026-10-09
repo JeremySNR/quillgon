@@ -31,7 +31,7 @@ export async function initProject(dir: string, opts: { title: string; genre?: st
   const root = path.resolve(dir);
   if (fs.existsSync(path.join(root, 'book.yaml'))) throw new Error(`${root} already has a book.yaml`);
   fs.mkdirSync(root, { recursive: true });
-  for (const d of ['plot-points', 'threads', 'characters', 'scenes', 'style', 'reports']) fs.mkdirSync(path.join(root, d), { recursive: true });
+  for (const d of ['plot-points', 'threads', 'obligations', 'characters', 'scenes', 'style', 'reports']) fs.mkdirSync(path.join(root, d), { recursive: true });
   fs.writeFileSync(path.join(root, 'book.yaml'), `title: ${JSON.stringify(opts.title)}\n`);
   const store = GraphStore.open(root);
   const offline = { provider: 'offline' as const, model: 'offline', price_in: 0, price_out: 0 };
@@ -39,14 +39,16 @@ export async function initProject(dir: string, opts: { title: string; genre?: st
     title: opts.title,
     genre: opts.genre ?? '',
     target_words: opts.target_words ?? 12000,
-    stage: 'intent',
+    // Start at the idea stage; an author who already has a premise can skip straight to intent.
+    stage: 'idea',
     models: opts.offline ? { frontier: offline, mid: offline, small: offline, reader: offline } : {},
   });
   store.saveIntent({});
   store.saveStructure({ acts: [] });
   store.saveTimeline({ events: [] });
   store.saveStyle({ samples: DEFAULT_SAMPLES, banned: DEFAULT_BANNED });
-  for (const d of ['plot-points', 'threads', 'characters', 'scenes', 'reports']) {
+  store.saveStyleSheet({});
+  for (const d of ['plot-points', 'threads', 'obligations', 'characters', 'scenes', 'reports']) {
     const keep = path.join(root, d, '.gitkeep');
     if (!fs.readdirSync(path.join(root, d)).length) fs.writeFileSync(keep, '');
   }

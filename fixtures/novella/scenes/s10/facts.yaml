@@ -25,3 +25,8 @@ facts:
     object: harbour-office
     confidence: 0.95
 contradictions: []
+obligations:
+  - id: storm-entry
+    action: paid
+  - id: two-inks
+    action: paid

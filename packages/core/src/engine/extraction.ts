@@ -4,6 +4,7 @@ import type { GraphStore } from '../store.js';
 import { sceneOrder, stateBefore } from '../project.js';
 import { factsDiff } from '../impact.js';
 import { uniq } from '../util.js';
+import { obligationStatusAfter } from '../obligations.js';
 
 export function extractInput(store: GraphStore, sceneId: string, prose?: string): ExtractInput {
   const p = store.project;
@@ -16,6 +17,9 @@ export function extractInput(store: GraphStore, sceneId: string, prose?: string)
     facts: p.factGlossary.facts,
     locations: p.locations.locations.map((l) => ({ id: l.id, name: l.name })),
     states_before: s.card.characters.map((c) => ({ character: c, snapshot: stateBefore(p, c, sceneId, order)?.snapshot ?? null })),
+    obligations: [...p.obligations.values()].filter(
+      (o) => s.card.sets_up.includes(o.id) || s.card.pays_off.includes(o.id) || (o.status === 'open' && o.setup_scene && order.indexOf(o.setup_scene) < order.indexOf(sceneId)),
+    ),
   };
 }
 
@@ -36,6 +40,11 @@ export function compareWithCard(card: SceneCard, out: ExtractOutput): Contradict
     const somewhere = out.facts.some((x) => x.object === f) || out.states.some((s) => s.learns.includes(f));
     if (!somewhere) add({ field: 'reveals', card_says: `reveals ${f}`, prose_says: 'not revealed in the prose' });
   }
+  for (const o of card.sets_up)
+    if (!(out.obligations ?? []).some((x) => x.id === o && (x.action === 'planted' || x.action === 'referenced')))
+      add({ field: 'sets_up', card_says: `plants ${o}`, prose_says: 'not planted in the prose' });
+  for (const o of card.pays_off)
+    if (!(out.obligations ?? []).some((x) => x.id === o && x.action === 'paid')) add({ field: 'pays_off', card_says: `pays off ${o}`, prose_says: 'not paid off in the prose' });
   for (const st of out.states) {
     if (!st.alive) add({ field: `characters.${st.character}`, card_says: `${st.character} is alive`, prose_says: `${st.character} dies` });
   }
@@ -128,8 +137,12 @@ export function applyExtraction(store: GraphStore, r: ExtractionResult, opts: { 
     }
     store.saveTimeline(tl);
   }
+  for (const o of p.obligations.values()) {
+    const status = obligationStatusAfter(o, r.output.obligations ?? []);
+    if (status !== o.status) store.saveObligation({ ...o, status });
+  }
   if (opts.adoptCard) store.saveCard(r.proposedCard, { adoptIntoProse: true });
-  store.markExtracted(r.scene, { facts: r.facts, contradictions: opts.adoptCard ? [] : r.contradictions });
+  store.markExtracted(r.scene, { facts: r.facts, contradictions: opts.adoptCard ? [] : r.contradictions, obligations: r.output.obligations ?? [] });
 }
 
 /**

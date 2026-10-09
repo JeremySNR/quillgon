@@ -46,7 +46,9 @@ export class AnthropicBackend implements Backend {
     const params = {
       model: req.config.model,
       max_tokens: req.maxTokens,
-      system: req.system,
+      // The system prompt (shared rules + intent + agent prompt + output schema) is stable
+      // across calls: cache it, so repeated calls read it at a fraction of the price.
+      system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }],
       messages: req.messages,
       ...(Object.keys(outputConfig).length ? { output_config: outputConfig } : {}),
       ...(fallbackCapable ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' } : {}),
@@ -62,7 +64,15 @@ export class AnthropicBackend implements Backend {
       .filter((b): b is Anthropic.TextBlock => b.type === 'text')
       .map((b) => b.text)
       .join('');
-    return { text, inputTokens: msg.usage.input_tokens, outputTokens: msg.usage.output_tokens, model: msg.model };
+    const u = msg.usage as Anthropic.Usage & { cache_creation_input_tokens?: number | null; cache_read_input_tokens?: number | null };
+    return {
+      text,
+      inputTokens: u.input_tokens,
+      outputTokens: u.output_tokens,
+      cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
+      cacheReadTokens: u.cache_read_input_tokens ?? 0,
+      model: msg.model,
+    };
   }
 }
 

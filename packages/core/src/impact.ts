@@ -1,4 +1,4 @@
-import type { Fact, PlotPoint, SceneCard, StateSnapshot, Thread } from './schemas/index.js';
+import type { Fact, Obligation, PlotPoint, SceneCard, StateSnapshot, Thread } from './schemas/index.js';
 import { sceneOrder, type Project } from './project.js';
 import type { ProjectIndex } from './index-db.js';
 import { uniq } from './util.js';
@@ -19,6 +19,7 @@ export type Change =
   | { kind: 'character'; character: string; field: 'bio' | 'voice'; description?: string }
   | { kind: 'thread'; before: Thread | null; after: Thread | null; description?: string }
   | { kind: 'plot'; before: PlotPoint | null; after: PlotPoint | null; description?: string }
+  | { kind: 'obligation'; before: Obligation | null; after: Obligation | null; description?: string }
   | { kind: 'reorder'; before: string[]; after: string[]; description?: string }
   | { kind: 'delete-scene'; scene: string; card: SceneCard; orderBefore: string[]; description?: string };
 
@@ -170,6 +171,8 @@ export function describeChange(p: Project, c: Change): string {
       return `Thread "${(c.after ?? c.before)?.title || (c.after ?? c.before)?.id}" ${c.after ? (c.before ? 'changed' : 'added') : 'removed'}`;
     case 'plot':
       return `Plot point "${(c.after ?? c.before)?.title || (c.after ?? c.before)?.id}" ${c.after ? (c.before ? 'changed' : 'added') : 'removed'}: ${(c.after ?? c.before)?.description}`;
+    case 'obligation':
+      return `Setup “${(c.after ?? c.before)?.description}” ${c.after ? (c.before ? 'changed' : 'added') : 'removed'}`;
     case 'reorder':
       return 'Scenes were reordered';
     case 'delete-scene':
@@ -181,7 +184,7 @@ export function cardDiffSummary(a: SceneCard, b: SceneCard): string[] {
   const out: string[] = [];
   const arr = (k: keyof SceneCard) => JSON.stringify(a[k]) !== JSON.stringify(b[k]);
   for (const k of ['title', 'pov', 'location', 'time', 'purpose', 'outcome'] as const) if (a[k] !== b[k]) out.push(`${k} changed`);
-  for (const k of ['beats', 'characters', 'threads_touched', 'plot_points', 'reveals', 'mentions', 'deltas'] as const) if (arr(k)) out.push(`${k} changed`);
+  for (const k of ['beats', 'characters', 'threads_touched', 'plot_points', 'reveals', 'mentions', 'deltas', 'sets_up', 'pays_off'] as const) if (arr(k)) out.push(`${k} changed`);
   return out;
 }
 
@@ -262,7 +265,30 @@ export function analyseImpact(p: Project, change: Change, index: ProjectIndex | 
           out.add(end, 2, `${end === t.setup_scene ? 'sets up' : 'pays off'} thread "${t.title || t.id}", which ${change.scene} touches`, touchedChanged ? 0.6 : 0.5);
         }
       }
-      // POV change: voice and interiority of this scene only (hop 0 already covers it).
+      // Obligations: a setup no longer planted here strands its payoff; a payoff moved here
+      // must not come before its setup.
+      for (const oid of uniq([...b.sets_up, ...a.sets_up, ...b.pays_off, ...a.pays_off])) {
+        const o = p.obligations.get(oid);
+        if (!o) continue;
+        const label = `“${o.description}”`;
+        if (b.sets_up.includes(oid) && !a.sets_up.includes(oid) && o.payoff_scene && o.payoff_scene !== change.scene)
+          out.add(o.payoff_scene, 1, `pays off ${label}, which is no longer set up in ${change.scene}`, 0.9);
+        if (!b.sets_up.includes(oid) && a.sets_up.includes(oid) && o.setup_scene && o.setup_scene !== change.scene)
+          out.add(o.setup_scene, 1, `also sets up ${label}, now planted in ${change.scene}`, 0.6);
+        if (b.pays_off.includes(oid) !== a.pays_off.includes(oid) && o.setup_scene && o.setup_scene !== change.scene)
+          out.add(o.setup_scene, 2, `sets up ${label}, whose payoff ${a.pays_off.includes(oid) ? 'now lands' : 'no longer lands'} in ${change.scene}`, 0.5);
+        if (storyChanged && a.sets_up.includes(oid) && b.sets_up.includes(oid) && o.payoff_scene && o.payoff_scene !== change.scene)
+          out.add(o.payoff_scene, 2, `pays off ${label}, set up in ${change.scene}, which changed`, 0.5);
+      }
+      break;
+    }
+
+    case 'obligation': {
+      const ob = change.before;
+      const oa = change.after;
+      const label = `“${(oa ?? ob)!.description}”`;
+      for (const sid of uniq([ob?.setup_scene, oa?.setup_scene].filter((x): x is string => !!x))) out.add(sid, 1, `sets up ${label}`, 0.9);
+      for (const sid of uniq([ob?.payoff_scene, oa?.payoff_scene].filter((x): x is string => !!x))) out.add(sid, 1, `pays off ${label}`, 0.9);
       break;
     }
 

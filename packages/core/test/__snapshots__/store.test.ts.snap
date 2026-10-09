@@ -138,6 +138,41 @@ exports[`phase 1: schemas and store > the index rebuilds from files and matches 
       "title": "The Ship",
     },
     {
+      "file": "obligations/kittiwake.yaml",
+      "id": "kittiwake",
+      "key": "obligation:kittiwake",
+      "kind": "obligation",
+      "title": "The Kittiwake slipped her mooring that night",
+    },
+    {
+      "file": "obligations/storm-entry.yaml",
+      "id": "storm-entry",
+      "key": "obligation:storm-entry",
+      "kind": "obligation",
+      "title": "Why does the ledger record a storm on a calm night?",
+    },
+    {
+      "file": "obligations/tom-holds-back.yaml",
+      "id": "tom-holds-back",
+      "key": "obligation:tom-holds-back",
+      "kind": "obligation",
+      "title": "Tom knows more about that night than he will say",
+    },
+    {
+      "file": "obligations/two-inks.yaml",
+      "id": "two-inks",
+      "key": "obligation:two-inks",
+      "kind": "obligation",
+      "title": "The storm entry is in blue-black shop ink, not Walter's iron-gall",
+    },
+    {
+      "file": "obligations/walter-letter-sent.yaml",
+      "id": "walter-letter-sent",
+      "key": "obligation:walter-letter-sent",
+      "kind": "obligation",
+      "title": "Walter's unsent letter to the Fisheries Committee",
+    },
+    {
       "file": "plot-points/pp-confession.yaml",
       "id": "pp-confession",
       "key": "plot:pp-confession",
@@ -3687,6 +3722,116 @@ exports[`phase 1: schemas and store > the index rebuilds from files and matches 
       "to_key": "scene:s10",
     },
     {
+      "field": "facts",
+      "from_key": "obligation:kittiwake",
+      "to_key": "fact:jory-boat-lost",
+    },
+    {
+      "field": "setup_scene",
+      "from_key": "obligation:kittiwake",
+      "to_key": "scene:s07",
+    },
+    {
+      "field": "payoff_scene",
+      "from_key": "obligation:kittiwake",
+      "to_key": "scene:s09",
+    },
+    {
+      "field": "threads",
+      "from_key": "obligation:kittiwake",
+      "to_key": "thread:ledger",
+    },
+    {
+      "field": "threads",
+      "from_key": "obligation:kittiwake",
+      "to_key": "thread:mara-jory",
+    },
+    {
+      "field": "facts",
+      "from_key": "obligation:storm-entry",
+      "to_key": "fact:ledger-storm-entry",
+    },
+    {
+      "field": "setup_scene",
+      "from_key": "obligation:storm-entry",
+      "to_key": "scene:s02",
+    },
+    {
+      "field": "payoff_scene",
+      "from_key": "obligation:storm-entry",
+      "to_key": "scene:s10",
+    },
+    {
+      "field": "threads",
+      "from_key": "obligation:storm-entry",
+      "to_key": "thread:ledger",
+    },
+    {
+      "field": "facts",
+      "from_key": "obligation:tom-holds-back",
+      "to_key": "fact:jory-boat-lost",
+    },
+    {
+      "field": "setup_scene",
+      "from_key": "obligation:tom-holds-back",
+      "to_key": "scene:s03",
+    },
+    {
+      "field": "payoff_scene",
+      "from_key": "obligation:tom-holds-back",
+      "to_key": "scene:s09",
+    },
+    {
+      "field": "threads",
+      "from_key": "obligation:tom-holds-back",
+      "to_key": "thread:ledger",
+    },
+    {
+      "field": "facts",
+      "from_key": "obligation:two-inks",
+      "to_key": "fact:ink-mismatch",
+    },
+    {
+      "field": "facts",
+      "from_key": "obligation:two-inks",
+      "to_key": "fact:jory-forged-ledger",
+    },
+    {
+      "field": "setup_scene",
+      "from_key": "obligation:two-inks",
+      "to_key": "scene:s05",
+    },
+    {
+      "field": "payoff_scene",
+      "from_key": "obligation:two-inks",
+      "to_key": "scene:s10",
+    },
+    {
+      "field": "threads",
+      "from_key": "obligation:two-inks",
+      "to_key": "thread:ledger",
+    },
+    {
+      "field": "facts",
+      "from_key": "obligation:walter-letter-sent",
+      "to_key": "fact:walter-letter",
+    },
+    {
+      "field": "setup_scene",
+      "from_key": "obligation:walter-letter-sent",
+      "to_key": "scene:s06",
+    },
+    {
+      "field": "payoff_scene",
+      "from_key": "obligation:walter-letter-sent",
+      "to_key": "scene:s11",
+    },
+    {
+      "field": "threads",
+      "from_key": "obligation:walter-letter-sent",
+      "to_key": "thread:cannery-debt",
+    },
+    {
       "field": "involves",
       "from_key": "plot:pp-confession",
       "to_key": "character:jory",
@@ -3802,6 +3947,11 @@ exports[`phase 1: schemas and store > the index rebuilds from files and matches 
       "to_key": "location:harbour-office",
     },
     {
+      "field": "sets_up",
+      "from_key": "scene:s02",
+      "to_key": "obligation:storm-entry",
+    },
+    {
       "field": "plot_points",
       "from_key": "scene:s02",
       "to_key": "plot:pp-drowning",
@@ -3855,6 +4005,11 @@ exports[`phase 1: schemas and store > the index rebuilds from files and matches 
       "field": "location",
       "from_key": "scene:s03",
       "to_key": "location:quay",
+    },
+    {
+      "field": "sets_up",
+      "from_key": "scene:s03",
+      "to_key": "obligation:tom-holds-back",
     },
     {
       "field": "threads_touched",
@@ -3965,6 +4120,11 @@ exports[`phase 1: schemas and store > the index rebuilds from files and matches 
       "field": "location",
       "from_key": "scene:s05",
       "to_key": "location:harbour-office",
+    },
+    {
+      "field": "sets_up",
+      "from_key": "scene:s05",
+      "to_key": "obligation:two-inks",
     },
     {
       "field": "threads_touched",
@@ -4022,6 +4182,11 @@ exports[`phase 1: schemas and store > the index rebuilds from files and matches 
       "to_key": "location:cottage",
     },
     {
+      "field": "sets_up",
+      "from_key": "scene:s06",
+      "to_key": "obligation:walter-letter-sent",
+    },
+    {
       "field": "threads_touched",
       "from_key": "scene:s06",
       "to_key": "thread:cannery-debt",
@@ -4065,6 +4230,11 @@ exports[`phase 1: schemas and store > the index rebuilds from files and matches 
       "field": "location",
       "from_key": "scene:s07",
       "to_key": "location:ship-inn",
+    },
+    {
+      "field": "sets_up",
+      "from_key": "scene:s07",
+      "to_key": "obligation:kittiwake",
     },
     {
       "field": "threads_touched",
@@ -4167,6 +4337,16 @@ exports[`phase 1: schemas and store > the index rebuilds from files and matches 
       "to_key": "location:quay",
     },
     {
+      "field": "pays_off",
+      "from_key": "scene:s09",
+      "to_key": "obligation:kittiwake",
+    },
+    {
+      "field": "pays_off",
+      "from_key": "scene:s09",
+      "to_key": "obligation:tom-holds-back",
+    },
+    {
       "field": "threads_touched",
       "from_key": "scene:s09",
       "to_key": "thread:ledger",
@@ -4225,6 +4405,16 @@ exports[`phase 1: schemas and store > the index rebuilds from files and matches 
       "field": "location",
       "from_key": "scene:s10",
       "to_key": "location:harbour-office",
+    },
+    {
+      "field": "pays_off",
+      "from_key": "scene:s10",
+      "to_key": "obligation:storm-entry",
+    },
+    {
+      "field": "pays_off",
+      "from_key": "scene:s10",
+      "to_key": "obligation:two-inks",
     },
     {
       "field": "plot_points",
@@ -4310,6 +4500,11 @@ exports[`phase 1: schemas and store > the index rebuilds from files and matches 
       "field": "location",
       "from_key": "scene:s11",
       "to_key": "location:cannery",
+    },
+    {
+      "field": "pays_off",
+      "from_key": "scene:s11",
+      "to_key": "obligation:walter-letter-sent",
     },
     {
       "field": "threads_touched",

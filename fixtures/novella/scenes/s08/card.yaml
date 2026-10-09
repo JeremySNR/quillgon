@@ -27,6 +27,8 @@ deltas:
     learns:
       - walter-letter
     forgets: []
+sets_up: []
+pays_off: []
 outcome: Eliza admits the weights but denies the drowning, and points at Jory.
 status: approved
 lock: none

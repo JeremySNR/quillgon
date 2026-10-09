@@ -24,6 +24,9 @@ deltas:
       - ledger-storm-entry
     forgets: []
     location: harbour-office
+sets_up:
+  - storm-entry
+pays_off: []
 outcome: Mara knows the ledger and the weather disagree.
 status: approved
 lock: none

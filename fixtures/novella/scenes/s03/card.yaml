@@ -33,6 +33,9 @@ deltas:
     learns:
       - ledger-storm-entry
     forgets: []
+sets_up:
+  - tom-holds-back
+pays_off: []
 outcome: Mara is sure the entry is false and that Tom knows more.
 status: approved
 lock: none

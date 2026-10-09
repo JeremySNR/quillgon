@@ -33,6 +33,10 @@ deltas:
       - jory-forged-ledger
     forgets: []
     location: harbour-office
+sets_up: []
+pays_off:
+  - storm-entry
+  - two-inks
 outcome: The truth, and the beginning of forgiveness.
 status: locked
 lock: both

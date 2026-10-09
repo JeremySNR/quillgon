@@ -25,6 +25,12 @@ import {
   Structure,
   Thread,
   costSummary,
+  checkStyle,
+  fingerprint,
+  obligationIssues,
+  readEdits,
+  suggestRules,
+  suggestSheet,
   type Change,
   type Impact,
   type RippleItem,
@@ -130,7 +136,7 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
       const title = (flags.title as string) ?? (await ask('Title:', path.basename(dir)));
       const store = await initProject(dir, { title, target_words: Number(flags.words) || 12000, offline: !!flags.offline });
       say(green(`Created ${store.dir}`));
-      say(`Next: ${cyan(`novel intent --dir ${dir}`)}`);
+      say(`Next: ${cyan(`novel spark --dir ${dir}`)} to develop an idea, or ${cyan(`novel intent --dir ${dir}`)} if you have a premise.`);
       store.close();
     },
   },
@@ -184,6 +190,113 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
     },
   },
 
+  spark: {
+    help: 'spark ["seed idea"] [--genre G]   Idea → premise: diverge, keep/discard, expand to logline, synopsis, cast',
+    async run() {
+      const e = openEngine();
+      const I = e.ideation;
+      const seed = args[0] ?? (I.board.seed || (await ask('A seed: a line, an image, a what-if:\n>')));
+      I.start(seed, (flags.genre as string) ?? I.board.genre);
+      for (let round = 1; ; round++) {
+        say(dim(`\nAsking ${round === 1 ? 'four' : 'four more'} different minds…`));
+        const b = await I.diverge();
+        const fresh = b.pile.filter((i) => i.status === 'new');
+        if (b.cliches.length && round === 1) say(dim(`Clichés to steer away from: ${b.cliches.slice(0, 8).join('; ')}`));
+        for (const i of fresh) {
+          say(`\n${cyan(i.kind)} ${dim(`${Math.round(i.probability * 100)}% typical · ${i.persona}`)}${i.near_cliche ? yellow(`  near “${i.near_cliche}”`) : ''}\n  ${i.text}`);
+          const a = (await ask('[k]eep, [d]iscard, [s]kip?', i.near_cliche ? 's' : 'k')).toLowerCase();
+          if (a.startsWith('k')) I.mark(i.id, 'kept');
+          else if (a.startsWith('d')) I.mark(i.id, 'discarded');
+        }
+        const own = await ask('\nAdd an idea of your own (blank to go on):');
+        if (own) I.addOwn(own);
+        if (yes || !(await confirm('Another round?', false))) break;
+      }
+      for (const step of ['logline', 'paragraph', 'synopsis'] as const) {
+        say(dim(`\nDrafting ${step} options…`));
+        const b = await I.expand(step);
+        const options = b[`${step}_options`];
+        options.forEach((o, i) => say(`\n${cyan(`[${i}]`)} ${o}`));
+        const pick = Number(await ask(`Pick a ${step}:`, '0'));
+        I.choose(step, options[pick] ?? options[0]);
+      }
+      say(dim('\nCasting…'));
+      const b = await I.expand('cast');
+      for (const c of b.cast) say(`  ${bold(c.name)} ${dim(c.role)}  wants ${c.want}; needs ${c.need}`);
+      if (await confirm('Use this premise and cast?')) {
+        await I.finish();
+        say(green('✓ Premise written to intent.md.') + ` Next: ${cyan('novel intent')}`);
+      }
+    },
+  },
+
+  ledger: {
+    help: 'ledger   Setups and payoffs: every clue, promise and question, and what is unpaid',
+    run() {
+      const p = loadProject(projectDir()).project;
+      const order = sceneOrder(p);
+      const os = [...p.obligations.values()].sort((a, b) => order.indexOf(a.setup_scene ?? '') - order.indexOf(b.setup_scene ?? ''));
+      for (const o of os) say(`  ${(o.status === 'paid' ? green : o.status === 'dropped' ? dim : yellow)(o.status.padEnd(7))} ${dim(o.kind.padEnd(13))} ${(o.setup_scene ?? '—').padEnd(5)} → ${(o.payoff_scene ?? '—').padEnd(5)} ${o.description}`);
+      if (!os.length) say(dim('  The ledger is empty. Cards add to it as they are planned.'));
+      const issues = obligationIssues(p);
+      for (const i of issues) say(`${i.severity === 'high' ? red('●') : yellow('●')} ${i.scene} ${i.message}`);
+      if (issues.length) process.exitCode = 1;
+    },
+  },
+
+  style: {
+    help: 'style [check|learn|fit] [--scene s01]   Check prose against style.yaml; learn rules from your edits; fit the dials to your samples',
+    run() {
+      const store = GraphStore.open(projectDir());
+      const p = store.project;
+      const sub = args[0] ?? 'check';
+      if (sub === 'fit') {
+        const fp = fingerprint(p.style.samples);
+        say(bold('Your samples') + dim(` (${fp.words} words)`));
+        say(`  sentences ${fp.sentence_mean} ± ${fp.sentence_sd} words, dialogue ${Math.round(fp.dialogue_share * 100)}%, adverbs ${fp.adverbs_per_1000}/1k, em dashes ${fp.em_dashes_per_1000}/1k, ${fp.quotes} quotes, ${fp.spelling} spelling`);
+        const next = suggestSheet(fp, p.style.sheet);
+        say(`\n${bold('Suggested style.yaml')}\n${YAML.stringify(next)}`);
+        if (flags.write) store.saveStyleSheet(next), say(green('✓ Written to style/style.yaml'));
+        else say(dim('Pass --write to save it.'));
+      } else if (sub === 'learn') {
+        const edits = readEdits(store);
+        const s = suggestRules(edits, p.style.sheet);
+        say(dim(`${edits.length} hand edit(s) recorded.`));
+        for (const x of s) say(`  ${cyan('+')} ${x.title} ${dim(`(${x.evidence})`)}`);
+        if (!s.length) say(dim('  No repeated patterns yet.'));
+      } else {
+        let enforced = 0;
+        for (const id of flags.scene ? [flags.scene as string] : sceneOrder(p)) {
+          const prose = p.scenes.get(id)?.prose?.body;
+          if (!prose) continue;
+          const r = checkStyle(prose, p.style.sheet, { book: p.book, banned: p.style.banned });
+          enforced += r.enforced;
+          say(`${id.padEnd(5)} ${r.enforced ? red(`${r.enforced} enforced`) : green('clean')}  ${dim(`${r.guided} guided · ${r.stats.sentence_mean} words/sentence`)}`);
+          if (flags.scene || flags.verbose) for (const v of r.violations.slice(0, 40)) say(`    ${v.kind === 'enforced' ? red('●') : yellow('○')} ${v.message}${v.text ? dim(`  “${v.text.slice(0, 50)}”`) : ''}`);
+        }
+        if (enforced) process.exitCode = 1;
+      }
+      store.close();
+    },
+  },
+
+  critique: {
+    help: 'critique [--scene s05]   Judge the plan before prose: structural tells, or how predictable one scene is',
+    async run() {
+      const e = openEngine();
+      if (flags.scene) {
+        const r = await e.predictability(flags.scene as string);
+        say(`${bold(r.scene)} ${r.verdict === 'predictable' ? red(r.verdict) : r.verdict === 'expected' ? yellow(r.verdict) : green(r.verdict)} ${dim(`(${Math.round(r.score * 100)}% of the model's own guesses land on your turn)`)}`);
+        for (const s of r.samples) say(`  ${s.similarity >= 0.3 ? yellow('≈') : dim('·')} ${s.text} ${dim(`p=${s.probability} sim=${s.similarity}`)}`);
+        return;
+      }
+      const r = await e.critique();
+      for (const f of [...r.mechanical, ...r.findings]) say(`${f.severity === 'high' ? red('●') : yellow('●')} ${bold(f.kind)} ${dim(f.where)}\n    ${f.evidence}\n    ${cyan('→')} ${f.suggestion}`);
+      for (const s of r.strengths) say(green(`  + ${s}`));
+      say(dim('\nWritten to reports/critique-latest.json'));
+    },
+  },
+
   intent: {
     help: 'intent   Interview: answer a few questions, approve the intent',
     async run() {
@@ -208,7 +321,7 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
       const e = openEngine();
       const pl = e.pipeline;
       const p = e.store.project;
-      if (['intent', 'plot-points'].includes(p.book.stage)) {
+      if (['idea', 'intent', 'plot-points'].includes(p.book.stage)) {
         say(bold('Plot points'));
         while (!yes) {
           const d = await ask('Pin an event that must happen (blank to continue):');
@@ -368,10 +481,10 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
   },
 
   read: {
-    help: 'read [--act act-1]   Simulated first reader: engagement, confusion, predictions',
+    help: 'read [--act act-1] [--outline]   Simulated first reader: engagement, confusion, predictions, twist fairness',
     async run() {
       const e = openEngine();
-      const r = await e.reader({ act: flags.act as string | undefined, progress });
+      const r = await e.reader({ act: flags.act as string | undefined, mode: flags.outline ? 'outline' : 'prose', progress });
       say(`\n${bold('Engagement')}  mean ${r.mean_engagement}/5`);
       for (const x of r.engagement) say(`  ${x.scene.padEnd(5)} ${'█'.repeat(x.engagement * 2).padEnd(10)} ${dim(x.title)}`);
       say(`\n${bold('Predictions that landed early')}`);
@@ -380,6 +493,8 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
       say(`\n${bold('Unresolved confusion')}`);
       for (const c of r.confusions.filter((c) => !c.resolved_in)) say(`  ${c.scene}: ${c.text}`);
       for (const b of r.boredom) say(red(`  Boredom run ${b.from} → ${b.to}`));
+      if (r.twists?.length) say(`\n${bold('Twists')}`);
+      for (const t of r.twists ?? []) say(`  ${t.verdict === 'good' ? green('✓') : t.verdict === 'unknown' ? dim('?') : yellow('●')} ${t.scene} ${t.what}: ${t.verdict}${t.fairness !== null ? dim(` (fair ${t.fairness}/5)`) : ''}${t.guessed ? dim(` guessed in ${t.guessed.guessed_in}`) : ''}`);
       say(dim(`\nWritten to reports/reader-${r.id}.md`));
     },
   },

@@ -29,3 +29,6 @@ facts:
     object: harbour-office
     confidence: 0.95
 contradictions: []
+obligations:
+  - id: two-inks
+    action: planted

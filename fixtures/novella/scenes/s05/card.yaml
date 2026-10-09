@@ -36,6 +36,9 @@ deltas:
     learns:
       - ink-mismatch
     forgets: []
+sets_up:
+  - two-inks
+pays_off: []
 outcome: Mara knows someone else wrote the entry. The rift with Jory widens.
 status: approved
 lock: none

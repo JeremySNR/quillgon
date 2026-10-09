@@ -35,6 +35,7 @@ export const ModelConfig = z.object({
 export type ModelConfig = z.infer<typeof ModelConfig>;
 
 export const AgentName = z.enum([
+  'muse',
   'interviewer',
   'planner',
   'writer',
@@ -44,6 +45,8 @@ export const AgentName = z.enum([
   'humaniser',
   'reader',
   'continuity',
+  'critic',
+  'judge',
 ]);
 export type AgentName = z.infer<typeof AgentName>;
 
@@ -55,6 +58,9 @@ export const DEFAULT_MODELS: Record<ModelTier, ModelConfig> = {
 };
 
 export const DEFAULT_AGENT_TIERS: Record<AgentName, ModelTier> = {
+  muse: 'frontier',
+  critic: 'frontier',
+  judge: 'frontier',
   interviewer: 'frontier',
   planner: 'frontier',
   writer: 'frontier',
@@ -66,7 +72,7 @@ export const DEFAULT_AGENT_TIERS: Record<AgentName, ModelTier> = {
   continuity: 'small',
 };
 
-export const PipelineStage = z.enum(['intent', 'plot-points', 'structure', 'cards', 'prose', 'complete']);
+export const PipelineStage = z.enum(['idea', 'intent', 'plot-points', 'structure', 'cards', 'prose', 'complete']);
 export type PipelineStage = z.infer<typeof PipelineStage>;
 
 export const Book = z.object({
@@ -75,7 +81,7 @@ export const Book = z.object({
   target_words: z.number().int().positive().default(12000),
   pov_mode: z.enum(['first', 'third-limited', 'third-omniscient', 'multiple']).default('third-limited'),
   tense: z.enum(['past', 'present']).default('past'),
-  stage: PipelineStage.default('intent'),
+  stage: PipelineStage.default('idea'),
   models: z
     .object({
       frontier: ModelConfig.optional(),
@@ -163,6 +169,16 @@ export const CharacterBio = z.object({
   role: z.string().default(''),
   goals: z.array(z.string()).default([]),
   aliases: z.array(z.string()).default([]),
+  /** What they think they want. */
+  want: z.string().default(''),
+  /** What they actually need (often in tension with the want). */
+  need: z.string().default(''),
+  /** The old hurt that shapes them. */
+  wound: z.string().default(''),
+  /** The false belief they act on until the story breaks it. */
+  lie: z.string().default(''),
+  /** How they change, or refuse to. Ambiguity and failure are allowed. */
+  arc: z.string().default(''),
   /** Markdown body of bio.md. */
   background: z.string().default(''),
 });
@@ -252,11 +268,37 @@ export const SceneCard = z.object({
   mentions: z.array(Mention).default([]),
   /** Expected character-state deltas, checked against extraction. */
   deltas: z.array(StateDelta).default([]),
+  /** Obligations this scene plants (clues, promises, questions, Chekhov's guns). */
+  sets_up: z.array(Id).default([]),
+  /** Obligations this scene pays off. */
+  pays_off: z.array(Id).default([]),
   outcome: z.string().default(''),
   status: Status.default('draft'),
   lock: Lock.default('none'),
 });
 export type SceneCard = z.infer<typeof SceneCard>;
+
+// ---------------------------------------------------------------- obligations/<id>.yaml
+
+/**
+ * The obligations ledger: everything the book promises the reader and must pay off.
+ * A setup is planted in one scene and paid off in a later one; until then it is open,
+ * and the writer is told to keep it alive without resolving it.
+ */
+export const Obligation = z.object({
+  id: Id,
+  kind: z.enum(['clue', 'promise', 'question', 'foreshadowing', 'chekhov', 'reveal']).default('clue'),
+  description: z.string().min(1),
+  setup_scene: Id.nullable().default(null),
+  /** Earliest scene the payoff may happen in (defaults to right after the setup). */
+  eligible_from: Id.nullable().default(null),
+  payoff_scene: Id.nullable().default(null),
+  status: z.enum(['planned', 'open', 'paid', 'dropped']).default('planned'),
+  threads: z.array(Id).default([]),
+  facts: z.array(Id).default([]),
+  notes: z.string().default(''),
+});
+export type Obligation = z.infer<typeof Obligation>;
 
 // ---------------------------------------------------------------- scenes/<id>/prose.md (frontmatter)
 
@@ -288,8 +330,77 @@ export const SceneFacts = z.object({
   facts: z.array(Fact).default([]),
   /** Where the prose disagreed with the card at extraction. The scene is flagged until resolved. */
   contradictions: z.array(Contradiction).default([]),
+  /** What the prose actually did with each obligation. */
+  obligations: z.array(z.object({ id: Id, action: z.enum(['planted', 'paid', 'referenced']) })).default([]),
 });
 export type SceneFacts = z.infer<typeof SceneFacts>;
+
+// ---------------------------------------------------------------- idea.yaml (the ideation board)
+
+export const IdeaItem = z.object({
+  id: z.string(),
+  kind: z.enum(['logline', 'what-if', 'character', 'setting', 'twist', 'theme', 'image', 'note']),
+  text: z.string(),
+  probability: z.number().min(0).max(1).default(0.5),
+  persona: z.string().default(''),
+  status: z.enum(['new', 'kept', 'discarded']).default('new'),
+  /** Close to a known cliché (embedding similarity) or a stock LLM name/setting. */
+  near_cliche: z.string().nullable().default(null),
+  /** Added by the author rather than generated. */
+  mine: z.boolean().default(false),
+});
+export type IdeaItem = z.infer<typeof IdeaItem>;
+
+export const IdeaBoard = z.object({
+  seed: z.string().default(''),
+  genre: z.string().default(''),
+  cliches: z.array(z.string()).default([]),
+  pile: z.array(IdeaItem).default([]),
+  logline: z.string().default(''),
+  logline_options: z.array(z.string()).default([]),
+  paragraph: z.string().default(''),
+  paragraph_options: z.array(z.string()).default([]),
+  synopsis: z.string().default(''),
+  synopsis_options: z.array(z.string()).default([]),
+  cast: z
+    .array(z.object({ id: Id, name: z.string(), role: z.string(), want: z.string(), need: z.string(), wound: z.string(), lie: z.string(), arc: z.string() }))
+    .default([]),
+  done: z.boolean().default(false),
+});
+export type IdeaBoard = z.infer<typeof IdeaBoard>;
+
+// ---------------------------------------------------------------- style/style.yaml
+
+/**
+ * The style sheet: dials, each of which maps to a check. "Enforced" rules are checked on
+ * every word by code; "guided" ones are measured and judged. See style-check.ts.
+ */
+export const StyleSheet = z.object({
+  spelling: z.enum(['any', 'uk', 'us']).default('any'),
+  quotes: z.enum(['any', 'single', 'double']).default('any'),
+  dialogue_tags: z.enum(['any', 'simple', 'said-only']).default('any'),
+  em_dashes: z.enum(['allow', 'limit', 'ban']).default('limit'),
+  em_dashes_per_1000: z.number().min(0).default(3),
+  semicolons: z.enum(['allow', 'dialogue-only', 'ban']).default('allow'),
+  exclamations: z.enum(['allow', 'dialogue-only', 'ban']).default('dialogue-only'),
+  contractions: z.enum(['any', 'avoid-in-narration']).default('any'),
+  sentence_words: z
+    .object({ mean_min: z.number().default(7), mean_max: z.number().default(24), max: z.number().default(60) })
+    .default({ mean_min: 7, mean_max: 24, max: 60 }),
+  dialogue_share: z.object({ min: z.number().default(0), max: z.number().default(0.75) }).default({ min: 0, max: 0.75 }),
+  paragraph_sentences_max: z.number().int().positive().default(9),
+  adverbs_per_1000_max: z.number().min(0).default(14),
+  filter_words_per_1000_max: z.number().min(0).default(6),
+  /** Words and phrases that must never appear. */
+  never: z.array(z.string()).default([]),
+  /** Always use one word instead of another. */
+  prefer: z.array(z.object({ avoid: z.string(), use: z.string() })).default([]),
+  /** Rules a model judges rather than code checks ("feeling carried in objects, not named"). */
+  guidance: z.array(z.string()).default([]),
+  /** Repair rounds after drafting before remaining issues go to the author. */
+  repair_passes: z.number().int().min(0).max(4).default(2),
+});
+export type StyleSheet = z.infer<typeof StyleSheet>;
 
 // ---------------------------------------------------------------- locations.yaml (optional glossary)
 

@@ -29,6 +29,8 @@ deltas:
     learns: []
     forgets: []
     location: harbour
+sets_up: []
+pays_off: []
 outcome: Mara is home, unwelcome, and already doubting the story.
 status: approved
 lock: none

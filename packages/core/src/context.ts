@@ -2,6 +2,8 @@ import type { Project } from './project.js';
 import { sceneOrder, stateAt, stateBefore } from './project.js';
 import type { ProjectIndex } from './index-db.js';
 import type { WriterInput } from './agents/contracts.js';
+import { obligationsForScene } from './obligations.js';
+import { styleRules } from './style-sheet.js';
 
 /**
  * Writer context per scene. Deliberately scoped: full-manuscript context makes the
@@ -49,6 +51,8 @@ export function writerContext(p: Project, sceneId: string, index: ProjectIndex |
     banned_patterns: p.style.banned.map((b) => b.source),
     similar_scenes: similar,
     target_words: Math.round(p.book.target_words / scenesTotal / 50) * 50 || 1200,
+    obligations: obligationsForScene(p, sceneId, order),
+    style_rules: styleRules(p),
   };
 }
 
@@ -64,28 +68,8 @@ export interface DialogueLine {
   paragraph: number;
 }
 
-const OPEN = new Set(["'", '‘', '"', '“']);
-const CLOSE = new Set(["'", '’', '"', '”']);
-const BEFORE_OPEN = /[\s(—–-]/;
-const AFTER_CLOSE = /[\s,.;:!?—–)]/;
-
-/** Quoted spans in a paragraph, telling apostrophes (don't, Mara's) from closing quotes. */
-export function quotedSpans(para: string): { start: number; end: number; text: string }[] {
-  const spans: { start: number; end: number; text: string }[] = [];
-  let open = -1;
-  for (let i = 0; i < para.length; i++) {
-    const ch = para[i];
-    const prev = i > 0 ? para[i - 1] : ' ';
-    const next = i + 1 < para.length ? para[i + 1] : ' ';
-    if (open < 0) {
-      if (OPEN.has(ch) && BEFORE_OPEN.test(prev) && !/\s/.test(next)) open = i;
-    } else if (CLOSE.has(ch) && !/\s/.test(prev) && AFTER_CLOSE.test(next)) {
-      spans.push({ start: open, end: i + 1, text: para.slice(open + 1, i) });
-      open = -1;
-    }
-  }
-  return spans;
-}
+export { quotedSpans } from './text.js';
+import { quotedSpans } from './text.js';
 
 /**
  * Pull dialogue from prose and attribute it to speakers. Heuristic: a character's name

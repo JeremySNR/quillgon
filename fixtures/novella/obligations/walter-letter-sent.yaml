@@ -1,0 +1,12 @@
+id: walter-letter-sent
+kind: chekhov
+description: Walter's unsent letter to the Fisheries Committee
+setup_scene: s06
+eligible_from: null
+payoff_scene: s11
+status: paid
+threads:
+  - cannery-debt
+facts:
+  - walter-letter
+notes: ""
