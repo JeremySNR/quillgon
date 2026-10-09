@@ -4,6 +4,8 @@ kind: setup-payoff
 description: Eliza holds the village's debts and short-weighs its catch. Walter was about to report her.
 setup_scene: s04
 payoff_scene: s11
+setup_chapter: null
+payoff_chapter: null
 status: paid-off
 beats:
   - scene: s06

@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   Book,
+  FactGlossary,
+  Locations,
   CharacterBio,
   CharacterState,
   CharacterVoice,
@@ -237,6 +239,38 @@ export class GraphStore {
     this.project.timeline = tl;
     this.after('timeline');
     return tl;
+  }
+
+  saveFactGlossary(value: unknown) {
+    const g = parseOrThrow(FactGlossary, value, paths.factGlossary);
+    this.write(paths.factGlossary, toYaml(g));
+    this.project.factGlossary = g;
+    this.after('facts');
+    return g;
+  }
+
+  /** Add facts that don't exist yet; existing ids are left alone. */
+  addFacts(facts: { id: string; statement: string }[]) {
+    const g = structuredClone(this.project.factGlossary);
+    let added = 0;
+    for (const f of facts) if (!g.facts.some((x) => x.id === f.id)) (g.facts.push(f), added++);
+    if (added) this.saveFactGlossary(g);
+  }
+
+  saveLocations(value: unknown) {
+    const l = parseOrThrow(Locations, value, paths.locations);
+    this.write(paths.locations, toYaml(l));
+    this.project.locations = l;
+    this.after('locations');
+    return l;
+  }
+
+  addLocations(locs: { id: string; name: string; description?: string }[]) {
+    const l = structuredClone(this.project.locations);
+    let added = 0;
+    for (const x of locs)
+      if (!l.locations.some((y) => y.id === x.id)) (l.locations.push({ id: x.id, name: x.name, description: x.description ?? '', near: [] }), added++);
+    if (added) this.saveLocations(l);
   }
 
   saveStyle(value: { samples?: string; banned?: string }) {

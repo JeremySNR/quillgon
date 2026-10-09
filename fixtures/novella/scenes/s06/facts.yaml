@@ -24,3 +24,4 @@ facts:
     predicate: located_at
     object: cottage
     confidence: 0.95
+contradictions: []

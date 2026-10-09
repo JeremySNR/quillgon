@@ -4,6 +4,8 @@ kind: relationship
 description: Estranged siblings; one left, one stayed. Ends in partial repair.
 setup_scene: s01
 payoff_scene: s12
+setup_chapter: null
+payoff_chapter: null
 status: paid-off
 beats:
   - scene: s05

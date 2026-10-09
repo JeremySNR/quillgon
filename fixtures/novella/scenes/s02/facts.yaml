@@ -8,3 +8,4 @@ facts:
     predicate: located_at
     object: harbour-office
     confidence: 0.95
+contradictions: []

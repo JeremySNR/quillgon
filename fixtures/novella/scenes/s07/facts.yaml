@@ -16,3 +16,4 @@ facts:
     predicate: located_at
     object: ship-inn
     confidence: 0.95
+contradictions: []

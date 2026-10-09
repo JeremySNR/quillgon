@@ -371,7 +371,7 @@ const cards: CardIn[] = [
     outcome: "Jory is cornered. The reader knows about the boat; Mara doesn't.", status: 'approved',
   },
   {
-    id: 's08', title: 'The Offer', pov: 'mara', location: 'cannery', time: '1926-03-15 afternoon',
+    id: 's08', title: 'The Offer', pov: 'mara', location: 'cannery', time: '1926-03-15 evening',
     purpose: "Mara confronts Eliza with the letter; Eliza turns suspicion toward Jory.",
     beats: ['Eliza offers to buy the harbour house', 'Everybody owes somebody', 'Mara lays the letter on the desk', 'Eliza drops the smile: the weights pay for the carrying', "'Ask your brother where he was that night.'"],
     characters: ['mara', 'eliza'], threads_touched: ['cannery-debt'],

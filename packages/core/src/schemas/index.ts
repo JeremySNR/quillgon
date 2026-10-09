@@ -147,6 +147,9 @@ export const Thread = z.object({
   description: z.string().default(''),
   setup_scene: Id.nullable().default(null),
   payoff_scene: Id.nullable().default(null),
+  /** Planned ends at chapter level, resolved to scenes once cards exist. */
+  setup_chapter: Id.nullable().default(null),
+  payoff_chapter: Id.nullable().default(null),
   status: z.enum(['planned', 'open', 'paid-off', 'dropped']).default('open'),
   beats: z.array(z.object({ scene: Id, note: z.string() })).default([]),
 });
@@ -203,7 +206,14 @@ export type Timeline = z.infer<typeof Timeline>;
 
 // ---------------------------------------------------------------- structure.yaml
 
-export const Chapter = z.object({ id: Id, title: z.string().default(''), scenes: z.array(Id).default([]) });
+export const Chapter = z.object({
+  id: Id,
+  title: z.string().default(''),
+  summary: z.string().default(''),
+  /** Scenes the planner intends for this chapter, before cards exist. */
+  planned_scenes: z.number().int().nonnegative().default(0),
+  scenes: z.array(Id).default([]),
+});
 export type Chapter = z.infer<typeof Chapter>;
 export const Act = z.object({ id: Id, title: z.string().default(''), chapters: z.array(Chapter).default([]) });
 export type Act = z.infer<typeof Act>;
@@ -270,9 +280,14 @@ export const Fact = z.object({
 });
 export type Fact = z.infer<typeof Fact>;
 
+export const Contradiction = z.object({ field: z.string(), card_says: z.string(), prose_says: z.string() });
+export type Contradiction = z.infer<typeof Contradiction>;
+
 export const SceneFacts = z.object({
   extracted_from: z.string().nullable().default(null),
   facts: z.array(Fact).default([]),
+  /** Where the prose disagreed with the card at extraction. The scene is flagged until resolved. */
+  contradictions: z.array(Contradiction).default([]),
 });
 export type SceneFacts = z.infer<typeof SceneFacts>;
 

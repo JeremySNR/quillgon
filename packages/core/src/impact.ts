@@ -80,7 +80,7 @@ const sceneLabel = (p: Project, id: string) => {
 function mentionsIn(p: Project, scene: string): { character: string; fact: string; source: 'card' | 'prose' }[] {
   const s = p.scenes.get(scene);
   if (!s) return [];
-  const out = s.card.mentions.map((m) => ({ ...m, source: 'card' as const }));
+  const out: { character: string; fact: string; source: 'card' | 'prose' }[] = s.card.mentions.map((m) => ({ ...m, source: 'card' as const }));
   for (const f of s.facts?.facts ?? []) {
     if (f.predicate === 'mentions' && !out.some((m) => m.character === f.subject && m.fact === f.object))
       out.push({ character: f.subject, fact: f.object, source: 'prose' });
@@ -120,6 +120,17 @@ function laterMentions(p: Project, order: string[], fromIdx: number, character: 
     if (mentionsIn(p, sid).some((m) => m.character === character && m.fact === fact)) out.push(sid);
   }
   return out;
+}
+
+/** True when the character knew the fact before any scene card teaches it (backstory). */
+function priorKnowledge(p: Project, character: string, fact: string, order: string[]): boolean {
+  const ch = p.characters.get(character);
+  if (!ch) return false;
+  for (const sid of order) {
+    if (learnsIn(p, sid, character, fact)) return false;
+    if (ch.state[sid]?.knows.includes(fact)) return true;
+  }
+  return false;
 }
 
 function nextSceneWith(p: Project, order: string[], fromIdx: number, character: string): string | null {
@@ -356,9 +367,11 @@ export function analyseImpact(p: Project, change: Change, index: ProjectIndex | 
           out.add(s, 2, 'moved; its neighbours changed', 0.5);
         }
       }
-      // Knowledge now used before it is learned.
+      // Knowledge now used before it is learned. Facts a character knew before any scene
+      // teaches them (backstory, per their earliest snapshot) are never "learned late".
       for (let i = 0; i < order.length; i++) {
         for (const m of mentionsIn(p, order[i])) {
+          if (priorKnowledge(p, m.character, m.fact, before)) continue;
           const learnedAt = order.findIndex((s) => learnsIn(p, s, m.character, m.fact));
           if (learnedAt > i) {
             out.add(order[i], 1, `${name(p, m.character)} speaks about "${factLabel(p, m.fact)}" before learning it in ${order[learnedAt]}`, 0.95);

@@ -4,6 +4,8 @@ kind: mystery
 description: The ledger records a storm on a calm night. Someone other than Walter wrote it.
 setup_scene: s02
 payoff_scene: s10
+setup_chapter: null
+payoff_chapter: null
 status: paid-off
 beats:
   - scene: s03
