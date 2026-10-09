@@ -1,15 +1,15 @@
 {
-  "name": "@novel/cli",
+  "name": "@quillgon/cli",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "bin": {
-    "novel": "./bin/novel.mjs"
+    "quillgon": "./bin/quillgon.mjs"
   },
   "dependencies": {
-    "@novel/agents": "workspace:*",
-    "@novel/core": "workspace:*",
-    "@novel/server": "workspace:*",
+    "@quillgon/agents": "workspace:*",
+    "@quillgon/core": "workspace:*",
+    "@quillgon/server": "workspace:*",
     "yaml": "^2.8.1",
     "zod": "^4.1.0",
     "diff": "^8.0.2",

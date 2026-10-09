@@ -1,4 +1,4 @@
-// Electron shell. Starts the local Novel Engine server (plain Node, so native modules
+// Electron shell. Starts the local Quillgon server (plain Node, so native modules
 // like better-sqlite3 load without an Electron rebuild) and opens the UI it serves.
 const { app, BrowserWindow, dialog, ipcMain, shell, nativeTheme } = require('electron');
 const { spawn } = require('node:child_process');
@@ -10,11 +10,11 @@ let win = null;
 
 function startServer() {
   return new Promise((resolve, reject) => {
-    const node = process.env.NOVEL_NODE || 'node';
+    const node = process.env.QUILLGON_NODE || 'node';
     const tsx = require.resolve('tsx', { paths: [root] });
     const cli = path.join(root, 'packages', 'cli', 'src', 'main.ts');
     const args = ['--import', require('node:url').pathToFileURL(tsx).href, cli, 'serve', '--port', '0'];
-    if (process.env.NOVEL_PROJECT) args.push('--dir', process.env.NOVEL_PROJECT);
+    if (process.env.QUILLGON_PROJECT) args.push('--dir', process.env.QUILLGON_PROJECT);
     server = spawn(node, args, { cwd: root, env: { ...process.env, FORCE_COLOR: '0' } });
     let out = '';
     server.stdout.on('data', (d) => {
@@ -34,7 +34,7 @@ async function createWindow() {
     height: 920,
     minWidth: 980,
     minHeight: 640,
-    title: 'Novel Engine',
+    title: 'Quillgon',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#110e0b' : '#f9f6f1',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 16, y: 14 },
@@ -44,11 +44,11 @@ async function createWindow() {
   win.once('ready-to-show', () => win.show());
   win.webContents.setWindowOpenHandler(({ url: u }) => (shell.openExternal(u), { action: 'deny' }));
   await win.loadURL(url);
-  // NOVEL_SCREENSHOT=file.png: capture the window once it has rendered, then quit (smoke test).
-  if (process.env.NOVEL_SCREENSHOT) {
+  // QUILLGON_SCREENSHOT=file.png: capture the window once it has rendered, then quit (smoke test).
+  if (process.env.QUILLGON_SCREENSHOT) {
     setTimeout(async () => {
       const img = await win.webContents.capturePage();
-      require('node:fs').writeFileSync(process.env.NOVEL_SCREENSHOT, img.toPNG());
+      require('node:fs').writeFileSync(process.env.QUILLGON_SCREENSHOT, img.toPNG());
       app.quit();
     }, 2500);
   }

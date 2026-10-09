@@ -34,7 +34,7 @@ export class Repo {
 
   private async ensureIdentity() {
     const name = await this.git.getConfig('user.name');
-    if (!name.value) await this.git.addConfig('user.name', 'Novel Engine');
+    if (!name.value) await this.git.addConfig('user.name', 'Quillgon');
     const email = await this.git.getConfig('user.email');
     if (!email.value) await this.git.addConfig('user.email', 'engine@localhost');
   }

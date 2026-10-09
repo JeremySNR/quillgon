@@ -1,4 +1,4 @@
-import { ContinuityInput, ContinuityOutput } from '@novel/core';
+import { ContinuityInput, ContinuityOutput } from '@quillgon/core';
 import { defineAgent, json } from '../define.js';
 
 export const continuity = defineAgent({

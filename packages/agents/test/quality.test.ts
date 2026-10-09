@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { latestReaderReport, mechanicalContinuity, predictionMatch, voiceReport, type ReaderOutput } from '@novel/core';
+import { latestReaderReport, mechanicalContinuity, predictionMatch, voiceReport, type ReaderOutput } from '@quillgon/core';
 import { fixtureEngine } from './helpers.js';
 
 /** A scripted reader: engagement and predictions per scene number. */

@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { GraphStore } from '@novel/core';
+import { GraphStore } from '@quillgon/core';
 import { NovelServer } from '../src/index.js';
 import { copyFixture } from '../../core/test/helpers.js';
 
-process.env.NOVEL_OFFLINE = '1';
+process.env.QUILLGON_OFFLINE = '1';
 let server: NovelServer;
 let base = '';
 

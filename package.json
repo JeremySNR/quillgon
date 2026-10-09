@@ -1,5 +1,5 @@
 {
-  "name": "novel-engine",
+  "name": "quillgon",
   "private": true,
   "type": "module",
   "description": "Generate full-length novels while keeping the author in charge of the story.",
@@ -8,10 +8,10 @@
     "node": ">=22"
   },
   "scripts": {
-    "novel": "tsx packages/cli/src/main.ts",
+    "quillgon": "tsx packages/cli/src/main.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:live": "NOVEL_LIVE=1 vitest run --project live",
+    "test:live": "QUILLGON_LIVE=1 vitest run --project live",
     "typecheck": "tsc -p tsconfig.json --noEmit && pnpm -C apps/desktop typecheck",
     "dev": "pnpm -C apps/desktop dev",
     "serve": "tsx packages/cli/src/main.ts serve",
@@ -22,10 +22,10 @@
     "screenshots": "pnpm build && tsx scripts/screenshots.ts"
   },
   "devDependencies": {
-    "@novel/agents": "workspace:*",
-    "@novel/cli": "workspace:*",
-    "@novel/core": "workspace:*",
-    "@novel/server": "workspace:*",
+    "@quillgon/agents": "workspace:*",
+    "@quillgon/cli": "workspace:*",
+    "@quillgon/core": "workspace:*",
+    "@quillgon/server": "workspace:*",
     "@types/node": "^22.10.0",
     "playwright-core": "^1.64.0",
     "tsx": "^4.19.0",

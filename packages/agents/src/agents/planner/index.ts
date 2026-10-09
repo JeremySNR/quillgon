@@ -1,4 +1,4 @@
-import { CardsInput, CardsOutput, PlotPointsInput, PlotPointsOutput, StructureInput, StructureOutput } from '@novel/core';
+import { CardsInput, CardsOutput, PlotPointsInput, PlotPointsOutput, StructureInput, StructureOutput } from '@quillgon/core';
 import { defineAgent, json } from '../define.js';
 
 export const plannerPlotPoints = defineAgent({

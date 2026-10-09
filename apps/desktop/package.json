@@ -1,5 +1,5 @@
 {
-  "name": "@novel/desktop",
+  "name": "@quillgon/desktop",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -31,7 +31,7 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
-    "@novel/core": "workspace:*",
+    "@quillgon/core": "workspace:*",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.1.2",

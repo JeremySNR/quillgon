@@ -12,8 +12,8 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const out = path.resolve(here, '..', 'docs', 'screenshots');
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ne-home-'));
 process.env.HOME = home;
-process.env.NOVEL_OFFLINE = process.env.NOVEL_OFFLINE ?? '1';
-const { NovelServer } = await import('@novel/server');
+process.env.QUILLGON_OFFLINE = process.env.QUILLGON_OFFLINE ?? '1';
+const { NovelServer } = await import('@quillgon/server');
 
 const server = new NovelServer({ staticDir: path.resolve(here, '..', 'apps', 'desktop', 'dist') });
 const port = await server.listen(0);

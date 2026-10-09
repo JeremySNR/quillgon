@@ -42,7 +42,7 @@ import type {
   ShapeFinding,
   Predictability,
   TwistCheck,
-} from '@novel/core';
+} from '@quillgon/core';
 
 export type {
   Book,

@@ -1,4 +1,4 @@
-import { VoiceInput, VoiceOutput } from '@novel/core';
+import { VoiceInput, VoiceOutput } from '@quillgon/core';
 import { defineAgent, json } from '../define.js';
 
 export const voice = defineAgent({

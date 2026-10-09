@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import type { GraphStore } from '@novel/core';
+import type { GraphStore } from '@quillgon/core';
 
 /** The manuscript as one Markdown document: acts and chapters as headings, scenes separated. */
 export function manuscriptMarkdown(store: GraphStore): string {

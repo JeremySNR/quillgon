@@ -1,4 +1,4 @@
-import { ProseOutput, ReviseCardInput, ReviseCardOutput, ReviseLinesInput, ReviseProseInput } from '@novel/core';
+import { ProseOutput, ReviseCardInput, ReviseCardOutput, ReviseLinesInput, ReviseProseInput } from '@quillgon/core';
 import { defineAgent, json } from '../define.js';
 
 export const reviseLines = defineAgent({

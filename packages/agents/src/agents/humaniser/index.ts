@@ -1,4 +1,4 @@
-import { HumaniseInput, LineEditOutput } from '@novel/core';
+import { HumaniseInput, LineEditOutput } from '@quillgon/core';
 import { defineAgent, json } from '../define.js';
 
 export const humaniser = defineAgent({

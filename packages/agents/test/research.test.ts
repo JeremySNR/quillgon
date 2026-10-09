@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { Engine, initProject, judgeBothWays, obligationIssues, runStylePasses, sceneOrder, type JudgeInput } from '@novel/core';
+import { Engine, initProject, judgeBothWays, obligationIssues, runStylePasses, sceneOrder, type JudgeInput } from '@quillgon/core';
 import { OfflineSuite, ScriptedSuite } from '../src/index.js';
 import { fixtureEngine } from './helpers.js';
 

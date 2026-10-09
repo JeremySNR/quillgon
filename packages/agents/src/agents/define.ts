@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ZodType } from 'zod';
-import type { AgentName, Intent } from '@novel/core';
+import type { AgentName, Intent } from '@quillgon/core';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 

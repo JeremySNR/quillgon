@@ -1,12 +1,12 @@
 {
-  "name": "@novel/server",
+  "name": "@quillgon/server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
-    "@novel/agents": "workspace:*",
-    "@novel/core": "workspace:*",
+    "@quillgon/agents": "workspace:*",
+    "@quillgon/core": "workspace:*",
     "zod": "^4.1.0"
   }
 }

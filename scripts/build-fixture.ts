@@ -8,7 +8,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { GraphStore, type SceneCard, type StateSnapshot } from '@novel/core';
+import { GraphStore, type SceneCard, type StateSnapshot } from '@quillgon/core';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const out = path.resolve(here, '..', 'fixtures', 'novella');

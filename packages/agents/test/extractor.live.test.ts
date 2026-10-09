@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { GraphStore, runExtraction, scoreFacts, sceneOrder } from '@novel/core';
+import { GraphStore, runExtraction, scoreFacts, sceneOrder } from '@quillgon/core';
 import { copyFixture } from '../../core/test/helpers.js';
 import { createSuite } from '../src/index.js';
 
-/** Live: runs the real extractor model on all 12 fixture scenes. NOVEL_LIVE=1 and an API key. */
-describe.runIf(process.env.NOVEL_LIVE === '1')('phase 3 (live): extraction accuracy', () => {
+/** Live: runs the real extractor model on all 12 fixture scenes. QUILLGON_LIVE=1 and an API key. */
+describe.runIf(process.env.QUILLGON_LIVE === '1')('phase 3 (live): extraction accuracy', () => {
   it('reproduces fixture facts at 90%+ recall on knowledge and mentions', async () => {
     const store = GraphStore.open(copyFixture(), { memoryIndex: true });
-    const agents = createSuite(store, { record: process.env.NOVEL_RECORD });
+    const agents = createSuite(store, { record: process.env.QUILLGON_RECORD });
     const scores: number[] = [];
     for (const id of sceneOrder(store.project)) {
       const reference = store.scene(id).facts!.facts.filter((f) => f.predicate !== 'located_at');

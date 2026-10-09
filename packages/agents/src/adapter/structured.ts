@@ -1,5 +1,5 @@
 import { z, type ZodType } from 'zod';
-import { DEFAULT_MODELS, type Book, type ModelConfig, type ModelTier } from '@novel/core';
+import { DEFAULT_MODELS, type Book, type ModelConfig, type ModelTier } from '@quillgon/core';
 import type { Backend, Message, UsageRecord } from './types.js';
 import { SchemaFailure } from './types.js';
 

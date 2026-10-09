@@ -55,7 +55,7 @@ export function Welcome() {
     }
   };
   const choose = async () => {
-    const d = await window.novel?.chooseFolder?.();
+    const d = await window.quillgon?.chooseFolder?.();
     if (d) open(d);
   };
 
@@ -67,7 +67,7 @@ export function Welcome() {
             <BookOpen size={26} strokeWidth={2.2} />
           </span>
         </div>
-        <h1>Novel Engine</h1>
+        <h1>Quillgon</h1>
         <p className="tag">Plan it, write it, change your mind. The story stays consistent and every change waits for your approval.</p>
         <div className="welcome-grid">
           <div className="card">
@@ -119,7 +119,7 @@ export function Welcome() {
               )}
               <div className="row">
                 <input className="input grow" value={openPath} onChange={(e) => setOpenPath(e.target.value)} placeholder="/path/to/book" onKeyDown={(e) => e.key === 'Enter' && openPath && open(openPath)} />
-                {window.novel?.chooseFolder ? (
+                {window.quillgon?.chooseFolder ? (
                   <Button icon={<FolderOpen />} onClick={choose}>
                     Browse
                   </Button>

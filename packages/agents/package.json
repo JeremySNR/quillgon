@@ -1,12 +1,12 @@
 {
-  "name": "@novel/agents",
+  "name": "@quillgon/agents",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.ts" },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
-    "@novel/core": "workspace:*",
+    "@quillgon/core": "workspace:*",
     "zod": "^4.1.0"
   }
 }

@@ -13,8 +13,8 @@ import {
   type ContinuityIssue,
   type Engine,
   type GraphStore,
-} from '@novel/core';
-import { suiteMode } from '@novel/agents';
+} from '@quillgon/core';
+import { suiteMode } from '@quillgon/agents';
 
 export function excerpt(text: string, n = 220): string {
   const t = text.replace(/\s+/g, ' ').trim();

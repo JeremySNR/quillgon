@@ -1,4 +1,4 @@
-import { JudgeInput, JudgeOutput } from '@novel/core';
+import { JudgeInput, JudgeOutput } from '@quillgon/core';
 import { defineAgent } from '../define.js';
 
 export const judge = defineAgent({

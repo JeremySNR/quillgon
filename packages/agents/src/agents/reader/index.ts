@@ -1,4 +1,4 @@
-import { ReaderInput, ReaderOutput } from '@novel/core';
+import { ReaderInput, ReaderOutput } from '@quillgon/core';
 import { defineAgent } from '../define.js';
 
 export const reader = defineAgent({

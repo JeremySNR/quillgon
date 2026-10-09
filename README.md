@@ -1,4 +1,6 @@
-# Novel Engine
+# Quillgon
+
+*Quill, plus a certain Jedi who trusted the living Force over the plan: the plan here is the story graph, and it's yours to change.*
 
 A local desktop tool that generates full-length novels while you stay in charge of the story. You set the intent, pin plot points, choose between alternatives and edit anything. Every change ripples through the rest of the book, and nothing changes until you've reviewed it.
 
@@ -15,7 +17,7 @@ pnpm serve          # http://127.0.0.1:4317, then "Open the sample novella"
 pnpm desktop        # or run it as an Electron app
 ```
 
-The app works with no API key: choose **Offline** models when you create a book (or set `NOVEL_OFFLINE=1`). Offline output is placeholder text, but every screen and workflow works.
+The app works with no API key: choose **Offline** models when you create a book (or set `QUILLGON_OFFLINE=1`). Offline output is placeholder text, but every screen and workflow works.
 
 To use Claude, set `ANTHROPIC_API_KEY`. Models per tier live in each book's `book.yaml`, and you can also change them under Settings → Models. The defaults are:
 
@@ -56,26 +58,26 @@ For development, `pnpm dev` runs the API and the Vite dev server with hot reload
 
 ## CLI
 
-The same engine, headless. `novel` lives at `packages/cli/bin/novel.mjs`; `pnpm novel <command>` also works.
+The same engine, headless. `quillgon` lives at `packages/cli/bin/quillgon.mjs`; `pnpm quillgon <command>` also works.
 
 ```
-novel init <dir> [--title T] [--words 12000] [--offline]
-novel validate [dir]                 schema + reference check with file/field-precise errors
-novel status | sync | log | costs
-novel spark ["seed"] [--genre G]     idea → premise: diverge, keep/bin, logline → synopsis → cast
-novel intent | plan | cards <chapter|all> [--default] | write <scene|chapter|all>
-novel ledger                         setups and payoffs, and what is unpaid
-novel style [check|learn|fit]        check prose against style.yaml; rules from your edits; dials from samples
-novel critique [--scene s05]         plan critic, or how predictable one scene's turn is
-novel impact <entity>                preview what a change touches (no model calls)
-novel change <entity>                edit in $EDITOR → impact → card diffs → prose diffs → commit
+quillgon init <dir> [--title T] [--words 12000] [--offline]
+quillgon validate [dir]                 schema + reference check with file/field-precise errors
+quillgon status | sync | log | costs
+quillgon spark ["seed"] [--genre G]     idea → premise: diverge, keep/bin, logline → synopsis → cast
+quillgon intent | plan | cards <chapter|all> [--default] | write <scene|chapter|all>
+quillgon ledger                         setups and payoffs, and what is unpaid
+quillgon style [check|learn|fit]        check prose against style.yaml; rules from your edits; dials from samples
+quillgon critique [--scene s05]         plan critic, or how predictable one scene's turn is
+quillgon impact <entity>                preview what a change touches (no model calls)
+quillgon change <entity>                edit in $EDITOR → impact → card diffs → prose diffs → commit
         entity: scene:s04  state:mara@s04  thread:ledger  plot:pp-drowning  character:mara  structure
-novel extract <scene>                read a hand edit back; "your edit changed these facts"
-novel ripple [revert|abandon|list]
-novel read [--act act-1] [--outline] | check [--mechanical] | voice | estimate
-novel export [--format md|docx|epub]   (docx/epub need Pandoc)
-novel branch [name | switch <b> | merge <b> | delete <b>]
-novel serve [--dir book] [--port 4317]
+quillgon extract <scene>                read a hand edit back; "your edit changed these facts"
+quillgon ripple [revert|abandon|list]
+quillgon read [--act act-1] [--outline] | check [--mechanical] | voice | estimate
+quillgon export [--format md|docx|epub]   (docx/epub need Pandoc)
+quillgon branch [name | switch <b> | merge <b> | delete <b>]
+quillgon serve [--dir book] [--port 4317]
 ```
 
 Pass `--yes` to accept the defaults at every gate (useful for scripting), or `--record <dir>` / `--replay <dir>` to record model responses as test fixtures or replay them.
@@ -88,7 +90,7 @@ packages/core/       schemas, graph store, SQLite index, impact analyser, sync,
                      pipeline, ripple engine, quality checks, git
 packages/agents/     nine agents (prompt.md + schemas), model adapter, offline suite
 packages/server/     local JSON API, background jobs, file watching
-packages/cli/        the `novel` command
+packages/cli/        the `quillgon` command
 fixtures/novella/    "The Tidekeeper's Ledger": 12 scenes, 4 characters, 3 threads, 2 plot points
 ```
 
@@ -108,7 +110,7 @@ pnpm test           # 94 unit/integration tests, no model calls
 pnpm e2e            # drives the real UI in Chromium (offline models)
 pnpm screenshots    # regenerates docs/screenshots
 pnpm typecheck
-pnpm test:live      # live-model tests; needs NOVEL_LIVE=1 and an API key
+pnpm test:live      # live-model tests; needs QUILLGON_LIVE=1 and an API key
 ```
 
 | Phase | Status |
@@ -127,7 +129,7 @@ pnpm test:live      # live-model tests; needs NOVEL_LIVE=1 and an API key
 ## Notes and deviations from the plan
 
 - **Anthropic SDK, not the Agent SDK.** Every agent call is a single structured completion, so the agents use `@anthropic-ai/sdk` directly. The Agent SDK's file and tool loop isn't needed.
-- **Electron runs the core as a plain Node process.** This lets `better-sqlite3` load without an Electron rebuild. It needs `node` on your `PATH` (or set `NOVEL_NODE`).
+- **Electron runs the core as a plain Node process.** This lets `better-sqlite3` load without an Electron rebuild. It needs `node` on your `PATH` (or set `QUILLGON_NODE`).
 - **Reader prediction matching is mechanical** (embedding similarity, synonym folding, and the prediction must name the right person). A cheap model judge would be more accurate and is an easy swap.
 - **Two small additions to the data model:** `scenes/<id>/facts.yaml` holds extracted facts, so the index can rebuild from files, and an optional `locations.yaml` / `facts.yaml` glossary gives ids human-readable names.
 

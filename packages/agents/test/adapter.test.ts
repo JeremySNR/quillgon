@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { Book } from '@novel/core';
+import { Book } from '@quillgon/core';
 import { extractJson, ModelAdapter, RecordReplayBackend, SchemaFailure, strictify, type Backend, type RawRequest, type UsageRecord } from '../src/index.js';
 
 const book = Book.parse({ title: 'T' });

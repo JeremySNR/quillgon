@@ -25,8 +25,8 @@ import {
   type Change,
   type ReaderReport,
   type StructureAlternative,
-} from '@novel/core';
-import { builtinPrompt, createSuite, loadPrompt } from '@novel/agents';
+} from '@quillgon/core';
+import { builtinPrompt, createSuite, loadPrompt } from '@quillgon/agents';
 import { projectSnapshot, sceneDetail } from './snapshot.js';
 import { exportManuscript } from './export.js';
 
@@ -56,7 +56,7 @@ export class HttpError extends Error {
   }
 }
 
-const RECENT = path.join(os.homedir(), '.novel-engine', 'recent.json');
+const RECENT = path.join(os.homedir(), '.quillgon', 'recent.json');
 
 /**
  * The local boundary between the UI and the core. JSON over HTTP, server-sent events for
@@ -213,7 +213,7 @@ export class NovelServer {
     const dir = this.opts.staticDir;
     if (!dir || !fs.existsSync(dir)) {
       res.writeHead(200, { 'content-type': 'text/plain' });
-      return res.end('Novel Engine API. Build the UI with `pnpm build` or run `pnpm dev`.');
+      return res.end('Quillgon API. Build the UI with `pnpm build` or run `pnpm dev`.');
     }
     let file = path.join(dir, path.normalize(p).replace(/^(\.\.[/\\])+/, ''));
     if (!file.startsWith(dir) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(dir, 'index.html');
@@ -305,7 +305,7 @@ export class NovelServer {
     });
     r('POST', '/api/scenes/:id/style', ({ engine, params, server }) =>
       server.job('style', async (progress) => {
-        const { runStylePasses } = await import('@novel/core');
+        const { runStylePasses } = await import('@quillgon/core');
         const s = engine.store.scene(params.id);
         if (!s.prose) throw new Error('no prose yet');
         const out = await runStylePasses(engine.store, engine.agents, params.id, s.prose.body, progress);

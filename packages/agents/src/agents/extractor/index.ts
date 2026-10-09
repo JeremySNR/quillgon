@@ -1,4 +1,4 @@
-import { ExtractInput, ExtractOutput } from '@novel/core';
+import { ExtractInput, ExtractOutput } from '@quillgon/core';
 import { defineAgent, json } from '../define.js';
 
 export const extractor = defineAgent({

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyExtraction, loadProject, runExtraction, scoreFacts, sceneOrder } from '@novel/core';
+import { applyExtraction, loadProject, runExtraction, scoreFacts, sceneOrder } from '@quillgon/core';
 import { FIXTURE } from '../../core/test/helpers.js';
 import { fixtureEngine, fixtureExtractor } from './helpers.js';
 

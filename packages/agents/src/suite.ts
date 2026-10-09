@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { DEFAULT_AGENT_TIERS, type AgentSuite, type Book, type Intent } from '@novel/core';
+import { DEFAULT_AGENT_TIERS, type AgentSuite, type Book, type Intent } from '@quillgon/core';
 import type { ModelAdapter } from './adapter/structured.js';
 import * as A from './agents/index.js';
 import { builtinPrompt, intentBlock, loadPrompt, type AgentDef } from './agents/define.js';

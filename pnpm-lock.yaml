@@ -8,16 +8,16 @@ importers:
 
   .:
     devDependencies:
-      '@novel/agents':
+      '@quillgon/agents':
         specifier: workspace:*
         version: link:packages/agents
-      '@novel/cli':
+      '@quillgon/cli':
         specifier: workspace:*
         version: link:packages/cli
-      '@novel/core':
+      '@quillgon/core':
         specifier: workspace:*
         version: link:packages/core
-      '@novel/server':
+      '@quillgon/server':
         specifier: workspace:*
         version: link:packages/server
       '@types/node':
@@ -87,7 +87,7 @@ importers:
         specifier: ^19.2.0
         version: 19.3.0(react@19.3.0)
     devDependencies:
-      '@novel/core':
+      '@quillgon/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@types/react':
@@ -117,7 +117,7 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.133.0
         version: 0.133.0(zod@4.6.5)
-      '@novel/core':
+      '@quillgon/core':
         specifier: workspace:*
         version: link:../core
       zod:
@@ -126,13 +126,13 @@ importers:
 
   packages/cli:
     dependencies:
-      '@novel/agents':
+      '@quillgon/agents':
         specifier: workspace:*
         version: link:../agents
-      '@novel/core':
+      '@quillgon/core':
         specifier: workspace:*
         version: link:../core
-      '@novel/server':
+      '@quillgon/server':
         specifier: workspace:*
         version: link:../server
       diff:
@@ -172,10 +172,10 @@ importers:
 
   packages/server:
     dependencies:
-      '@novel/agents':
+      '@quillgon/agents':
         specifier: workspace:*
         version: link:../agents
-      '@novel/core':
+      '@quillgon/core':
         specifier: workspace:*
         version: link:../core
       zod:

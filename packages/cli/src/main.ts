@@ -34,8 +34,8 @@ import {
   type Change,
   type Impact,
   type RippleItem,
-} from '@novel/core';
-import { createSuite, suiteMode } from '@novel/agents';
+} from '@quillgon/core';
+import { createSuite, suiteMode } from '@quillgon/agents';
 import { diffLines, diffWords } from 'diff';
 
 // ------------------------------------------------------------------ args & output
@@ -84,9 +84,9 @@ async function confirm(q: string, def = true): Promise<boolean> {
 }
 
 function projectDir(): string {
-  const d = (flags.dir as string) ?? process.env.NOVEL_PROJECT ?? '.';
+  const d = (flags.dir as string) ?? process.env.QUILLGON_PROJECT ?? '.';
   if (!fs.existsSync(path.join(d, paths.book))) {
-    console.error(red(`No book.yaml in ${path.resolve(d)}. Run \`novel init <dir>\` or pass --dir.`));
+    console.error(red(`No book.yaml in ${path.resolve(d)}. Run \`quillgon init <dir>\` or pass --dir.`));
     process.exit(1);
   }
   return d;
@@ -123,7 +123,7 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
   help: {
     help: 'Show this help',
     run() {
-      say(bold('novel') + ' — the story graph is the source; prose is compiled output.\n');
+      say(bold('quillgon') + ' — the story graph is the source; prose is compiled output.\n');
       for (const [k, v] of Object.entries(commands)) say(`  ${cyan(k.padEnd(10))} ${v.help}`);
       say(`\nOptions: --dir <book>  --yes (accept defaults)  --record <dir> / --replay <dir> (model fixtures)`);
     },
@@ -136,7 +136,7 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
       const title = (flags.title as string) ?? (await ask('Title:', path.basename(dir)));
       const store = await initProject(dir, { title, target_words: Number(flags.words) || 12000, offline: !!flags.offline });
       say(green(`Created ${store.dir}`));
-      say(`Next: ${cyan(`novel spark --dir ${dir}`)} to develop an idea, or ${cyan(`novel intent --dir ${dir}`)} if you have a premise.`);
+      say(`Next: ${cyan(`quillgon spark --dir ${dir}`)} to develop an idea, or ${cyan(`quillgon intent --dir ${dir}`)} if you have a premise.`);
       store.close();
     },
   },
@@ -225,7 +225,7 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
       for (const c of b.cast) say(`  ${bold(c.name)} ${dim(c.role)}  wants ${c.want}; needs ${c.need}`);
       if (await confirm('Use this premise and cast?')) {
         await I.finish();
-        say(green('✓ Premise written to intent.md.') + ` Next: ${cyan('novel intent')}`);
+        say(green('✓ Premise written to intent.md.') + ` Next: ${cyan('quillgon intent')}`);
       }
     },
   },
@@ -310,7 +310,7 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
       say(`\n${bold('Intent')}\n${YAML.stringify(r.intent)}`);
       if (await confirm('Approve this intent?')) {
         await e.pipeline.approveIntent(r.intent!);
-        say(green('✓ Intent approved.') + ` Next: ${cyan('novel plan')}`);
+        say(green('✓ Intent approved.') + ` Next: ${cyan('quillgon plan')}`);
       }
     },
   },
@@ -357,7 +357,7 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
             continue;
           }
           const alt = await pl.pickStructure(Number(pick));
-          say(green(`✓ Structure: ${alt.label}.`) + ` Next: ${cyan('novel cards all')}`);
+          say(green(`✓ Structure: ${alt.label}.`) + ` Next: ${cyan('quillgon cards all')}`);
           break;
         }
       }
@@ -390,7 +390,7 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
         }
         await pl.pickCards(ch.id, Number(pick));
       }
-      say(green('✓ Cards written.') + ` Next: ${cyan('novel write all')}`);
+      say(green('✓ Cards written.') + ` Next: ${cyan('quillgon write all')}`);
     },
   },
 
@@ -553,7 +553,7 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
   export: {
     help: 'export [--format md|docx|epub]   Export the manuscript (docx/epub need Pandoc)',
     async run() {
-      const { exportManuscript } = await import('@novel/server');
+      const { exportManuscript } = await import('@quillgon/server');
       const store = GraphStore.open(projectDir(), { noIndex: true });
       const r = exportManuscript(store, ((flags.format as string) ?? 'md') as 'md');
       say(green(`✓ ${r.file}`));
@@ -586,14 +586,14 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
   serve: {
     help: 'serve [--port 4317]   Run the local API (and the UI if built)',
     async run() {
-      const { NovelServer } = await import('@novel/server');
+      const { NovelServer } = await import('@quillgon/server');
       const here = path.dirname(fileURLToPath(import.meta.url));
       const staticDir = path.resolve(here, '../../../apps/desktop/dist');
       const server = new NovelServer({ staticDir });
       const dir = (flags.dir as string) ?? args[0];
       if (dir) server.open(dir);
       const port = await server.listen(Number(flags.port) || 4317);
-      say(`${green('●')} Novel Engine on ${bold(`http://127.0.0.1:${port}`)}${dir ? dim(`  (${path.resolve(dir)})`) : ''}`);
+      say(`${green('●')} Quillgon on ${bold(`http://127.0.0.1:${port}`)}${dir ? dim(`  (${path.resolve(dir)})`) : ''}`);
     },
   },
 };
@@ -706,7 +706,7 @@ async function rippleLoop(e: Engine, r: Ripple) {
     showImpact(r.data.remaining, 3);
   } else if (r.data.state === 'done') say(green('\n✓ Ripple complete.'));
   const issues = mechanicalContinuity(e.store.project);
-  say(issues.length ? yellow(`Continuity: ${issues.length} mechanical issue(s). Run \`novel check\`.`) : green('Continuity: no mechanical issues.'));
+  say(issues.length ? yellow(`Continuity: ${issues.length} mechanical issue(s). Run \`quillgon check\`.`) : green('Continuity: no mechanical issues.'));
 }
 
 async function resolveConflict(r: Ripple, it: RippleItem) {

@@ -20,10 +20,10 @@ function Shell() {
   useEffect(() => {
     document.documentElement.style.setProperty('--prose-size', `${loadPref('proseSize', 19)}px`);
     document.documentElement.style.setProperty('--prose-measure', `${loadPref('measure', 66)}ch`);
-    document.body.classList.toggle('is-mac', isMac && !!window.novel);
+    document.body.classList.toggle('is-mac', isMac && !!window.quillgon);
   }, []);
   useEffect(() => {
-    if (project) document.title = `${project.book.title} — Novel Engine`;
+    if (project) document.title = `${project.book.title} — Quillgon`;
   }, [project?.book.title]);
 
   if (loading) return <div className="welcome" />;

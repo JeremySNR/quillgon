@@ -15,8 +15,8 @@ import { chromium, type Page } from 'playwright-core';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 process.env.HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'ne-e2e-'));
-process.env.NOVEL_OFFLINE = '1';
-const { NovelServer } = await import('@novel/server');
+process.env.QUILLGON_OFFLINE = '1';
+const { NovelServer } = await import('@quillgon/server');
 const server = new NovelServer({ staticDir: path.resolve(here, '..', 'apps', 'desktop', 'dist') });
 const base = `http://127.0.0.1:${await server.listen(0)}`;
 const api = async (p: string) => (await fetch(`${base}/api${p}`)).json() as Promise<any>;

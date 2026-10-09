@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { AgentSuite, GraphStore } from '@novel/core';
+import type { AgentSuite, GraphStore } from '@quillgon/core';
 import { ModelAdapter } from './adapter/structured.js';
 import { AnthropicBackend } from './adapter/anthropic.js';
 import { OpenAICompatibleBackend } from './adapter/openai.js';
@@ -17,7 +17,7 @@ export interface CreateOptions {
 }
 
 export function suiteMode(store: GraphStore): 'offline' | 'live' {
-  if (process.env.NOVEL_OFFLINE === '1') return 'offline';
+  if (process.env.QUILLGON_OFFLINE === '1') return 'offline';
   return store.book.models.frontier?.provider === 'offline' ? 'offline' : 'live';
 }
 

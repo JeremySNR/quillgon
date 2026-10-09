@@ -1,4 +1,4 @@
-import type { ModelConfig, ModelTier } from '@novel/core';
+import type { ModelConfig, ModelTier } from '@quillgon/core';
 
 export interface Message {
   role: 'user' | 'assistant';

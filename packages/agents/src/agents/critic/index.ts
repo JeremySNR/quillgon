@@ -1,4 +1,4 @@
-import { CritiqueInput, CritiqueOutput, SampleTurnsInput, SampleTurnsOutput } from '@novel/core';
+import { CritiqueInput, CritiqueOutput, SampleTurnsInput, SampleTurnsOutput } from '@quillgon/core';
 import { defineAgent, json } from '../define.js';
 
 export const critic = defineAgent({

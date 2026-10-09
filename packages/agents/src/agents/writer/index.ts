@@ -1,4 +1,4 @@
-import { WriterInput, WriterOutput } from '@novel/core';
+import { WriterInput, WriterOutput } from '@quillgon/core';
 import { defineAgent } from '../define.js';
 
 export const writer = defineAgent({

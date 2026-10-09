@@ -2,11 +2,11 @@ import type { Job } from './types';
 
 declare global {
   interface Window {
-    novel?: { apiBase?: string; platform?: string; chooseFolder?: () => Promise<string | null>; reveal?: (p: string) => void };
+    quillgon?: { apiBase?: string; platform?: string; chooseFolder?: () => Promise<string | null>; reveal?: (p: string) => void };
   }
 }
 
-const BASE = window.novel?.apiBase ?? '';
+const BASE = window.quillgon?.apiBase ?? '';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public data?: any) {

@@ -14,8 +14,8 @@ import type {
   ReviseCardOutput,
   StructureAlternative,
   StructureOutput,
-} from '@novel/core';
-import { slugify } from '@novel/core';
+} from '@quillgon/core';
+import { slugify } from '@quillgon/core';
 
 /**
  * A deterministic, model-free stand-in for every agent. It makes the whole app usable

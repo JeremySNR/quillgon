@@ -1,4 +1,4 @@
-import { InterviewInput, InterviewOutput } from '@novel/core';
+import { InterviewInput, InterviewOutput } from '@quillgon/core';
 import { defineAgent } from '../define.js';
 
 export const interviewer = defineAgent({

@@ -63,7 +63,7 @@ export function Sidebar({ rail, onToggle }: { rail: boolean; onToggle: () => voi
         <span className="brand-mark">
           <BookOpen size={13} strokeWidth={2.4} />
         </span>
-        <span className="brand-name">Novel Engine</span>
+        <span className="brand-name">Quillgon</span>
       </div>
       <button className="book-switch" onClick={() => go('settings', 'book')} title={project.dir}>
         <span className="book-title">{project.book.title}</span>

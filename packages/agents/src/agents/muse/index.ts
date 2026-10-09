@@ -1,4 +1,4 @@
-import { DivergeInput, DivergeOutput, ExpandInput, ExpandOutput } from '@novel/core';
+import { DivergeInput, DivergeOutput, ExpandInput, ExpandOutput } from '@quillgon/core';
 import { defineAgent, json } from '../define.js';
 
 export const museDiverge = defineAgent({

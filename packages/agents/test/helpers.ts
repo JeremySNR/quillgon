@@ -1,4 +1,4 @@
-import { GraphStore, Engine, type AgentSuite } from '@novel/core';
+import { GraphStore, Engine, type AgentSuite } from '@quillgon/core';
 import { copyFixture } from '../../core/test/helpers.js';
 import { ScriptedSuite } from '../src/index.js';
 

@@ -1,6 +1,6 @@
-# Research: making Novel Engine better at turning an idea into a novel
+# Research: making Quillgon better at turning an idea into a novel
 
-October 2026. This combines three research passes (academic work on long-form AI fiction, agent and LLM techniques, and the product landscape with author feedback) and maps each finding onto Novel Engine's architecture.
+October 2026. This combines three research passes (academic work on long-form AI fiction, agent and LLM techniques, and the product landscape with author feedback) and maps each finding onto Quillgon's architecture.
 
 Caveats:
 - Most results are the authors' own figures and have not been replicated.
@@ -152,10 +152,10 @@ Off-the-shelf LLM judges agreed with humans only 73% of the time on fiction ([Li
 
 | # | Change | Status |
 |---|---|---|
-| 1 | Divergent ideation front end | ✅ Built: the Idea step and `novel spark` (personas, verbalized sampling, tail first, embedding dedupe, cliché flags, Snowflake expansion, want/need/wound/lie/arc) |
-| 2 | Obligations ledger | ✅ Built: `obligations/`, `sets_up`/`pays_off` on cards, writer told plant/pay/keep open, extraction checks it landed, ledger view, `novel ledger`, obligation changes ripple |
-| 3 | Style system | ✅ Built: `style/style.yaml` dials, code-checked spans, deterministic fixes, span-level line edits gated by code and both-ways judging, live underlines in the editor, fingerprinting samples, rules learned from edits, `novel style` |
-| 4 | Plan-level critics | ✅ Built: structural critic (book and per structure), predictability test per scene, outline reader, two-sided twist verdicts, `novel critique` |
+| 1 | Divergent ideation front end | ✅ Built: the Idea step and `quillgon spark` (personas, verbalized sampling, tail first, embedding dedupe, cliché flags, Snowflake expansion, want/need/wound/lie/arc) |
+| 2 | Obligations ledger | ✅ Built: `obligations/`, `sets_up`/`pays_off` on cards, writer told plant/pay/keep open, extraction checks it landed, ledger view, `quillgon ledger`, obligation changes ripple |
+| 3 | Style system | ✅ Built: `style/style.yaml` dials, code-checked spans, deterministic fixes, span-level line edits gated by code and both-ways judging, live underlines in the editor, fingerprinting samples, rules learned from edits, `quillgon style` |
+| 4 | Plan-level critics | ✅ Built: structural critic (book and per structure), predictability test per scene, outline reader, two-sided twist verdicts, `quillgon critique` |
 | 7 | Caching | ✅ Prompt caching on the system prompt with cache-aware cost. Batch API not yet |
 | 8 | Graph views | ◐ Ripple blast-radius map and the ledger chart built; scene local graph and fact flow not yet |
 | 5, 6, 9–11 | Eval harness, tension curve, character agents, provenance, orchestration | Not yet |

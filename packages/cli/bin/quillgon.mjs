@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Thin launcher so `novel` works without a build step, from any directory.
+// Thin launcher so `quillgon` works without a build step, from any directory.
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
