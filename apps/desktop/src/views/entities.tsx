@@ -4,7 +4,8 @@ import { post, put } from '../lib/api';
 import { useApp } from '../lib/app';
 import type { CharacterEntry, ImpactResult, StateSnapshot, Thread } from '../lib/types';
 import { factLabel, hue, plural } from '../lib/util';
-import { Avatar, Badge, Button, Chip, Drawer, Empty, Field, ListEditor } from '../components/ui';
+import { Avatar, Badge, Button, Chip, Drawer, Empty, Field, ListEditor, Segmented } from '../components/ui';
+import { Ledger } from './ledger';
 
 /** After an edit that has an impact, offer the ripple. */
 function useRippleOffer() {
@@ -26,9 +27,11 @@ function useRippleOffer() {
 
 export function Threads({ id }: { id?: string }) {
   const { project: p, go } = useApp();
+  const offer = useRippleOffer();
   const [editing, setEditing] = useState<Thread | null>(null);
+  const tab = id === 'ledger' ? 'ledger' : 'threads';
   useEffect(() => {
-    if (id && p) setEditing(p.threads.find((t) => t.id === id) ?? null);
+    if (id && id !== 'ledger' && p) setEditing(p.threads.find((t) => t.id === id) ?? null);
   }, [id, p?.threads]);
   if (!p) return null;
   const order = p.scenes.map((s) => s.id);
@@ -42,12 +45,22 @@ export function Threads({ id }: { id?: string }) {
             <p className="sub">Mysteries, arcs, promises and relationships, and where each one is set up and paid off.</p>
           </div>
           <div className="actions">
-            <Button icon={<Plus />} onClick={() => setEditing({ id: '', title: '', kind: 'setup-payoff', description: '', setup_scene: null, payoff_scene: null, setup_chapter: null, payoff_chapter: null, status: 'open', beats: [] })}>
+            <Segmented
+              value={tab}
+              onChange={(v) => go('threads', v === 'ledger' ? 'ledger' : undefined)}
+              options={[
+                { value: 'threads', label: `Threads · ${p.threads.length}` },
+                { value: 'ledger', label: <span className="row" style={{ gap: 6 }}>Setups and payoffs · {p.obligations.length}{p.obligationIssues.length > 0 && <span className="dot-warn" />}</span> },
+              ]}
+            />
+            {tab === 'threads' && <Button icon={<Plus />} onClick={() => setEditing({ id: '', title: '', kind: 'setup-payoff', description: '', setup_scene: null, payoff_scene: null, setup_chapter: null, payoff_chapter: null, status: 'open', beats: [] })}>
               New thread
-            </Button>
+            </Button>}
           </div>
         </div>
-        {!p.threads.length ? (
+        {tab === 'ledger' ? (
+          <Ledger onOffer={offer} />
+        ) : !p.threads.length ? (
           <Empty icon={<Spline />} title="No threads yet">
             Threads come from the structure you pick in Build, or you can add your own.
           </Empty>

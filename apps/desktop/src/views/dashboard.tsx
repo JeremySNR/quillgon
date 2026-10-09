@@ -17,6 +17,9 @@ import {
   BookText,
   PenLine,
   Telescope,
+  Sparkles,
+  Link2,
+  SpellCheck,
 } from 'lucide-react';
 import { get } from '../lib/api';
 import { useApp } from '../lib/app';
@@ -26,6 +29,7 @@ import { Badge, Button, Ring, SyncBadge } from '../components/ui';
 import { Sparkline } from '../components/chart';
 
 export const STAGES = [
+  { id: 'idea', name: 'Idea', desc: 'Find the story', icon: Sparkles },
   { id: 'intent', name: 'Intent', desc: 'What the book is', icon: Lightbulb },
   { id: 'plot-points', name: 'Plot points', desc: 'What must happen', icon: ListChecks },
   { id: 'structure', name: 'Structure', desc: 'Acts and chapters', icon: Layers },
@@ -61,6 +65,8 @@ function nextStep(p: Snapshot): { label: string; view: Parameters<ReturnType<typ
   const conflict = p.scenes.find((s) => s.sync === 'conflict');
   if (conflict) return { label: `Resolve ${conflict.id}`, view: 'scene', id: conflict.id };
   switch (p.book.stage) {
+    case 'idea':
+      return { label: 'Find your story', view: 'build', id: 'idea' };
     case 'intent':
       return { label: 'Describe your book', view: 'build', id: 'intent' };
     case 'plot-points':
@@ -94,12 +100,17 @@ export function Dashboard() {
     attention.push({ icon: <AlertTriangle size={16} style={{ color: 'var(--warning)' }} />, title: `${s.id}: prose disagrees with its card`, sub: s.contradictions.map((c) => c.card_says).join('; '), onClick: () => go('scene', s.id) });
   for (const i of [...p.continuity.mechanical, ...p.continuity.model].slice(0, 6))
     attention.push({ icon: <CircleAlert size={16} style={{ color: i.severity === 'high' ? 'var(--danger)' : 'var(--warning)' }} />, title: i.message, sub: `Continuity · ${i.scene}`, onClick: () => i.scene && go('scene', i.scene) });
+  for (const i of p.obligationIssues.filter((x) => x.severity !== 'low').slice(0, 4))
+    attention.push({ icon: <Link2 size={16} style={{ color: i.severity === 'high' ? 'var(--danger)' : 'var(--warning)' }} />, title: i.message, sub: `Setups and payoffs · ${i.scene}`, onClick: () => go('threads', 'ledger') });
+  for (const s of p.scenes.filter((s) => s.style?.enforced).slice(0, 4))
+    attention.push({ icon: <SpellCheck size={16} style={{ color: 'var(--warning)' }} />, title: `${s.id}: ${plural(s.style!.enforced, 'style rule')} broken`, sub: 'The line editor could not fix these; they are underlined in the scene', onClick: () => go('scene', s.id) });
   for (const e of p.issues.filter((i) => i.severity === 'error').slice(0, 4))
     attention.push({ icon: <CircleAlert size={16} style={{ color: 'var(--danger)' }} />, title: e.message, sub: `${e.file}${e.path ? ` › ${e.path}` : ''}`, onClick: () => go('settings') });
 
   const t = p.totals;
   const inSync = t.bySync.in_sync ?? 0;
   const written = p.scenes.filter((s) => s.sync !== 'unwritten').length;
+  const styled = p.scenes.filter((s) => s.style);
   const engagement = p.scenes.map((s) => s.engagement).filter((x): x is number => x !== null);
 
   return (
@@ -177,6 +188,44 @@ export function Dashboard() {
               <>
                 <span className="tile-value faint">—</span>
                 <span className="tile-foot">Not run yet</span>
+              </>
+            )}
+          </button>
+          <button className="tile" onClick={() => go('threads', 'ledger')}>
+            <span className="tile-label">
+              <Link2 /> Setups and payoffs
+            </span>
+            {p.obligations.length ? (
+              <>
+                <span className="tile-value">
+                  {p.obligations.filter((o) => o.payoff_scene).length}
+                  <small>of {p.obligations.length} paid off</small>
+                </span>
+                <span className="tile-foot">{p.obligationIssues.length ? `${plural(p.obligationIssues.length, 'problem')} in the ledger` : 'Every promise is kept'}</span>
+              </>
+            ) : (
+              <>
+                <span className="tile-value faint">—</span>
+                <span className="tile-foot">Scene cards add clues and promises here</span>
+              </>
+            )}
+          </button>
+          <button className="tile" onClick={() => go('settings', 'style')}>
+            <span className="tile-label">
+              <SpellCheck /> Style
+            </span>
+            {styled.length ? (
+              <>
+                <span className="tile-value">
+                  {styled.filter((s) => !s.style!.enforced).length}
+                  <small>of {styled.length} scenes clean</small>
+                </span>
+                <span className="tile-foot">{styled.reduce((n, s) => n + s.style!.guided, 0)} softer notes · checked on every word</span>
+              </>
+            ) : (
+              <>
+                <span className="tile-value faint">—</span>
+                <span className="tile-foot">Set your style dials</span>
               </>
             )}
           </button>

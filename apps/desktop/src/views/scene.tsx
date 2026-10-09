@@ -20,13 +20,17 @@ import {
   Plus,
   X,
   Trash2,
+  Link2,
+  SpellCheck,
 } from 'lucide-react';
 import { del, get, post, put, runJob } from '../lib/api';
 import { useApp } from '../lib/app';
-import type { ExtractionResult, Fact, ImpactResult, SceneCard, SceneDetail } from '../lib/types';
+import type { ExtractionResult, Fact, ImpactResult, SceneCard, SceneDetail, StyleReport, StyleViolation } from '../lib/types';
 import { factLabel, firstName, keys, plural } from '../lib/util';
 import { Avatar, Badge, Button, Chip, Dialog, Empty, Field, ListEditor, StatusBadge, SyncBadge, TagSelect, Working } from '../components/ui';
-import { ProseEditor, bannedRegexes } from '../components/prose-editor';
+import { ProseEditor, bannedRegexes, type StyleMark } from '../components/prose-editor';
+import { PredictabilityCheck } from './critique';
+import { OBLIGATION_KIND } from './ledger';
 import { CardDiff, ProseDiff, ProseSideBySide } from '../components/diff';
 
 type ProseReview = { title: string; before: string; after: string; summary?: string; apply: (text: string) => Promise<void> };
@@ -41,6 +45,22 @@ export function SceneEditor({ id }: { id: string }) {
   const [review, setReview] = useState<ProseReview | null>(null);
   const [facts, setFacts] = useState<ExtractionResult['diff'] | null>(null);
   const saveTimer = useRef<number | null>(null);
+  const [styleReport, setStyleReport] = useState<StyleReport | null>(null);
+  const [styleOpen, setStyleOpen] = useState(false);
+  const [jump, setJump] = useState<{ from: number; to: number } | null>(null);
+  const checkTimer = useRef<number | null>(null);
+  // Check every word against the style sheet shortly after typing stops.
+  useEffect(() => {
+    if (checkTimer.current) clearTimeout(checkTimer.current);
+    if (!prose.trim()) return setStyleReport(null);
+    checkTimer.current = window.setTimeout(() => {
+      post<StyleReport>('/style/check', { text: prose }).then(setStyleReport).catch(() => undefined);
+    }, 450);
+    return () => {
+      if (checkTimer.current) clearTimeout(checkTimer.current);
+    };
+  }, [prose, p?.style.sheet]);
+  const marks = useMemo<StyleMark[]>(() => (styleReport?.violations ?? []).filter((v) => v.end > v.start).map((v) => ({ from: v.start, to: v.end, kind: v.kind, message: v.message })), [styleReport]);
 
   const load = useCallback(async () => {
     const d = await get<SceneDetail>(`/scenes/${id}`).catch(() => null);
@@ -150,12 +170,20 @@ export function SceneEditor({ id }: { id: string }) {
 
   const style = () =>
     withBusy('Style passes', async () => {
-      const r = await runJob<{ before: string; after: string; report: { voiceFlags: unknown[]; bannedBefore: unknown[] } }>(`/scenes/${id}/style`);
+      const r = await runJob<{ before: string; after: string; report: { voiceFlags: unknown[]; autoFixes: number; enforcedBefore: number; enforcedAfter: number; rounds: { kept: boolean; applied: number; why: string }[] } }>(`/scenes/${id}/style`);
+      const kept = r.report.rounds.filter((x) => x.kept);
       setReview({
         title: 'Style passes',
         before: r.before,
         after: r.after,
-        summary: `${plural(r.report.voiceFlags.length, 'voice fix', 'voice fixes')}, ${plural(r.report.bannedBefore.length, 'banned pattern')} removed, humaniser pass.`,
+        summary: [
+          r.report.voiceFlags.length && plural(r.report.voiceFlags.length, 'voice fix', 'voice fixes'),
+          r.report.autoFixes && `${plural(r.report.autoFixes, 'automatic fix', 'automatic fixes')}`,
+          `${plural(kept.reduce((n, x) => n + x.applied, 0), 'line edit')} kept${r.report.rounds.some((x) => !x.kept) ? ` (${r.report.rounds.find((x) => !x.kept)!.why})` : ''}`,
+          `style rules broken: ${r.report.enforcedBefore} → ${r.report.enforcedAfter}`,
+        ]
+          .filter(Boolean)
+          .join(' · '),
         apply: async (text) => {
           await runJob(`/scenes/${id}/accept-prose`, { body: text });
         },
@@ -252,6 +280,8 @@ export function SceneEditor({ id }: { id: string }) {
             <textarea className="textarea" rows={2} value={card.outcome} onChange={(e) => set('outcome', e.target.value)} style={{ minHeight: 0, fieldSizing: 'content' } as React.CSSProperties} />
           </Field>
 
+          <LedgerFields card={card} onChange={(k, v) => set(k, v)} />
+
           <details className="more">
             <summary>
               <ChevronRight /> People, threads and facts
@@ -300,6 +330,7 @@ export function SceneEditor({ id }: { id: string }) {
           </details>
 
           <KnowledgePanel detail={detail} name={name} facts={p.facts} onOpen={(c) => go('characters', c)} />
+          {card.beats.length > 1 && <PredictabilityCheck scene={id} />}
 
           {cardDirty && (
             <div className="decision-bar">
@@ -323,17 +354,24 @@ export function SceneEditor({ id }: { id: string }) {
           <span className="faint num" style={{ fontSize: 'var(--fs-caption)' }}>
             {words.toLocaleString('en')} words
           </span>
+          {styleReport && (
+            <button className={`style-chip ${styleReport.enforced ? 'bad' : 'ok'}`} onClick={() => setStyleOpen(!styleOpen)} aria-expanded={styleOpen} title="Checked against your style sheet">
+              <SpellCheck size={13} />
+              {styleReport.enforced ? `${styleReport.enforced} to fix` : 'Style clean'}
+              {styleReport.guided > 0 && <span className="faint">· {styleReport.guided} notes</span>}
+            </button>
+          )}
           <span className="grow" />
           {detail.prose ? (
             <>
               <Button size="sm" variant="ghost" icon={<ScanText />} onClick={readBack} disabled={!!busy} tip="Extract facts from my edit">
-                Read back
+                <span className="btn-text">Read back</span>
               </Button>
               <Button size="sm" variant="ghost" icon={<Sparkles />} onClick={style} disabled={!!busy || proseLocked}>
                 Style passes
               </Button>
               <Button size="sm" variant="ghost" icon={<RefreshCw />} onClick={() => regenerate('minimal')} disabled={!!busy || proseLocked} tip="Change only what the card change needs">
-                Revise to card
+                <span className="btn-text">Revise to card</span>
               </Button>
             </>
           ) : null}
@@ -400,7 +438,8 @@ export function SceneEditor({ id }: { id: string }) {
                 {card.beats.length ? `The writer will follow the ${plural(card.beats.length, 'beat')} on the card, then run the style passes and read the result back into the story. Or just start typing.` : 'Add some beats to the card first, or just start typing.'}
               </Empty>
             ) : null}
-            <ProseEditor value={prose} onChange={onProse} banned={banned} readOnly={proseLocked} placeholder={detail.prose ? undefined : 'Or start writing here…'} />
+            {styleOpen && styleReport && <StylePanel report={styleReport} onJump={(v) => setJump({ from: v.start, to: v.end })} onClose={() => setStyleOpen(false)} onSettings={() => go('settings', 'style')} />}
+            <ProseEditor value={prose} onChange={onProse} banned={banned} readOnly={proseLocked} marks={marks} jump={jump} placeholder={detail.prose ? undefined : 'Or start writing here…'} />
           </div>
         </div>
       </section>
@@ -633,3 +672,112 @@ export function ProseReviewDialog({ review, onClose, onDone }: { review: ProseRe
 }
 
 export { CardDiff };
+
+const RULE: Record<string, string> = {
+  never: 'Never list',
+  prefer: 'Preferred word',
+  banned: 'Banned pattern',
+  spelling: 'Spelling',
+  'em-dash': 'Em dashes',
+  semicolon: 'Semicolons',
+  exclamation: 'Exclamation marks',
+  quotes: 'Quotation marks',
+  'dialogue-tag': 'Dialogue tags',
+  'sentence-length': 'Sentence length',
+  pov: 'Point of view',
+  tense: 'Tense',
+  contraction: 'Contractions',
+  adverb: 'Adverbs',
+  'filter-word': 'Filter words',
+  rhythm: 'Rhythm',
+  'dialogue-share': 'Dialogue share',
+  'paragraph-length': 'Paragraph length',
+};
+
+/** Every style-sheet violation in the scene, grouped by rule; click one to jump to it. */
+function StylePanel({ report, onJump, onClose, onSettings }: { report: StyleReport; onJump: (v: StyleViolation) => void; onClose: () => void; onSettings: () => void }) {
+  const groups = new Map<string, StyleViolation[]>();
+  for (const v of report.violations) groups.set(v.rule, [...(groups.get(v.rule) ?? []), v]);
+  const ordered = [...groups.entries()].sort((a, b) => Number(b[1][0].kind === 'enforced') - Number(a[1][0].kind === 'enforced'));
+  return (
+    <div className="style-panel">
+      <div className="row">
+        <strong className="grow">
+          {report.enforced ? `${plural(report.enforced, 'rule')} broken` : 'Every enforced rule holds'}
+          {report.guided > 0 && <span className="faint" style={{ fontWeight: 400 }}> · {plural(report.guided, 'softer note')}</span>}
+        </strong>
+        <Button size="sm" variant="ghost" onClick={onSettings}>
+          Style dials
+        </Button>
+        <Button size="sm" variant="ghost" iconOnly icon={<X />} tip="Close" onClick={onClose} />
+      </div>
+      <div className="style-stats faint">
+        {report.stats.sentence_mean} words a sentence · {Math.round(report.stats.dialogue_share * 100)}% dialogue · {report.stats.adverbs_per_1000} adverbs per 1,000
+      </div>
+      {ordered.map(([rule, vs]) => (
+        <div key={rule} className="style-group">
+          <div className="row" style={{ gap: 6 }}>
+            <span className={`sev ${vs[0].kind === 'enforced' ? 'high' : 'low'}`} />
+            <span style={{ fontWeight: 600 }}>{RULE[rule] ?? rule}</span>
+            <span className="faint">{vs.length}</span>
+          </div>
+          <div className="style-hits">
+            {vs.slice(0, 12).map((v, i) =>
+              v.end > v.start ? (
+                <button key={i} className="style-hit" onClick={() => onJump(v)} title={v.message}>
+                  {v.text.length > 40 ? v.text.slice(0, 38) + '…' : v.text}
+                  {v.fix !== undefined && <span className="faint"> → {v.fix || '∅'}</span>}
+                </button>
+              ) : (
+                <span key={i} className="faint" style={{ fontSize: 'var(--fs-label)' }}>
+                  {v.message}
+                </span>
+              ),
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** What this scene plants for later and what it pays off, from the obligations ledger. */
+function LedgerFields({ card, onChange }: { card: SceneCard; onChange: <K extends 'sets_up' | 'pays_off'>(k: K, v: SceneCard[K]) => void }) {
+  const { project: p, go } = useApp();
+  if (!p) return null;
+  const opts = p.obligations.map((o) => ({ id: o.id, label: `${OBLIGATION_KIND[o.kind]}: ${o.description.length > 50 ? o.description.slice(0, 48) + '…' : o.description}` }));
+  const order = p.scenes.map((s) => s.id);
+  const here = order.indexOf(card.id);
+  const open = p.obligations.filter((o) => o.status !== 'dropped' && o.setup_scene && order.indexOf(o.setup_scene) < here && (!o.payoff_scene || order.indexOf(o.payoff_scene) > here) && !card.pays_off.includes(o.id));
+  const issues = p.obligationIssues.filter((i) => i.scene === card.id);
+  return (
+    <div className="ledger-fields">
+      <div className="row">
+        <Link2 size={14} className="faint" />
+        <span className="grow" style={{ fontWeight: 600, fontSize: 'var(--fs-label)' }}>
+          Setups and payoffs
+        </span>
+        <Button size="sm" variant="ghost" onClick={() => go('threads', 'ledger')}>
+          Ledger
+        </Button>
+      </div>
+      <Field label="Plants">
+        <TagSelect value={card.sets_up} options={opts} onChange={(v) => onChange('sets_up', v)} placeholder="Add a setup…" />
+      </Field>
+      <Field label="Pays off">
+        <TagSelect value={card.pays_off} options={opts} onChange={(v) => onChange('pays_off', v)} placeholder="Add a payoff…" />
+      </Field>
+      {open.length > 0 && (
+        <div className="faint" style={{ fontSize: 'var(--fs-label)', lineHeight: 1.5 }}>
+          Still open here, not to be resolved yet: {open.slice(0, 4).map((o) => o.description).join('; ')}
+          {open.length > 4 ? ` and ${open.length - 4} more` : ''}.
+        </div>
+      )}
+      {issues.map((i, k) => (
+        <div key={k} className="row" style={{ gap: 6, color: 'var(--warning)', fontSize: 'var(--fs-label)' }}>
+          <AlertTriangle size={12} /> {i.message}
+        </div>
+      ))}
+    </div>
+  );
+}

@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, Check, MessageCircleQuestion, Pin, Plus, RefreshCw, Sparkles, Wand2, X, PenLine, Telescope, Shuffle, Layers, BookText, Pencil } from 'lucide-react';
+import { ArrowRight, Check, MessageCircleQuestion, Pin, Plus, RefreshCw, Sparkles, Wand2, X, PenLine, Telescope, Shuffle, Layers, BookText, Pencil, ScanSearch, Link2 } from 'lucide-react';
 import { get, post } from '../lib/api';
 import { useApp } from '../lib/app';
-import type { CardsOutput, Intent, InterviewState, StructureOutput } from '../lib/types';
+import type { CardsOutput, CritiqueOutput, Intent, InterviewState, StructureOutput } from '../lib/types';
 import { plural } from '../lib/util';
 import { Badge, Button, Empty, Field, ListEditor, Working, Avatar } from '../components/ui';
 import { Stepper, STAGES } from './dashboard';
+import { IdeaStep } from './spark';
+import { FindingList } from './critique';
 
 interface PipelineState {
   stage: string;
   interview: InterviewState | null;
   structures: StructureOutput | null;
+  structureCritiques: CritiqueOutput[] | null;
   cast: { id: string; name: string; role: string }[] | null;
   cards: Record<string, CardsOutput>;
 }
@@ -33,10 +36,11 @@ export function Build({ step }: { step?: string }) {
         <div className="page-head">
           <div>
             <h1>Build</h1>
-            <p className="sub">Five steps, top down. Each choice is cheap to make here and expensive to make later, so the decisions come first and the prose comes last.</p>
+            <p className="sub">Seven steps, top down. Each choice is cheap to make here and expensive to make later, so the decisions come first and the prose comes last.</p>
           </div>
         </div>
         <Stepper stage={stage} current={current} onPick={(id) => go('build', id)} />
+        {current === 'idea' && <IdeaStep job={job} />}
         {current === 'intent' && <IntentStep state={state} reload={load} job={job} />}
         {current === 'plot-points' && <PlotPointsStep reload={load} job={job} />}
         {current === 'structure' && <StructureStep state={state} reload={load} job={job} />}
@@ -288,6 +292,17 @@ function StructureStep({ state, reload, job }: { state: PipelineState | null; re
   const { project: p, job: run, refresh, go, toast } = useApp();
   const [busy, setBusy] = useState(false);
   const alts = state?.structures?.alternatives ?? [];
+  const critiques = state?.structureCritiques ?? null;
+  const [judging, setJudging] = useState(false);
+  const critique = async () => {
+    setJudging(true);
+    try {
+      await run('/pipeline/critique-structures', {}, 'Critique');
+      reload();
+    } finally {
+      setJudging(false);
+    }
+  };
   const propose = async (more = false) => {
     setBusy(true);
     try {
@@ -326,6 +341,7 @@ function StructureStep({ state, reload, job }: { state: PipelineState | null; re
         </Empty>
       )}
       {busy && <Working job={job} fallback="Planning three structures" />}
+      {judging && <Working job={job} fallback="A critic reads each structure for the shapes AI plots fall into" />}
       {alts.length > 0 && (
         <>
           <div className="alts">
@@ -352,6 +368,11 @@ function StructureStep({ state, reload, job }: { state: PipelineState | null; re
                     </span>
                   ))}
                 </div>
+                {critiques?.[i] && (
+                  <div className="alt-critique">
+                    <FindingList findings={critiques[i].findings} empty="No structural tells found." />
+                  </div>
+                )}
                 <Button className="pick" variant="primary" icon={<Check />} onClick={() => pick(i)}>
                   Pick this one
                 </Button>
@@ -359,7 +380,10 @@ function StructureStep({ state, reload, job }: { state: PipelineState | null; re
             ))}
           </div>
           <div className="btn-row">
-            <Button variant="ghost" icon={<RefreshCw />} onClick={() => propose(true)} disabled={busy}>
+            <Button icon={<ScanSearch />} onClick={critique} disabled={busy || judging}>
+              {critiques ? 'Critique again' : 'Critique them first'}
+            </Button>
+            <Button variant="ghost" icon={<RefreshCw />} onClick={() => propose(true)} disabled={busy || judging}>
               Show me more alternatives
             </Button>
           </div>
@@ -480,6 +504,16 @@ function CardsStep({ state, reload, job }: { state: PipelineState | null; reload
                     </ol>
                   </div>
                 ))}
+                {a.new_obligations.length > 0 && (
+                  <div className="alt-critique">
+                    <div className="faint" style={{ fontSize: 'var(--fs-label)', marginBottom: 4 }}>Plants for later</div>
+                    {a.new_obligations.map((o) => (
+                      <div key={o.id} className="row" style={{ gap: 6, fontSize: 'var(--fs-label)' }}>
+                        <Link2 size={12} className="faint" /> {o.description}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <Button className="pick" variant="primary" icon={<Check />} onClick={() => pick(i)}>
                   Pick this one
                 </Button>

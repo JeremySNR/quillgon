@@ -90,6 +90,16 @@ try {
   console.log('B. A new book through every gate in the UI');
   await page.evaluate(() => fetch('/api/init', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dir: '~/Novels/Glasshouse', title: 'The Glasshouse', target_words: 12000, offline: true }) }));
   await page.goto(`${base}/#/build`);
+  await page.getByPlaceholder(/harbourmaster drowns/).fill('A glasshouse whose orchids are watered every night, though the house has been empty for a year.');
+  await page.getByRole('button', { name: 'Show me ideas' }).click();
+  await until(async () => (await page.locator('article.idea').count()) > 3, 'ideas');
+  await page.locator('article.idea').first().getByRole('button', { name: 'Keep' }).click();
+  await until(async () => (await page.getByRole('button', { name: /Kept · 1/ }).count()) === 1, 'one kept idea');
+  await page.locator('.rung').first().getByRole('button', { name: 'Draft options' }).click();
+  await page.locator('.option-card').first().click();
+  await page.getByRole('button', { name: 'Use this premise' }).click();
+  await page.getByPlaceholder(/Cornwall, 1926/).waitFor();
+  step('idea: diverged, kept an idea, chose a logline, handed it to the intent');
   await page.getByPlaceholder(/Cornwall, 1926/).fill('When Ines Varga inherits her grandmother’s glasshouse, she finds the orchids are watered every night by someone. Her neighbour Teo says the house has been empty for a year.');
   await page.getByRole('button', { name: 'Ask me what you need to know' }).click();
   const answers = page.locator('.card textarea:not(.prose)');
@@ -114,9 +124,11 @@ try {
 
   await page.getByRole('button', { name: 'Propose three structures' }).click();
   await until(async () => (await page.locator('article.alt').count()) === 3, 'three structures');
+  await page.getByRole('button', { name: 'Critique them first' }).click();
+  await until(async () => (await page.locator('.alt-critique').count()) === 3, 'a critique of each structure');
   await page.locator('article.alt').nth(1).getByRole('button', { name: 'Pick this one' }).click();
   await page.getByText('Two ways to tell this chapter').waitFor();
-  step('structure: three alternatives shown, picked the unexpected one');
+  step('structure: three alternatives shown and critiqued, picked the unexpected one');
 
   await page.getByRole('button', { name: 'Propose two beat sequences' }).click();
   await until(async () => (await page.locator('article.alt').count()) === 2, 'two beat sequences');

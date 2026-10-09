@@ -93,7 +93,19 @@ export function spellingFixes(text: string, target: 'uk' | 'us'): { start: numbe
   return out.sort((x, y) => x.start - y.start);
 }
 
-export function fingerprint(text: string): Fingerprint {
+/**
+ * The prose in a samples file. style/samples.md often mixes notes about the voice with the
+ * samples themselves; when the samples are quoted (markdown "> "), measure only those.
+ */
+export function sampleProse(text: string): string {
+  const lines = text.split('\n');
+  const quoted = lines.filter((l) => /^\s*>/.test(l));
+  if (quoted.length >= 2) return quoted.map((l) => l.replace(/^\s*>\s?/, '')).join('\n');
+  return lines.filter((l) => !/^\s*#/.test(l)).join('\n');
+}
+
+export function fingerprint(raw: string): Fingerprint {
+  const text = sampleProse(raw);
   const sents = sentences(text);
   const words = countWords(text);
   const per1000 = (n: number) => (words ? Math.round((n / words) * 1000 * 10) / 10 : 0);

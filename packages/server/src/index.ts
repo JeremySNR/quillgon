@@ -467,6 +467,7 @@ export class NovelServer {
     // --- obligations ledger
     r('GET', '/api/obligations', ({ engine }) => ({ obligations: [...engine.store.project.obligations.values()], issues: obligationIssues(engine.store.project) }));
     r('PUT', '/api/obligations/:id', async ({ engine, params, body }) => {
+      const before = engine.store.project.obligations.get(params.id) ?? null;
       const o = engine.store.saveObligation({ ...body.obligation, id: params.id });
       // Keep the cards that plant and pay it in step with the ledger.
       for (const s of engine.store.project.scenes.values()) {
@@ -481,7 +482,8 @@ export class NovelServer {
           });
       }
       await engine.store.commit(`Ledger: ${o.description}`);
-      return o;
+      const change: Change = { kind: 'obligation', before, after: o };
+      return { obligation: o, change, impact: before ? analyseImpact(engine.store.project, change, engine.store.index) : null };
     });
     r('DELETE', '/api/obligations/:id', async ({ engine, params }) => (engine.store.deleteObligation(params.id), await engine.store.commit(`Ledger: remove ${params.id}`), { ok: true }));
 

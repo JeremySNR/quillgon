@@ -147,3 +147,15 @@ Off-the-shelf LLM judges agreed with humans only 73% of the time on fiction ([Li
 | 9 | Character agents and interviews (§6) | Sharper motives and dialogue where it matters | Med–high |
 | 10 | Provenance ledger and disclosure report (§10) | Publishing readiness | Low |
 | 11 | Overnight orchestrator, rolling re-plan, discovery path, series bible | Scale and flexibility once quality is proven | Med–high |
+
+## Status
+
+| # | Change | Status |
+|---|---|---|
+| 1 | Divergent ideation front end | ✅ Built: the Idea step and `novel spark` (personas, verbalized sampling, tail first, embedding dedupe, cliché flags, Snowflake expansion, want/need/wound/lie/arc) |
+| 2 | Obligations ledger | ✅ Built: `obligations/`, `sets_up`/`pays_off` on cards, writer told plant/pay/keep open, extraction checks it landed, ledger view, `novel ledger`, obligation changes ripple |
+| 3 | Style system | ✅ Built: `style/style.yaml` dials, code-checked spans, deterministic fixes, span-level line edits gated by code and both-ways judging, live underlines in the editor, fingerprinting samples, rules learned from edits, `novel style` |
+| 4 | Plan-level critics | ✅ Built: structural critic (book and per structure), predictability test per scene, outline reader, two-sided twist verdicts, `novel critique` |
+| 7 | Caching | ✅ Prompt caching on the system prompt with cache-aware cost. Batch API not yet |
+| 8 | Graph views | ◐ Ripple blast-radius map and the ledger chart built; scene local graph and fact flow not yet |
+| 5, 6, 9–11 | Eval harness, tension curve, character agents, provenance, orchestration | Not yet |

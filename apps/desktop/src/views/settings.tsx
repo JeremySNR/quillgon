@@ -5,6 +5,7 @@ import { useApp } from '../lib/app';
 import type { Book } from '../lib/types';
 import { loadPref, money, savePref } from '../lib/util';
 import { Badge, Button, Field, Segmented } from '../components/ui';
+import { StyleSettings } from './style-settings';
 
 const TABS = [
   { id: 'book', label: 'Book', icon: BookOpen },
@@ -286,34 +287,6 @@ function ModelSettings() {
             </tr>
           </tbody>
         </table>
-      </div>
-    </div>
-  );
-}
-
-function StyleSettings() {
-  const { project: p } = useApp();
-  const save = useSaver();
-  const [samples, setSamples] = useState(p!.style.samples);
-  const [banned, setBanned] = useState(p!.style.banned);
-  return (
-    <div className="stack lg">
-      <div className="card stack">
-        <h3>Voice samples</h3>
-        <p className="muted">A few paragraphs written the way the book should sound. Your own writing works best.</p>
-        <textarea className="textarea prose" rows={12} value={samples} onChange={(e) => setSamples(e.target.value)} />
-      </div>
-      <div className="card stack">
-        <h3>Banned patterns</h3>
-        <p className="muted">
-          One per list item. Plain phrases match whole words; <span className="mono">/regex/</span> for patterns; add <span className="mono">(max 2 per scene)</span> to allow a few. Checked mechanically after every write, and underlined in the editor.
-        </p>
-        <textarea className="textarea mono" rows={14} value={banned} onChange={(e) => setBanned(e.target.value)} style={{ fontSize: 12.5 }} />
-      </div>
-      <div>
-        <Button variant="primary" icon={<Check />} onClick={() => save(() => put('/style', { samples, banned }), 'Style saved')}>
-          Save style
-        </Button>
       </div>
     </div>
   );

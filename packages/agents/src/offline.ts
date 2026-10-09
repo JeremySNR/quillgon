@@ -22,6 +22,8 @@ import { slugify } from '@novel/core';
  * without an API key (provider: offline) and gives tests a predictable baseline.
  * Its prose is placeholder text built from the card; it is not meant to be good.
  */
+const STOP = new Set('never always about above after again against around because before being below between could every first other their there these thing those through under until where which while whose would should'.split(' '));
+
 export class OfflineSuite implements AgentSuite {
   async interview({ premise, answers }: Parameters<AgentSuite['interview']>[0]): Promise<InterviewOutput> {
     if (!answers.length) {
@@ -318,7 +320,7 @@ export class OfflineSuite implements AgentSuite {
 
   async diverge(input: Parameters<AgentSuite['diverge']>[0]): Promise<DivergeOutput> {
     // Nouns, roughly: long words that are not verb forms or plurals.
-    const nouns = [...new Set((input.seed.match(/\b[a-z]{5,}\b/gi) ?? []).map((w) => w.toLowerCase()))].filter((w) => !/(?:ing|ed|[^s]s)$/.test(w)).slice(0, 6);
+    const nouns = [...new Set((input.seed.match(/\b[a-z]{5,}\b/gi) ?? []).map((w) => w.toLowerCase()))].filter((w) => !/(?:ing|ed|[^s]s)$/.test(w) && !STOP.has(w)).slice(0, 6);
     const pick = (i: number) => nouns[i % Math.max(1, nouns.length)] ?? 'the secret';
     const persona = input.persona.split(' ').slice(0, 3).join(' ');
     const templates: Record<string, (i: number) => string> = {

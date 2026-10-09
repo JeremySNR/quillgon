@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Activity, AlertTriangle, CheckCircle2, CircleHelp, Eye, Moon, Telescope, Target } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, CircleHelp, Eye, Moon, Telescope, Target, Scale, ScrollText } from 'lucide-react';
 import { get } from '../lib/api';
 import { useApp } from '../lib/app';
 import type { ReaderReport as Report } from '../lib/types';
 import { ago, plural } from '../lib/util';
-import { Badge, Button, Empty, Working } from '../components/ui';
+import { Badge, Button, Empty, Segmented, Working } from '../components/ui';
+import { PlanCritique } from './critique';
+import type { TwistCheck } from '../lib/types';
 import { EngagementChart } from '../components/chart';
 
 export function ReaderReport() {
@@ -13,6 +15,7 @@ export function ReaderReport() {
   const [report, setReport] = useState<Report | null>(null);
   const [busy, setBusy] = useState(false);
   const [act, setAct] = useState('');
+  const [mode, setMode] = useState<'prose' | 'outline'>('prose');
   const [sel, setSel] = useState<string | null>(null);
   const load = async (id?: string) => {
     const l = await get('/reports/reader');
@@ -27,7 +30,7 @@ export function ReaderReport() {
   const runReader = async () => {
     setBusy(true);
     try {
-      const r = await run<Report>('/quality/reader', act ? { act } : {}, 'Reader run');
+      const r = await run<Report>('/quality/reader', { ...(act ? { act } : {}), mode }, mode === 'outline' ? 'Outline read' : 'Reader run');
       toast({ kind: 'success', message: 'Reader run complete', detail: `Mean engagement ${r.mean_engagement}/5` });
       await load(r.id);
     } finally {
@@ -36,6 +39,7 @@ export function ReaderReport() {
   };
   const job = jobs[jobs.length - 1];
   const written = p.scenes.filter((s) => s.sync !== 'unwritten').length;
+  const canRead = mode === 'outline' ? p.scenes.length > 0 : written > 0;
   const selEntry = report?.log.find((e) => e.scene === sel);
 
   return (
@@ -64,16 +68,29 @@ export function ReaderReport() {
                 </option>
               ))}
             </select>
-            <Button variant="primary" icon={<Telescope />} onClick={runReader} disabled={busy || !written}>
-              Run reader
+            <Segmented
+              value={mode}
+              onChange={setMode}
+              options={[
+                { value: 'prose', label: 'Prose' },
+                { value: 'outline', label: 'Outline' },
+              ]}
+            />
+            <Button variant="primary" icon={mode === 'outline' ? <ScrollText /> : <Telescope />} onClick={runReader} disabled={busy || !canRead}>
+              {mode === 'outline' ? 'Read the outline' : 'Run reader'}
             </Button>
           </div>
         </div>
         {busy && <div style={{ marginBottom: 20 }}><Working job={job} fallback="Reading" /></div>}
         {!report ? (
-          <Empty icon={<Activity />} title={written ? 'No reader runs yet' : 'Nothing to read yet'}>
-            {written ? 'Run the reader to see an engagement curve, where it got confused, and which twists it saw coming.' : 'Write some scenes first.'}
-          </Empty>
+          <div className="stack lg">
+            <Empty icon={<Activity />} title={written ? 'No reader runs yet' : 'Read the outline first'}>
+              {written
+                ? 'Run the reader to see an engagement curve, where it got confused, and which twists it saw coming.'
+                : 'No prose yet, but the reader can read the scene cards. A twist that is guessed from the outline will be guessed from the book, and it is far cheaper to fix now.'}
+            </Empty>
+            {p.scenes.length > 0 && <PlanCritique />}
+          </div>
         ) : (
           <div className="stack lg">
             <div className="tiles">
@@ -85,7 +102,10 @@ export function ReaderReport() {
                   {report.mean_engagement.toFixed(1)}
                   <small>/ 5</small>
                 </span>
-                <span className="tile-foot">{plural(report.scenes.length, 'scene')} · {ago(report.ran_at)}</span>
+                <span className="tile-foot">
+                  {plural(report.scenes.length, 'scene')} · {report.mode === 'outline' ? 'from the outline · ' : ''}
+                  {ago(report.ran_at)}
+                </span>
               </div>
               <div className="tile">
                 <span className="tile-label">
@@ -156,6 +176,8 @@ export function ReaderReport() {
               )}
             </div>
 
+            {report.twists?.length > 0 && <TwistTable twists={report.twists} />}
+
             <div className="two-col">
               <div className="card">
                 <div className="card-head">
@@ -211,6 +233,8 @@ export function ReaderReport() {
               </div>
             </div>
 
+            <PlanCritique />
+
             <div className="card">
               <div className="card-head">
                 <h3>Reading log</h3>
@@ -236,6 +260,64 @@ export function ReaderReport() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+const VERDICT: Record<TwistCheck['verdict'], { label: string; kind: 'success' | 'warning' | 'danger' | 'outline'; help: string }> = {
+  good: { label: 'Earned', kind: 'success', help: 'Not guessed early, and fair in hindsight' },
+  guessable: { label: 'Guessed early', kind: 'warning', help: 'Fair, but the reader saw it coming: hide a clue better or add a red herring' },
+  unearned: { label: 'Out of nowhere', kind: 'warning', help: 'Not guessed, but not earned either: plant a clue earlier' },
+  'guessable-and-unearned': { label: 'Both', kind: 'danger', help: 'Guessed early and still felt unfair' },
+  unknown: { label: 'Not rated', kind: 'outline', help: 'The reader gave no fairness rating' },
+};
+
+/** A good twist passes two tests at once: nobody saw it coming, and it was fair. */
+function TwistTable({ twists }: { twists: TwistCheck[] }) {
+  const { go } = useApp();
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h3>
+          <Scale size={16} style={{ verticalAlign: -2, marginRight: 6 }} />
+          Twists, judged from both sides
+        </h3>
+        <span className="muted">Surprising going in, inevitable looking back.</span>
+      </div>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>Scene</th>
+            <th>What is revealed</th>
+            <th>Guessed early?</th>
+            <th>Fair in hindsight</th>
+            <th>Verdict</th>
+          </tr>
+        </thead>
+        <tbody>
+          {twists.map((t) => (
+            <tr key={t.scene} onClick={() => go('scene', t.scene)} title={VERDICT[t.verdict].help}>
+              <td className="mono">{t.scene}</td>
+              <td style={{ maxWidth: 420 }}>{t.what}</td>
+              <td>{t.guessed ? <span style={{ color: 'var(--warning)' }}>in {t.guessed.guessed_in}, {plural(t.guessed.early_by, 'scene')} early</span> : <span className="faint">no</span>}</td>
+              <td>
+                {t.fairness === null ? (
+                  <span className="faint">—</span>
+                ) : (
+                  <span className="fair" aria-label={`${t.fairness} of 5`}>
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <i key={n} className={n <= t.fairness! ? 'on' : ''} />
+                    ))}
+                  </span>
+                )}
+              </td>
+              <td>
+                <Badge kind={VERDICT[t.verdict].kind}>{VERDICT[t.verdict].label}</Badge>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

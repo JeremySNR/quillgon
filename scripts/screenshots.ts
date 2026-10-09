@@ -43,6 +43,7 @@ async function shoot(name: string, hash: string, theme: 'dark' | 'light', prep?:
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push(`${name}: ${e.message}`));
   page.on('console', (m) => m.type() === 'error' && errors.push(`${name}: ${m.text()}`));
+  page.on('response', async (r) => r.status() >= 400 && errors.push(`${name}: ${r.status()} ${r.url()} ${await r.text().catch(() => '')}`));
   await page.goto(`${base}/#/${hash}`);
   await page.waitForLoadState('networkidle');
   await page.waitForTimeout(400);
@@ -59,6 +60,10 @@ await api('POST', '/open-sample');
 // A reader run and a continuity check so the dashboard and report have data.
 await waitJob('/quality/reader');
 await waitJob('/quality/continuity', { model: false });
+// Style dials an author might set, a plan check, and the style status of every scene.
+await api('PUT', '/style/sheet', { sheet: { spelling: 'uk', quotes: 'single', dialogue_tags: 'simple', never: ['something moved', 'gently'], sentence_words: { mean_min: 7, mean_max: 20, max: 34 }, guidance: ['Feeling carried in objects and gestures, never named'] } });
+await api('POST', '/style/check-all');
+await waitJob('/critique');
 
 for (const theme of ['dark', 'light'] as const) {
   await shoot('overview', 'dashboard', theme);
@@ -70,6 +75,21 @@ await shoot('threads', 'threads', 'dark');
 await shoot('characters', 'characters/mara', 'dark');
 await shoot('reader', 'reader', 'dark', async (page) => {
   await page.locator('.chart .pt').nth(4).click();
+});
+await shoot('reader-twists', 'reader', 'dark', async (page) => {
+  await page.getByText('Twists, judged from both sides').scrollIntoViewIfNeeded();
+});
+await shoot('ledger', 'threads/ledger', 'dark');
+await shoot('ledger', 'threads/ledger', 'light');
+await shoot('style', 'settings/style', 'dark', async (page) => {
+  await page.getByRole('button', { name: 'Set the dials from these' }).click();
+  await page.waitForTimeout(300);
+  await page.locator('.fit').scrollIntoViewIfNeeded();
+});
+await shoot('style-dials', 'settings/style', 'light');
+await shoot('scene-style', 'scene/s04', 'dark', async (page) => {
+  await page.waitForSelector('.style-chip');
+  await page.locator('.style-chip').click();
 });
 await shoot('palette', 'dashboard', 'dark', async (page) => {
   await page.keyboard.press('Control+k');
@@ -93,7 +113,35 @@ await shoot('ripple-card', 'ripple', 'dark', async (page) => {
   await page.getByRole('option').filter({ hasText: 's11' }).click();
 });
 await shoot('overview-ripple', 'dashboard', 'dark');
+await shoot('ripple-graph', 'ripple', 'light', async (page) => {
+  await page.getByRole('option').filter({ hasText: 's06' }).click();
+});
+
 await shoot('narrow', 'scene/s10', 'dark', undefined, { width: 1100, height: 760 });
+
+// A new book, from a seed idea.
+await api('POST', '/init', { dir: path.join(home, 'Novels', 'Spark'), title: 'The Weather Clerk', genre: 'literary', offline: true });
+await api('POST', '/idea/start', { seed: 'A weather clerk on a remote island records storms that never arrive, and the islanders start planning their lives around his forecasts.', genre: 'literary' });
+let board = await waitJob('/idea/diverge');
+for (const i of board.pile.slice(0, 3)) board = await api('POST', '/idea/mark', { id: i.id, status: 'kept' });
+await api('POST', '/idea/mark', { id: board.pile[4].id, status: 'discarded' });
+await api('POST', '/idea/own', { text: 'His forecasts are always wrong, and always about the same family.' });
+board = await waitJob('/idea/expand', { step: 'logline' });
+await api('POST', '/idea/choose', { step: 'logline', text: board.logline_options[0] });
+await waitJob('/idea/expand', { step: 'paragraph' });
+for (const theme of ['dark', 'light'] as const) await shoot('idea', 'build/idea', theme);
+await shoot('idea-ladder', 'build/idea', 'dark', async (page) => {
+  await page.locator('.ladder').scrollIntoViewIfNeeded();
+});
+// Plan, then critique three structures before choosing.
+await api('POST', '/idea/skip');
+await api('POST', '/pipeline/approve-intent', { intent: { premise: board.logline_options[0] } });
+await waitJob('/pipeline/propose-plot-points');
+for (const pp of (await api('GET', '/project')).plotPoints) await api('POST', '/pipeline/accept-plot-point', { id: pp.id });
+await api('POST', '/pipeline/finish-plot-points');
+await waitJob('/pipeline/propose-structures');
+await waitJob('/pipeline/critique-structures');
+await shoot('build-critique', 'build/structure', 'dark');
 
 await browser.close();
 server.close();

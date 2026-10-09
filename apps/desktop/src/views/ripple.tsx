@@ -6,6 +6,7 @@ import type { RippleData, RippleItem, SceneCard } from '../lib/types';
 import { ago, cx, factLabel, firstName, plural } from '../lib/util';
 import { Badge, Button, Dialog, Empty, Field, Kbd, ListEditor, Working } from '../components/ui';
 import { CardDiff, ProseDiff, ProseSideBySide } from '../components/diff';
+import { BlastRadius } from '../components/blast-radius';
 
 const STATUS: Record<string, { label: string; kind?: 'success' | 'warning' | 'danger' | 'info' | 'accent' | 'outline' }> = {
   pending: { label: 'To review', kind: 'outline' },
@@ -174,6 +175,18 @@ export function RippleReview() {
         <div>
           <div className="section-title">The change</div>
           <p style={{ fontSize: 15, lineHeight: 1.5 }} className="serif">{data.description}</p>
+        </div>
+        <div className="blast-wrap">
+          <BlastRadius
+            items={items}
+            order={p.scenes.map((s) => s.id)}
+            handled={data.handled}
+            selected={sel}
+            onSelect={setSel}
+            colour={severity}
+            titles={Object.fromEntries(p.scenes.map((s) => [s.id, s.card.title]))}
+          />
+          <div className="blast-legend faint">Inner ring: directly affected. The book runs clockwise from the top.</div>
         </div>
         <div className="stack" style={{ gap: 8 }}>
           <div className="row">

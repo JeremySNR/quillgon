@@ -28,6 +28,20 @@ import type {
   ExtractionResult,
   InterviewState,
   VoiceReport,
+  Obligation,
+  ObligationIssue,
+  IdeaBoard,
+  IdeaItem,
+  StyleSheet,
+  StyleViolation,
+  StyleReport,
+  Fingerprint,
+  RuleSuggestion,
+  Critique,
+  CritiqueOutput,
+  ShapeFinding,
+  Predictability,
+  TwistCheck,
 } from '@novel/core';
 
 export type {
@@ -60,6 +74,20 @@ export type {
   ExtractionResult,
   InterviewState,
   VoiceReport,
+  Obligation,
+  ObligationIssue,
+  IdeaBoard,
+  IdeaItem,
+  StyleSheet,
+  StyleViolation,
+  StyleReport,
+  Fingerprint,
+  RuleSuggestion,
+  Critique,
+  CritiqueOutput,
+  ShapeFinding,
+  Predictability,
+  TwistCheck,
 };
 
 export interface SceneSummary {
@@ -74,6 +102,7 @@ export interface SceneSummary {
   contradictions: Contradiction[];
   issues: ContinuityIssue[];
   engagement: number | null;
+  style: { enforced: number; guided: number; checked_at: string } | null;
 }
 
 export interface CharacterEntry {
@@ -93,11 +122,15 @@ export interface Snapshot {
   unplaced: string[];
   plotPoints: PlotPoint[];
   threads: Thread[];
+  obligations: Obligation[];
+  obligationIssues: ObligationIssue[];
+  idea: IdeaBoard;
   characters: CharacterEntry[];
   timeline: Timeline;
   locations: { id: string; name: string; description: string; near: string[] }[];
   facts: { id: string; statement: string }[];
-  style: { samples: string; banned: string };
+  style: { samples: string; banned: string; sheet: StyleSheet };
+  critique: { ran_at: string; findings: number } | null;
   issues: { severity: 'error' | 'warning'; file: string; path: string; message: string }[];
   continuity: { mechanical: ContinuityIssue[]; model: ContinuityIssue[]; ran_at: string | null };
   voice: { ran_at: string; warnings: number } | null;
