@@ -1,0 +1,26 @@
+extracted_from: f4656110dc0dfb5f
+facts:
+  - subject: mara
+    predicate: mentions
+    object: eliza-holds-debts
+    confidence: 0.9
+  - subject: tom
+    predicate: mentions
+    object: walter-drowned
+    confidence: 0.9
+  - subject: mara
+    predicate: knows
+    object: walter-letter
+    confidence: 0.9
+  - subject: tom
+    predicate: knows
+    object: walter-letter
+    confidence: 0.9
+  - subject: mara
+    predicate: located_at
+    object: cottage
+    confidence: 0.95
+  - subject: tom
+    predicate: located_at
+    object: cottage
+    confidence: 0.95

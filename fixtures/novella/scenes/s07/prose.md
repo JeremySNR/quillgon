@@ -1,0 +1,34 @@
+---
+word_count: 367
+generated_from: 6e2bf68dd3b009d9
+last_extracted: 6e23b35287a4b017
+status: approved
+---
+
+The Ship was half empty, the way it was on a weeknight in March, and Jory Penrose was at the end of the bar where the light was worst. Tom had known he would be. He bought two halves and carried them over and set one down in front of the boy, who looked at it and then at him.
+
+'Not thirsty,' Jory said.
+
+'Drink it anyway.'
+
+They sat. The landlord found something to do in the cellar. Tom turned his glass on the wet wood and watched the rings it made, and thought about how to say a thing he had not said for twelve days.
+
+'I was up at two on the third,' he said. 'My chest. I stood at the window.'
+
+Jory went still.
+
+'I saw a boat in the bay. No lights. Just sitting out there on the flat water past the Mewstone, turning on the tide like a leaf.' Tom drank. 'I knew her shape. Your father built her for you. The *Kittiwake*.'
+
+'You don't know what you saw. It was dark.'
+
+'There was a moon.' Tom put the glass down. 'She'd slipped her mooring, hadn't she. You'd been in here till all hours and you'd not made her fast, and she went out on the ebb.'
+
+Jory's face had come apart. He was twenty-six years old and he looked about eleven. 'Don't,' he said.
+
+'And Walter saw her go, and he went after her in the punt, because she was yours and he'd built her with his own hands. On his own. At night.' Tom's voice did not rise. 'That's what happened. Isn't it, boy. No storm.'
+
+'If you knew,' Jory said, very low, 'why didn't you say?'
+
+Tom had asked himself the same thing every night for twelve days. Because Walter was dead and nothing would bring him back. Because the boy was all that was left of him, here, and the village could be cruel. Because he had been a coward, and was still being one.
+
+'Your sister's asking questions,' he said. 'She'll not stop. You tell her, Jory. Or I will.'

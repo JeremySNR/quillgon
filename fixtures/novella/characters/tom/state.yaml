@@ -1,0 +1,70 @@
+s03:
+  knows:
+    - walter-drowned
+    - no-storm-that-night
+    - jory-boat-lost
+    - ledger-storm-entry
+  wants: to protect Walter's children
+  feels:
+    mara: protective
+    jory: worried
+  location: quay
+  alive: true
+s06:
+  knows:
+    - walter-drowned
+    - no-storm-that-night
+    - jory-boat-lost
+    - ledger-storm-entry
+    - walter-letter
+  wants: to protect Walter's children
+  feels:
+    mara: protective
+    jory: worried
+    eliza: angry
+  location: cottage
+  alive: true
+s07:
+  knows:
+    - walter-drowned
+    - no-storm-that-night
+    - jory-boat-lost
+    - ledger-storm-entry
+    - walter-letter
+  wants: to make Jory tell her
+  feels:
+    mara: protective
+    jory: angry
+    eliza: angry
+  location: ship-inn
+  alive: true
+s09:
+  knows:
+    - walter-drowned
+    - no-storm-that-night
+    - jory-boat-lost
+    - ledger-storm-entry
+    - walter-letter
+  wants: to stop being a coward
+  feels:
+    mara: ashamed
+    jory: angry
+    eliza: angry
+  location: quay
+  alive: true
+s11:
+  knows:
+    - walter-drowned
+    - no-storm-that-night
+    - jory-boat-lost
+    - ledger-storm-entry
+    - walter-letter
+    - jory-forged-ledger
+    - eliza-knew
+  wants: to see it put right
+  feels:
+    mara: proud
+    jory: pitying
+    eliza: contempt
+  location: cannery
+  alive: true

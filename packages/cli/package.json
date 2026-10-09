@@ -1,0 +1,14 @@
+{
+  "name": "@novel/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "novel": "./bin/novel.mjs" },
+  "dependencies": {
+    "@novel/agents": "workspace:*",
+    "@novel/core": "workspace:*",
+    "@novel/server": "workspace:*",
+    "yaml": "^2.8.1",
+    "zod": "^4.1.0"
+  }
+}

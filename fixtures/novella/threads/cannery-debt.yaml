@@ -1,0 +1,12 @@
+id: cannery-debt
+title: Short weights
+kind: setup-payoff
+description: Eliza holds the village's debts and short-weighs its catch. Walter was about to report her.
+setup_scene: s04
+payoff_scene: s11
+status: paid-off
+beats:
+  - scene: s06
+    note: The unsent letter
+  - scene: s08
+    note: Eliza's offer; 'ask your brother'

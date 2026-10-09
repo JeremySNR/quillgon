@@ -1,0 +1,45 @@
+s04:
+  knows:
+    - walter-drowned
+    - eliza-holds-debts
+    - jory-boat-lost
+    - jory-forged-ledger
+    - eliza-knew
+    - no-storm-that-night
+    - ledger-storm-entry
+  wants: to send Mara back to London
+  feels:
+    mara: wary
+  location: cannery
+  alive: true
+s08:
+  knows:
+    - walter-drowned
+    - eliza-holds-debts
+    - jory-boat-lost
+    - jory-forged-ledger
+    - eliza-knew
+    - no-storm-that-night
+    - ledger-storm-entry
+    - walter-letter
+  wants: to buy the harbour house and the silence with it
+  feels:
+    mara: threatened
+  location: cannery
+  alive: true
+s11:
+  knows:
+    - walter-drowned
+    - eliza-holds-debts
+    - jory-boat-lost
+    - jory-forged-ledger
+    - eliza-knew
+    - no-storm-that-night
+    - ledger-storm-entry
+    - walter-letter
+  wants: to limit the damage
+  feels:
+    mara: respect
+    tom: indifferent
+  location: cannery
+  alive: true

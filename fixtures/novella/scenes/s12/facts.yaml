@@ -1,0 +1,22 @@
+extracted_from: 3f700952420319cc
+facts:
+  - subject: mara
+    predicate: mentions
+    object: jory-forged-ledger
+    confidence: 0.9
+  - subject: jory
+    predicate: mentions
+    object: walter-drowned
+    confidence: 0.9
+  - subject: jory
+    predicate: knows
+    object: walter-letter
+    confidence: 0.9
+  - subject: mara
+    predicate: located_at
+    object: harbour
+    confidence: 0.95
+  - subject: jory
+    predicate: located_at
+    object: harbour
+    confidence: 0.95

@@ -1,0 +1,39 @@
+id: s04
+title: Short Weight
+pov: mara
+location: cannery
+time: 1926-03-13 afternoon
+purpose: Introduce Eliza and her hold on the village; misdirect suspicion toward her.
+beats:
+  - The grown cannery
+  - Eliza's sympathy and offer of help
+  - "Eliza: I hold the paper on most of the boats"
+  - Mara raises the calm night; something moves behind Eliza's eyes
+  - "Eliza's warning: go home, it would be kinder"
+characters:
+  - mara
+  - eliza
+threads_touched:
+  - cannery-debt
+plot_points: []
+reveals:
+  - eliza-holds-debts
+mentions:
+  - character: mara
+    fact: no-storm-that-night
+  - character: eliza
+    fact: eliza-holds-debts
+deltas:
+  - character: mara
+    learns:
+      - eliza-holds-debts
+    forgets: []
+    location: cannery
+  - character: eliza
+    learns:
+      - no-storm-that-night
+      - ledger-storm-entry
+    forgets: []
+outcome: Eliza becomes the obvious suspect.
+status: approved
+lock: none

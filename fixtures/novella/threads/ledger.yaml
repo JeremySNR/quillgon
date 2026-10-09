@@ -1,0 +1,16 @@
+id: ledger
+title: Who wrote the storm?
+kind: mystery
+description: The ledger records a storm on a calm night. Someone other than Walter wrote it.
+setup_scene: s02
+payoff_scene: s10
+status: paid-off
+beats:
+  - scene: s03
+    note: "Tom: there was no weather"
+  - scene: s05
+    note: The ink and the uncrossed sevens
+  - scene: s07
+    note: Tom confronts Jory (reader sees, Mara does not)
+  - scene: s09
+    note: Tom tells Mara about the Kittiwake

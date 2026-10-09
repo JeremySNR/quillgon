@@ -1,0 +1,26 @@
+extracted_from: 161ca1da5a7880a2
+facts:
+  - subject: mara
+    predicate: mentions
+    object: jory-boat-lost
+    confidence: 0.9
+  - subject: mara
+    predicate: mentions
+    object: ink-mismatch
+    confidence: 0.9
+  - subject: jory
+    predicate: mentions
+    object: jory-forged-ledger
+    confidence: 0.9
+  - subject: mara
+    predicate: knows
+    object: jory-forged-ledger
+    confidence: 0.9
+  - subject: mara
+    predicate: located_at
+    object: harbour-office
+    confidence: 0.95
+  - subject: jory
+    predicate: located_at
+    object: harbour-office
+    confidence: 0.95

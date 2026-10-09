@@ -1,0 +1,29 @@
+id: s02
+title: The Tide Ledger
+pov: mara
+location: harbour-office
+time: 1926-03-12 night
+purpose: "Set up the mystery: the ledger records a storm."
+beats:
+  - The office as he left it
+  - Mara sits in his chair; memory of ruling the columns
+  - "The entry for 3 March: force 8, heavy sea"
+  - Contradiction with the telegram and the coroner
+characters:
+  - mara
+threads_touched:
+  - ledger
+plot_points:
+  - pp-drowning
+reveals:
+  - ledger-storm-entry
+mentions: []
+deltas:
+  - character: mara
+    learns:
+      - ledger-storm-entry
+    forgets: []
+    location: harbour-office
+outcome: Mara knows the ledger and the weather disagree.
+status: approved
+lock: none

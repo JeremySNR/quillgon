@@ -1,0 +1,17 @@
+title: The Tidekeeper's Ledger
+genre: literary mystery
+target_words: 12000
+pov_mode: third-limited
+tense: past
+stage: complete
+models: {}
+agents: {}
+ripple:
+  hop_limit: 2
+  round_cap: 3
+  similarity_threshold: 0.22
+health:
+  last_reader_run: null
+  reader_mean_engagement: null
+  open_continuity_issues: 0
+  voice_warnings: 0

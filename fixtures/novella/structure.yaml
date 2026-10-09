@@ -1,0 +1,40 @@
+acts:
+  - id: act-1
+    title: Return
+    chapters:
+      - id: ch-1
+        title: The Calm Night
+        scenes:
+          - s01
+          - s02
+      - id: ch-2
+        title: Weights and Measures
+        scenes:
+          - s03
+          - s04
+  - id: act-2
+    title: Undertow
+    chapters:
+      - id: ch-3
+        title: Two Inks
+        scenes:
+          - s05
+          - s06
+      - id: ch-4
+        title: Adrift
+        scenes:
+          - s07
+          - s08
+  - id: act-3
+    title: Slack Water
+    chapters:
+      - id: ch-5
+        title: What Tom Saw
+        scenes:
+          - s09
+          - s10
+      - id: ch-6
+        title: Ledger Balanced
+        scenes:
+          - s11
+          - s12

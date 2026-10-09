@@ -1,0 +1,25 @@
+locations:
+  - id: harbour
+    name: Harbour wall
+    description: The curved granite wall enclosing the cove; Jory's place to drink.
+    near: [quay, harbour-office, ship-inn]
+  - id: harbour-office
+    name: Harbour office
+    description: One room on the quay. Paraffin, wet rope, the ledger on the desk.
+    near: [quay, harbour]
+  - id: quay
+    name: The quay
+    description: Fish boxes, nets, the slip, a view of the Mewstone.
+    near: [harbour, harbour-office, cannery, ship-inn]
+  - id: cannery
+    name: Trevaskis cannery
+    description: Pilchard works with a new brick wing; Eliza's office overlooks the floor.
+    near: [quay]
+  - id: cottage
+    name: The Penrose cottage
+    description: The harbourmaster's house above the cove.
+    near: [quay]
+  - id: ship-inn
+    name: The Ship
+    description: The village pub at the end of the quay.
+    near: [quay, harbour]

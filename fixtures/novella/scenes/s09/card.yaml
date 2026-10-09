@@ -1,0 +1,34 @@
+id: s09
+title: What Tom Saw
+pov: mara
+location: quay
+time: 1926-03-16 dawn
+purpose: Tom tells Mara about the Kittiwake.
+beats:
+  - Low tide, boats on their sides
+  - "Mara: someone who knew how he set out a page"
+  - "Tom: the Kittiwake slipped her mooring; Walter went after her"
+  - There was no storm; there didn't need to be
+  - Tom's confession of cowardice
+characters:
+  - mara
+  - tom
+threads_touched:
+  - ledger
+plot_points: []
+reveals:
+  - jory-boat-lost
+mentions:
+  - character: mara
+    fact: ink-mismatch
+  - character: tom
+    fact: jory-boat-lost
+deltas:
+  - character: mara
+    learns:
+      - jory-boat-lost
+    forgets: []
+    location: quay
+outcome: Mara knows how her father died. She has not yet put Jory and the ink together aloud.
+status: approved
+lock: none

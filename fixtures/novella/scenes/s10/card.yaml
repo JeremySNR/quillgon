@@ -1,0 +1,38 @@
+id: s10
+title: Confession
+pov: mara
+location: harbour-office
+time: 1926-03-16 night
+purpose: "Twist: Jory forged the entry to hide that Walter died going after his boat."
+beats:
+  - Jory in their father's chair
+  - He did not make her fast; he did not get up when Walter called
+  - At five he wrote the storm in
+  - "'I just wanted there to be a reason that wasn't me.'"
+  - "Mara: he'd have gone out for you every time"
+characters:
+  - mara
+  - jory
+threads_touched:
+  - ledger
+  - mara-jory
+plot_points:
+  - pp-confession
+reveals:
+  - jory-forged-ledger
+mentions:
+  - character: mara
+    fact: jory-boat-lost
+  - character: mara
+    fact: ink-mismatch
+  - character: jory
+    fact: jory-forged-ledger
+deltas:
+  - character: mara
+    learns:
+      - jory-forged-ledger
+    forgets: []
+    location: harbour-office
+outcome: The truth, and the beginning of forgiveness.
+status: locked
+lock: both

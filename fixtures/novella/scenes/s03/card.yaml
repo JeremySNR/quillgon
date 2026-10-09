@@ -1,0 +1,38 @@
+id: s03
+title: No Weather
+pov: mara
+location: quay
+time: 1926-03-13 morning
+purpose: Confirm the night was calm; plant that Tom is holding something back.
+beats:
+  - Tom mending nets
+  - Mara tells him what the ledger says
+  - "Tom: there was no weather; Walter wouldn't lie in the book"
+  - "'Talk to your brother'"
+  - Tom refuses to say more
+characters:
+  - mara
+  - tom
+threads_touched:
+  - ledger
+plot_points: []
+reveals:
+  - no-storm-that-night
+mentions:
+  - character: mara
+    fact: ledger-storm-entry
+  - character: tom
+    fact: no-storm-that-night
+deltas:
+  - character: mara
+    learns:
+      - no-storm-that-night
+    forgets: []
+    location: quay
+  - character: tom
+    learns:
+      - ledger-storm-entry
+    forgets: []
+outcome: Mara is sure the entry is false and that Tom knows more.
+status: approved
+lock: none

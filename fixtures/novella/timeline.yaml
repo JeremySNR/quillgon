@@ -1,0 +1,41 @@
+events:
+  - id: e-boat-adrift
+    when: 1926-03-03T22:30
+    description: Jory's boat, the Kittiwake, slips her mooring and drifts out on the ebb.
+    scenes:
+      - s07
+      - s09
+      - s10
+  - id: e-walter-drowns
+    when: 1926-03-03T23:30
+    description: Walter rows out alone after the Kittiwake and drowns off the Mewstone.
+    scenes:
+      - s01
+      - s02
+      - s10
+  - id: e-ledger-forged
+    when: 1926-03-04T05:00
+    description: Jory writes a storm into the ledger in blue-black ink.
+    scenes:
+      - s10
+  - id: e-jory-tells-eliza
+    when: 1926-03-06T10:00
+    description: Jory asks Eliza for money and tells her everything.
+    scenes:
+      - s11
+  - id: e-mara-returns
+    when: 1926-03-12T17:00
+    description: Mara arrives in Porthwenna on the evening bus.
+    scenes:
+      - s01
+  - id: e-funeral
+    when: 1926-03-13T10:00
+    description: Walter's funeral at the chapel.
+    scenes:
+      - s01
+  - id: e-letter-to-truro
+    when: 1926-03-17T12:00
+    description: Mara's finished letter is signed by the witnesses.
+    scenes:
+      - s11
+      - s12

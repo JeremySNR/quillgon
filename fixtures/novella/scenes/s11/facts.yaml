@@ -1,0 +1,42 @@
+extracted_from: 312fbc52ffab40fc
+facts:
+  - subject: mara
+    predicate: mentions
+    object: walter-letter
+    confidence: 0.9
+  - subject: mara
+    predicate: mentions
+    object: eliza-holds-debts
+    confidence: 0.9
+  - subject: mara
+    predicate: mentions
+    object: jory-forged-ledger
+    confidence: 0.9
+  - subject: eliza
+    predicate: mentions
+    object: jory-forged-ledger
+    confidence: 0.9
+  - subject: mara
+    predicate: knows
+    object: eliza-knew
+    confidence: 0.9
+  - subject: tom
+    predicate: knows
+    object: jory-forged-ledger
+    confidence: 0.9
+  - subject: tom
+    predicate: knows
+    object: eliza-knew
+    confidence: 0.9
+  - subject: mara
+    predicate: located_at
+    object: cannery
+    confidence: 0.95
+  - subject: eliza
+    predicate: located_at
+    object: cannery
+    confidence: 0.95
+  - subject: tom
+    predicate: located_at
+    object: cannery
+    confidence: 0.95

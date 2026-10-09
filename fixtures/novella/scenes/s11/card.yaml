@@ -1,0 +1,45 @@
+id: s11
+title: Ledger Balanced
+pov: mara
+location: cannery
+time: 1926-03-17 morning
+purpose: "Pay off the cannery thread: Eliza knew and used it."
+beats:
+  - Mara and Tom go to the cannery
+  - Eliza knew the morning after; Jory came to her for money
+  - She used it to keep him quiet about the letter
+  - Mara will send the letter, signed by witnesses
+  - She offers Eliza the chance to pay the boats back
+characters:
+  - mara
+  - eliza
+  - tom
+threads_touched:
+  - cannery-debt
+  - ledger
+plot_points: []
+reveals:
+  - eliza-knew
+mentions:
+  - character: mara
+    fact: walter-letter
+  - character: mara
+    fact: eliza-holds-debts
+  - character: mara
+    fact: jory-forged-ledger
+  - character: eliza
+    fact: jory-forged-ledger
+deltas:
+  - character: mara
+    learns:
+      - eliza-knew
+    forgets: []
+    location: cannery
+  - character: tom
+    learns:
+      - jory-forged-ledger
+      - eliza-knew
+    forgets: []
+outcome: Eliza is given the choice Walter would have given her.
+status: approved
+lock: none
