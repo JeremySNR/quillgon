@@ -17,16 +17,19 @@
     "serve": "tsx packages/cli/src/main.ts serve",
     "build": "pnpm -C apps/desktop build",
     "desktop": "pnpm -C apps/desktop electron",
-    "fixture": "tsx scripts/build-fixture.ts"
+    "fixture": "tsx scripts/build-fixture.ts",
+    "e2e": "pnpm build && tsx scripts/e2e-ui.ts",
+    "screenshots": "pnpm build && tsx scripts/screenshots.ts"
   },
   "devDependencies": {
+    "@novel/agents": "workspace:*",
+    "@novel/cli": "workspace:*",
+    "@novel/core": "workspace:*",
+    "@novel/server": "workspace:*",
     "@types/node": "^22.10.0",
+    "playwright-core": "^1.64.0",
     "tsx": "^4.19.0",
     "typescript": "^5.9.0",
-    "vitest": "^4.0.0",
-    "@novel/core": "workspace:*",
-    "@novel/agents": "workspace:*",
-    "@novel/server": "workspace:*",
-    "@novel/cli": "workspace:*"
+    "vitest": "^4.0.0"
   }
 }

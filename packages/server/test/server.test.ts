@@ -9,7 +9,7 @@ let base = '';
 
 async function api(method: string, path: string, body?: unknown) {
   const res = await fetch(base + path, { method, headers: { 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
-  const json = await res.json();
+  const json: any = await res.json();
   if (!res.ok) throw Object.assign(new Error(json.error), { status: res.status, json });
   return json;
 }

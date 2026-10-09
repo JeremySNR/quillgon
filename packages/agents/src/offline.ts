@@ -222,7 +222,7 @@ export class OfflineSuite implements AgentSuite {
     card.mentions = card.mentions.filter((m) => !factIds.has(m.fact));
     if (card.mentions.length === before) return { action: 'no_change', justification: 'Nobody here speaks about the affected fact.', needs_decision: [] };
     const statements = [...factIds].map((id) => input.facts.find((f) => f.id === id)?.statement ?? id);
-    card.beats = [...card.beats.filter((b) => !statements.some((s) => overlap(b, s) >= 2)), `(Revised) no one raises: ${statements.join('; ')}`];
+    card.beats = card.beats.filter((b) => !statements.some((s) => overlap(b, s) >= 2));
     const { status: _s, lock: _l, ...draft } = card;
     return { action: 'revise', justification: `Removed mentions of ${[...factIds].join(', ')}, which are no longer known here.`, card: draft, needs_decision: [] };
   }
@@ -232,15 +232,17 @@ export class OfflineSuite implements AgentSuite {
     let paras = input.old_prose.split(/\n\s*\n/);
     const dropped: number[] = [];
     for (const m of removed) {
-      const words = m.fact.split('-').filter((w) => w.length > 2);
+      // Crude stemming: "eliza-holds-debts" matches "holding everybody's debts".
+      const stems = m.fact.split('-').filter((w) => w.length > 2).map((w) => w.slice(0, 4));
       paras = paras.filter((p, i) => {
-        const hit = words.filter((w) => p.toLowerCase().includes(w)).length >= Math.min(2, words.length);
+        const lower = p.toLowerCase();
+        const hit = stems.filter((w) => lower.includes(w)).length >= Math.min(2, stems.length);
         if (hit) dropped.push(i);
         return !hit;
       });
     }
     const added = input.new_card.beats.filter((b) => !input.old_card.beats.includes(b));
-    for (const b of added) paras.splice(Math.max(1, paras.length - 1), 0, capitalise(b.replace(/^\(Revised\)\s*/, '')) + '.');
+    for (const b of added) paras.splice(Math.max(1, paras.length - 1), 0, capitalise(b) + '.');
     return { prose: paras.join('\n\n'), summary: `${dropped.length} paragraph(s) removed, ${added.length} added`, needs_decision: [] };
   }
 

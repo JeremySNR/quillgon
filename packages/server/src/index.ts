@@ -97,6 +97,7 @@ export class NovelServer {
     });
     this.watch(abs);
     rememberRecent(abs, store.book.title);
+    this.broadcast('reloaded', { opened: abs });
     return engine;
   }
 
@@ -189,7 +190,7 @@ export class NovelServer {
         if (!r.open && !this.engine) throw new HttpError(409, 'no project is open');
         const params = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
         const out = await r.handler({ params, query: url.searchParams, body, engine: this.engine!, server: this });
-        return send(res, 200, out ?? { ok: true });
+        return send(res, 200, out === undefined ? { ok: true } : out);
       } catch (e) {
         if (e instanceof SchemaError) return send(res, 422, { error: e.message, issues: e.issues });
         if (e instanceof HttpError) return send(res, e.status, { error: e.message, data: e.data });
@@ -227,6 +228,26 @@ export class NovelServer {
         const dir = path.resolve(expandHome(body.dir));
         const store = await initProject(dir, { title: body.title, genre: body.genre, target_words: Number(body.target_words) || 12000, offline: !!body.offline });
         store.close();
+        server.open(dir);
+        return { ok: true, dir };
+      },
+      true,
+    );
+    r(
+      'POST',
+      '/api/open-sample',
+      async ({ server }) => {
+        const dir = path.join(os.homedir(), 'Novels', 'The-Tidekeepers-Ledger');
+        if (!fs.existsSync(path.join(dir, paths.book))) {
+          const here = path.dirname(new URL(import.meta.url).pathname);
+          const fixture = path.resolve(here, '../../../fixtures/novella');
+          fs.mkdirSync(path.dirname(dir), { recursive: true });
+          fs.cpSync(fixture, dir, { recursive: true, filter: (src) => !src.includes(`${path.sep}.engine`) });
+          const store = GraphStore.open(dir, { noIndex: true });
+          await store.repo.init();
+          await store.commit('The Tidekeeper’s Ledger (sample)');
+          store.close();
+        }
         server.open(dir);
         return { ok: true, dir };
       },
