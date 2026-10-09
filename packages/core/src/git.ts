@@ -28,7 +28,7 @@ export class Repo {
     if (this.isRepo()) return;
     await this.git.init(['-b', 'main']);
     const ignore = path.join(this.dir, '.gitignore');
-    if (!fs.existsSync(ignore)) fs.writeFileSync(ignore, '.engine/\n');
+    if (!fs.existsSync(ignore)) fs.writeFileSync(ignore, '.engine/\nexport/\n');
     await this.ensureIdentity();
   }
 

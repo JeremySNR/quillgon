@@ -217,7 +217,9 @@ export class Pipeline {
       first_scene_number: maxNum + 1,
       plot_points: [...this.p.plotPoints.values()],
       threads: [...this.p.threads.values()],
-      characters: [...this.p.characters.values()].map((c) => ({
+      characters: [...this.p.characters.values()]
+        .sort((a, b) => Number(/protagonist/i.test(b.bio.role)) - Number(/protagonist/i.test(a.bio.role)))
+        .map((c) => ({
         id: c.id,
         name: c.bio.name,
         role: c.bio.role,
