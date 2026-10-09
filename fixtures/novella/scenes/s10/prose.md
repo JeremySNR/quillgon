@@ -1,0 +1,28 @@
+---
+word_count: 372
+generated_from: 97d7e60833e101ff
+last_extracted: 161ca1da5a7880a2
+status: locked
+---
+
+The lamp was already lit in the harbour office when she came in. Jory was sitting in their father's chair with the ledger closed in front of him and his hands flat on the cover, the way she had sat on her first night home.
+
+'Tom told you,' he said. It was not a question.
+
+'Tom told me about the *Kittiwake*.' She stayed by the door. 'I want you to tell me the rest.'
+
+For a while he didn't. The lamp hissed. Out in the dark the moorings ticked against the hulls.
+
+'I'd been at the Ship,' he said at last. 'I didn't make her fast. I didn't even go down to look. I went home and went to sleep, and he woke me at eleven, shouting, and I didn't get up. I heard the door go. I thought he'd sort it. He always sorted it.' His voice was perfectly flat. 'They found the punt at first light, upside down off the Mewstone. And the *Kittiwake* was sitting on the sand at Polgwyn without a scratch on her.'
+
+Mara crossed the room and sat on the edge of the desk.
+
+'And the ledger,' she said.
+
+'I came in here at five. Before anyone. I sat in his chair and I looked at that page, all calm, all in his hand, and I thought: everyone will know. Everyone will know he went out after my boat because I was too drunk to tie a knot. So I gave him a storm.' Jory opened the ledger to the page and turned it towards her. Force eight. Heavy sea. 'I used my own pen. I didn't even think about the ink. I just wanted there to be a reason that wasn't me.'
+
+'Oh, Jory.'
+
+'I'm not asking you to forgive it.'
+
+'I know you're not.' She put her hand on the page, over the blue-black words, the uncrossed sevens. Her brother's hand, pretending to be her father's. She found she was crying, and that she did not mind. 'He'd have gone out anyway,' she said. 'You know that. Storm or no storm. He'd have gone out for you every time.'

@@ -1,0 +1,36 @@
+id: s07
+title: Adrift
+pov: tom
+location: ship-inn
+time: 1926-03-15 evening
+purpose: Tom confronts Jory about the Kittiwake. The reader learns Walter went after Jory's boat, but not about the ledger.
+beats:
+  - Jory at the dark end of the bar
+  - Tom saw a boat adrift at two
+  - The Kittiwake slipped her mooring
+  - Walter went after her alone
+  - "'You tell her, Jory. Or I will.'"
+characters:
+  - tom
+  - jory
+threads_touched:
+  - ledger
+  - mara-jory
+plot_points: []
+reveals: []
+mentions:
+  - character: tom
+    fact: jory-boat-lost
+  - character: jory
+    fact: jory-boat-lost
+deltas:
+  - character: tom
+    learns: []
+    forgets: []
+    location: ship-inn
+sets_up:
+  - kittiwake
+pays_off: []
+outcome: Jory is cornered. The reader knows about the boat; Mara doesn't.
+status: approved
+lock: none

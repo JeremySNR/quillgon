@@ -1,0 +1,14 @@
+extracted_from: bce60608a29bc8c3
+facts:
+  - subject: mara
+    predicate: knows
+    object: ledger-storm-entry
+    confidence: 0.9
+  - subject: mara
+    predicate: located_at
+    object: harbour-office
+    confidence: 0.95
+contradictions: []
+obligations:
+  - id: storm-entry
+    action: planted

@@ -1,0 +1,12 @@
+{
+  "name": "@quillgon/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@quillgon/agents": "workspace:*",
+    "@quillgon/core": "workspace:*",
+    "zod": "^4.1.0"
+  }
+}

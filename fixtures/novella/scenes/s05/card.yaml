@@ -1,0 +1,44 @@
+id: s05
+title: Two Inks
+pov: mara
+location: harbour-office
+time: 1926-03-14 morning
+purpose: Physical evidence of forgery; Jory's reaction reads as grief, not guilt.
+beats:
+  - Jory already in the office
+  - Mara shows the iron-gall ink vs blue-black shop ink
+  - The uncrossed sevens
+  - "Jory cracks: 'like it's a puzzle in the Sunday paper'"
+  - He walks out
+characters:
+  - mara
+  - jory
+threads_touched:
+  - ledger
+  - mara-jory
+plot_points: []
+reveals:
+  - ink-mismatch
+mentions:
+  - character: mara
+    fact: ledger-storm-entry
+  - character: mara
+    fact: no-storm-that-night
+  - character: jory
+    fact: walter-drowned
+deltas:
+  - character: mara
+    learns:
+      - ink-mismatch
+    forgets: []
+    location: harbour-office
+  - character: jory
+    learns:
+      - ink-mismatch
+    forgets: []
+sets_up:
+  - two-inks
+pays_off: []
+outcome: Mara knows someone else wrote the entry. The rift with Jory widens.
+status: approved
+lock: none

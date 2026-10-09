@@ -1,0 +1,22 @@
+extracted_from: 6e23b35287a4b017
+facts:
+  - subject: tom
+    predicate: mentions
+    object: jory-boat-lost
+    confidence: 0.9
+  - subject: jory
+    predicate: mentions
+    object: jory-boat-lost
+    confidence: 0.9
+  - subject: tom
+    predicate: located_at
+    object: ship-inn
+    confidence: 0.95
+  - subject: jory
+    predicate: located_at
+    object: ship-inn
+    confidence: 0.95
+contradictions: []
+obligations:
+  - id: kittiwake
+    action: planted

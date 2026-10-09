@@ -1,0 +1,520 @@
+import { z } from 'zod';
+import {
+  Act,
+  CharacterBio,
+  CharacterVoice,
+  Fact,
+  Id,
+  Intent,
+  Obligation,
+  PlotPoint,
+  SceneCard,
+  StateSnapshot,
+  Thread,
+} from '../schemas/index.js';
+
+/**
+ * Structured contracts for every agent. Agents return these and nothing else;
+ * the core validates with Zod and rejects anything that does not parse.
+ * Every output may carry `needs_decision`: things the agent will not invent.
+ */
+
+const NeedsDecision = z.array(z.string()).default([]);
+
+// ------------------------------------------------------------------ interviewer
+
+export const InterviewInput = z.object({
+  premise: z.string(),
+  answers: z.array(z.object({ question: z.string(), answer: z.string() })).default([]),
+});
+export type InterviewInput = z.infer<typeof InterviewInput>;
+
+export const InterviewOutput = z.object({
+  done: z.boolean(),
+  /** Only questions the agent cannot infer from the premise. At most five. */
+  questions: z.array(z.string()).max(5).default([]),
+  intent: Intent.omit({ approved: true }).partial().optional(),
+  needs_decision: NeedsDecision,
+});
+export type InterviewOutput = z.infer<typeof InterviewOutput>;
+
+// ------------------------------------------------------------------ planner: plot points
+
+export const CastMember = z.object({ id: Id, name: z.string(), role: z.string().default('') });
+
+export const PlotPointsInput = z.object({
+  intent: Intent,
+  pinned: z.array(PlotPoint),
+  cast: z.array(CastMember).default([]),
+  target_words: z.number(),
+});
+export type PlotPointsInput = z.infer<typeof PlotPointsInput>;
+
+export const PlotPointsOutput = z.object({
+  plot_points: z.array(PlotPoint.omit({ locked: true, proposed: true })).min(1).max(12),
+  cast: z.array(CastMember).default([]),
+  needs_decision: NeedsDecision,
+});
+export type PlotPointsOutput = z.infer<typeof PlotPointsOutput>;
+
+// ------------------------------------------------------------------ planner: structure
+
+export const CharacterDraft = z.object({ bio: CharacterBio, voice: CharacterVoice });
+export type CharacterDraft = z.infer<typeof CharacterDraft>;
+
+export const StructureAlternative = z.object({
+  label: z.string(),
+  /** One obvious option and at least one that breaks an expectation. */
+  kind: z.enum(['obvious', 'unexpected', 'wildcard']),
+  rationale: z.string(),
+  acts: z.array(
+    Act.extend({
+      chapters: z.array(z.object({ id: Id, title: z.string(), summary: z.string(), scene_count: z.number().int().min(1).max(8) })),
+    }),
+  ),
+  threads: z.array(Thread.omit({ setup_scene: true, payoff_scene: true, beats: true }).extend({ setup_chapter: Id.nullable(), payoff_chapter: Id.nullable() })),
+  characters: z.array(CharacterDraft),
+});
+export type StructureAlternative = z.infer<typeof StructureAlternative>;
+
+export const StructureInput = z.object({
+  intent: Intent,
+  plot_points: z.array(PlotPoint),
+  cast: z.array(CastMember),
+  target_words: z.number(),
+  avoid: z.array(z.string()).default([]),
+});
+export type StructureInput = z.infer<typeof StructureInput>;
+
+export const StructureOutput = z.object({
+  alternatives: z.array(StructureAlternative).min(1).max(3),
+  needs_decision: NeedsDecision,
+});
+export type StructureOutput = z.infer<typeof StructureOutput>;
+
+// ------------------------------------------------------------------ planner: scene cards
+
+export const CardsInput = z.object({
+  intent: Intent,
+  chapter: z.object({ id: Id, title: z.string(), summary: z.string(), scene_count: z.number() }),
+  first_scene_number: z.number().int(),
+  plot_points: z.array(PlotPoint),
+  threads: z.array(Thread),
+  characters: z.array(z.object({ id: Id, name: z.string(), role: z.string(), knows: z.array(Id) })),
+  locations: z.array(z.object({ id: Id, name: z.string() })),
+  facts: z.array(z.object({ id: Id, statement: z.string() })),
+  /** Open and planned obligations: setups waiting for a payoff. */
+  obligations: z.array(Obligation).default([]),
+  previous_cards: z.array(SceneCard),
+  words_per_scene: z.number(),
+});
+export type CardsInput = z.infer<typeof CardsInput>;
+
+export const CardDraft = SceneCard.omit({ status: true, lock: true });
+export type CardDraft = z.infer<typeof CardDraft>;
+
+export const CardsOutput = z.object({
+  alternatives: z
+    .array(
+      z.object({
+        label: z.string(),
+        kind: z.enum(['obvious', 'unexpected']),
+        rationale: z.string(),
+        cards: z.array(CardDraft).min(1),
+        new_facts: z.array(z.object({ id: Id, statement: z.string() })).default([]),
+        new_locations: z.array(z.object({ id: Id, name: z.string(), description: z.string().default('') })).default([]),
+        /** Setups this chapter plants; reference them from cards' sets_up / pays_off. */
+        new_obligations: z
+          .array(z.object({ id: Id, kind: Obligation.shape.kind, description: z.string(), payoff_hint: z.string().default('') }))
+          .default([]),
+      }),
+    )
+    .min(1)
+    .max(2),
+  needs_decision: NeedsDecision,
+});
+export type CardsOutput = z.infer<typeof CardsOutput>;
+
+// ------------------------------------------------------------------ writer
+
+export const WriterInput = z.object({
+  intent: Intent,
+  book: z.object({ title: z.string(), pov_mode: z.string(), tense: z.string() }),
+  card: SceneCard,
+  previous_prose: z.string().nullable(),
+  recent_cards: z.array(SceneCard),
+  states: z.array(z.object({ character: Id, name: z.string(), snapshot: StateSnapshot.nullable() })),
+  voices: z.array(z.object({ character: Id, name: z.string(), voice: CharacterVoice })),
+  threads: z.array(Thread),
+  facts: z.array(z.object({ id: Id, statement: z.string() })),
+  style_samples: z.string(),
+  banned_patterns: z.array(z.string()),
+  similar_scenes: z.array(z.object({ id: Id, excerpt: z.string() })),
+  target_words: z.number(),
+  obligations: z
+    .object({
+      plant: z.array(Obligation).default([]),
+      pay: z.array(Obligation).default([]),
+      keep_open: z.array(Obligation).default([]),
+    })
+    .default({ plant: [], pay: [], keep_open: [] }),
+  /** The style sheet rendered as rules. */
+  style_rules: z.array(z.string()).default([]),
+});
+export type WriterInput = z.infer<typeof WriterInput>;
+
+export const WriterOutput = z.object({ prose: z.string().min(1), needs_decision: NeedsDecision });
+export type WriterOutput = z.infer<typeof WriterOutput>;
+
+// ------------------------------------------------------------------ voice checker
+
+export const VoiceInput = z.object({
+  scene: Id,
+  lines: z.array(z.object({ character: Id, line: z.string() })),
+  voices: z.array(z.object({ character: Id, name: z.string(), voice: CharacterVoice })),
+});
+export type VoiceInput = z.infer<typeof VoiceInput>;
+
+export const VoiceFlag = z.object({ character: Id, line: z.string(), reason: z.string(), suggestion: z.string().nullable().default(null) });
+export type VoiceFlag = z.infer<typeof VoiceFlag>;
+export const VoiceOutput = z.object({ flags: z.array(VoiceFlag).default([]) });
+export type VoiceOutput = z.infer<typeof VoiceOutput>;
+
+// ------------------------------------------------------------------ reviser
+
+export const ReviseLinesInput = z.object({
+  prose: z.string(),
+  flags: z.array(z.object({ text: z.string(), reason: z.string(), suggestion: z.string().nullable() })),
+});
+export type ReviseLinesInput = z.infer<typeof ReviseLinesInput>;
+
+export const ProseOutput = z.object({ prose: z.string().min(1), summary: z.string().default(''), needs_decision: NeedsDecision });
+export type ProseOutput = z.infer<typeof ProseOutput>;
+
+export const ReviseCardInput = z.object({
+  intent: Intent,
+  change: z.string(),
+  reasons: z.array(z.string()),
+  card: SceneCard,
+  facts: z.array(z.object({ id: Id, statement: z.string() })),
+  characters: z.array(z.object({ id: Id, name: z.string() })),
+  states_before: z.array(z.object({ character: Id, knows: z.array(Id) })),
+});
+export type ReviseCardInput = z.infer<typeof ReviseCardInput>;
+
+export const ReviseCardOutput = z.object({
+  action: z.enum(['no_change', 'revise']),
+  justification: z.string(),
+  card: CardDraft.optional(),
+  needs_decision: NeedsDecision,
+});
+export type ReviseCardOutput = z.infer<typeof ReviseCardOutput>;
+
+export const ReviseProseInput = z.object({
+  intent: Intent,
+  change: z.string(),
+  old_card: SceneCard,
+  new_card: SceneCard,
+  old_prose: z.string(),
+  voices: z.array(z.object({ character: Id, name: z.string(), voice: CharacterVoice })),
+});
+export type ReviseProseInput = z.infer<typeof ReviseProseInput>;
+
+// ------------------------------------------------------------------ humaniser
+
+export const HumaniseInput = z.object({
+  prose: z.string(),
+  skill: z.string(),
+  banned_hits: z.array(z.object({ text: z.string(), rule: z.string() })).default([]),
+  /** Style violations found by code, each with the exact offending text. */
+  violations: z.array(z.object({ rule: z.string(), text: z.string(), message: z.string() })).default([]),
+  style_rules: z.array(z.string()).default([]),
+  style_samples: z.string().default(''),
+});
+export type HumaniseInput = z.infer<typeof HumaniseInput>;
+
+/** LAMP's seven categories of AI-writing habit, plus explicit style-sheet violations. */
+export const EditCategory = z.enum([
+  'cliche',
+  'unnecessary-exposition',
+  'purple-prose',
+  'poor-sentence-structure',
+  'lack-of-specificity',
+  'awkward-word-choice',
+  'tense-inconsistency',
+  'style-rule',
+]);
+
+export const SpanEdit = z.object({
+  /** Exact text from the prose to replace (must occur once). */
+  find: z.string().min(1),
+  replace: z.string(),
+  category: EditCategory,
+  reason: z.string().default(''),
+});
+export type SpanEdit = z.infer<typeof SpanEdit>;
+
+export const LineEditOutput = z.object({ edits: z.array(SpanEdit).max(40).default([]) });
+export type LineEditOutput = z.infer<typeof LineEditOutput>;
+
+// ------------------------------------------------------------------ extractor
+
+export const ExtractInput = z.object({
+  card: SceneCard,
+  prose: z.string(),
+  characters: z.array(z.object({ id: Id, name: z.string(), aliases: z.array(z.string()) })),
+  facts: z.array(z.object({ id: Id, statement: z.string() })),
+  locations: z.array(z.object({ id: Id, name: z.string() })),
+  states_before: z.array(z.object({ character: Id, snapshot: StateSnapshot.nullable() })),
+  obligations: z.array(Obligation).default([]),
+});
+export type ExtractInput = z.infer<typeof ExtractInput>;
+
+export const ExtractOutput = z.object({
+  facts: z.array(Fact),
+  states: z.array(
+    z.object({
+      character: Id,
+      learns: z.array(Id).default([]),
+      forgets: z.array(Id).default([]),
+      location: Id.nullable().default(null),
+      wants: z.string().nullable().default(null),
+      feels: z.record(Id, z.string()).default({}),
+      alive: z.boolean().default(true),
+    }),
+  ),
+  timeline: z.array(z.object({ when: z.string(), description: z.string() })).default([]),
+  new_facts: z.array(z.object({ id: Id, statement: z.string() })).default([]),
+  contradictions: z.array(z.object({ field: z.string(), card_says: z.string(), prose_says: z.string() })).default([]),
+  obligations: z.array(z.object({ id: Id, action: z.enum(['planted', 'paid', 'referenced']) })).default([]),
+});
+export type ExtractOutput = z.infer<typeof ExtractOutput>;
+
+// ------------------------------------------------------------------ reader
+
+export const ReaderLogEntry = z.object({
+  scene: Id,
+  believes: z.string(),
+  expects: z.string(),
+  confusions: z.array(z.object({ id: z.string(), text: z.string() })).default([]),
+  resolved_confusions: z.array(z.string()).default([]),
+  engagement: z.number().int().min(1).max(5),
+  predictions: z.array(z.string()).default([]),
+  /** When asked: looking back, did this scene's reveal feel fair (1-5)? */
+  fairness: z.number().int().min(1).max(5).nullable().default(null),
+});
+export type ReaderLogEntry = z.infer<typeof ReaderLogEntry>;
+
+export const ReaderInput = z.object({
+  scene: Id,
+  scene_number: z.number().int(),
+  prose: z.string(),
+  log: z.array(ReaderLogEntry),
+  /** Set when this scene reveals something: ask whether it was fair in hindsight. */
+  fairness_question: z.string().nullable().default(null),
+  /** 'prose' for the manuscript; 'outline' when reading scene synopses before anything is written. */
+  mode: z.enum(['prose', 'outline']).default('prose'),
+});
+export type ReaderInput = z.infer<typeof ReaderInput>;
+
+export const ReaderOutput = ReaderLogEntry.omit({ scene: true });
+export type ReaderOutput = z.infer<typeof ReaderOutput>;
+
+// ------------------------------------------------------------------ continuity (model-assisted)
+
+export const ContinuityInput = z.object({
+  a: z.object({ id: Id, card: SceneCard, prose: z.string() }),
+  b: z.object({ id: Id, card: SceneCard, prose: z.string() }),
+  states: z.array(z.object({ character: Id, name: z.string(), after_a: StateSnapshot.nullable() })),
+});
+export type ContinuityInput = z.infer<typeof ContinuityInput>;
+
+export const ContinuityOutput = z.object({
+  contradictions: z.array(z.object({ scene: Id, description: z.string(), severity: z.enum(['low', 'medium', 'high']) })).default([]),
+});
+export type ContinuityOutput = z.infer<typeof ContinuityOutput>;
+
+// ------------------------------------------------------------------ judge (pairwise)
+
+export const JudgeInput = z.object({
+  /** What the two texts are trying to be. */
+  task: z.string(),
+  criteria: z.array(z.string()),
+  a: z.string(),
+  b: z.string(),
+  /** Reference passages the winner should sound like (the author's own). */
+  reference: z.string().default(''),
+});
+export type JudgeInput = z.infer<typeof JudgeInput>;
+
+export const JudgeOutput = z.object({ winner: z.enum(['a', 'b', 'tie']), reason: z.string() });
+export type JudgeOutput = z.infer<typeof JudgeOutput>;
+
+// ------------------------------------------------------------------ critic (narrative shape)
+
+export const ShapeFinding = z.object({
+  kind: z.enum([
+    'theme-stated',
+    'single-track',
+    'flat-escalation',
+    'tidy-resolution',
+    'no-moral-ambiguity',
+    'archetype',
+    'rushed',
+    'sagging-middle',
+    'passive-protagonist',
+    'coincidence',
+    'unpaid-setup',
+    'other',
+  ]),
+  where: z.string(),
+  evidence: z.string(),
+  suggestion: z.string(),
+  severity: z.enum(['low', 'medium', 'high']),
+});
+export type ShapeFinding = z.infer<typeof ShapeFinding>;
+
+export const CritiqueInput = z.object({
+  intent: Intent,
+  level: z.enum(['structure', 'chapter', 'book']),
+  /** The plan being judged, as readable text (synopsis, chapters, beats). */
+  plan: z.string(),
+  characters: z.array(z.object({ id: Id, name: z.string(), want: z.string(), need: z.string(), arc: z.string() })).default([]),
+});
+export type CritiqueInput = z.infer<typeof CritiqueInput>;
+
+export const CritiqueOutput = z.object({ findings: z.array(ShapeFinding).default([]), strengths: z.array(z.string()).default([]) });
+export type CritiqueOutput = z.infer<typeof CritiqueOutput>;
+
+// ------------------------------------------------------------------ sameness sampling
+
+export const SampleTurnsInput = z.object({
+  intent: Intent,
+  /** The story so far, as card synopses. */
+  context: z.string(),
+  /** What the scene or chapter needs to do, without its chosen outcome. */
+  setup: z.string(),
+  k: z.number().int().min(3).max(10).default(6),
+});
+export type SampleTurnsInput = z.infer<typeof SampleTurnsInput>;
+
+export const SampleTurnsOutput = z.object({ turns: z.array(z.object({ text: z.string(), probability: z.number().min(0).max(1) })).min(1) });
+export type SampleTurnsOutput = z.infer<typeof SampleTurnsOutput>;
+
+// ------------------------------------------------------------------ muse (ideation)
+
+export const IdeaKind = z.enum(['logline', 'what-if', 'character', 'setting', 'twist', 'theme', 'image']);
+export const IdeaCandidate = z.object({
+  kind: IdeaKind,
+  text: z.string(),
+  /** The model's own estimate of how typical this idea is (verbalized sampling). */
+  probability: z.number().min(0).max(1),
+  persona: z.string().default(''),
+});
+export type IdeaCandidate = z.infer<typeof IdeaCandidate>;
+
+export const DivergeInput = z.object({
+  seed: z.string(),
+  genre: z.string().default(''),
+  persona: z.string(),
+  kinds: z.array(IdeaKind),
+  kept: z.array(z.string()).default([]),
+  discarded: z.array(z.string()).default([]),
+  avoid: z.array(z.string()).default([]),
+  k: z.number().int().min(3).max(12).default(8),
+});
+export type DivergeInput = z.infer<typeof DivergeInput>;
+
+export const DivergeOutput = z.object({
+  /** The genre's stock moves for this seed, listed first so the ideas can branch away from them. */
+  cliches: z.array(z.string()).default([]),
+  candidates: z.array(IdeaCandidate).min(1),
+});
+export type DivergeOutput = z.infer<typeof DivergeOutput>;
+
+export const ExpandInput = z.object({
+  step: z.enum(['logline', 'paragraph', 'synopsis', 'cast']),
+  seed: z.string(),
+  kept: z.array(z.string()).default([]),
+  logline: z.string().default(''),
+  paragraph: z.string().default(''),
+  synopsis: z.string().default(''),
+  avoid: z.array(z.string()).default([]),
+});
+export type ExpandInput = z.infer<typeof ExpandInput>;
+
+export const ExpandOutput = z.object({
+  options: z.array(z.string()).default([]),
+  cast: z
+    .array(
+      z.object({
+        id: Id,
+        name: z.string(),
+        role: z.string(),
+        want: z.string(),
+        need: z.string(),
+        wound: z.string(),
+        lie: z.string(),
+        arc: z.string(),
+      }),
+    )
+    .default([]),
+});
+export type ExpandOutput = z.infer<typeof ExpandOutput>;
+
+// ------------------------------------------------------------------ the suite the core calls
+
+export interface CallInfo {
+  agent: string;
+  scene?: string;
+}
+
+/**
+ * Everything the core needs from agents. The agents package implements this over a
+ * model adapter; tests implement it with recorded or scripted responses.
+ */
+export interface AgentSuite {
+  interview(input: InterviewInput): Promise<InterviewOutput>;
+  plotPoints(input: PlotPointsInput): Promise<PlotPointsOutput>;
+  structures(input: StructureInput): Promise<StructureOutput>;
+  cards(input: CardsInput): Promise<CardsOutput>;
+  write(input: WriterInput): Promise<WriterOutput>;
+  voice(input: VoiceInput): Promise<VoiceOutput>;
+  reviseLines(input: ReviseLinesInput): Promise<ProseOutput>;
+  /** Span-level line edit (LAMP categories + style violations). Never rewrites wholesale. */
+  humanise(input: HumaniseInput): Promise<LineEditOutput>;
+  extract(input: ExtractInput): Promise<ExtractOutput>;
+  reviseCard(input: ReviseCardInput): Promise<ReviseCardOutput>;
+  reviseProse(input: ReviseProseInput): Promise<ProseOutput>;
+  read(input: ReaderInput): Promise<ReaderOutput>;
+  continuity(input: ContinuityInput): Promise<ContinuityOutput>;
+  judge(input: JudgeInput): Promise<JudgeOutput>;
+  critique(input: CritiqueInput): Promise<CritiqueOutput>;
+  sampleTurns(input: SampleTurnsInput): Promise<SampleTurnsOutput>;
+  diverge(input: DivergeInput): Promise<DivergeOutput>;
+  expand(input: ExpandInput): Promise<ExpandOutput>;
+}
+
+export const Contracts = {
+  interviewer: { input: InterviewInput, output: InterviewOutput },
+  planner: {
+    plotPoints: { input: PlotPointsInput, output: PlotPointsOutput },
+    structures: { input: StructureInput, output: StructureOutput },
+    cards: { input: CardsInput, output: CardsOutput },
+  },
+  writer: { input: WriterInput, output: WriterOutput },
+  voice: { input: VoiceInput, output: VoiceOutput },
+  reviser: {
+    lines: { input: ReviseLinesInput, output: ProseOutput },
+    card: { input: ReviseCardInput, output: ReviseCardOutput },
+    prose: { input: ReviseProseInput, output: ProseOutput },
+  },
+  humaniser: { input: HumaniseInput, output: LineEditOutput },
+  judge: { input: JudgeInput, output: JudgeOutput },
+  critic: { input: CritiqueInput, output: CritiqueOutput },
+  sampler: { input: SampleTurnsInput, output: SampleTurnsOutput },
+  muse: { diverge: { input: DivergeInput, output: DivergeOutput }, expand: { input: ExpandInput, output: ExpandOutput } },
+  extractor: { input: ExtractInput, output: ExtractOutput },
+  reader: { input: ReaderInput, output: ReaderOutput },
+  continuity: { input: ContinuityInput, output: ContinuityOutput },
+};

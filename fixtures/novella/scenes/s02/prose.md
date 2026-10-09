@@ -1,0 +1,24 @@
+---
+word_count: 342
+generated_from: 5e88dd7316e8c595
+last_extracted: bce60608a29bc8c3
+status: approved
+---
+
+The harbour office smelled of paraffin and wet rope, as it always had. Her father's oilskin hung on its nail behind the door. Someone had wiped the desk, but they had left the ledger where it lay, open, the ribbon marker trailing to the floor.
+
+Mara lit the lamp and sat in his chair. It still held the shape of him.
+
+Walter Penrose had kept the tide ledger for thirty-one years: times of high and low water, wind and its direction, boats out and boats in, every entry in the same square, deliberate hand. As a girl she had been allowed to rule the columns for him on Sunday evenings. She turned back through the pages now and the years went past under her fingers, calm and storm and calm again, the village's whole life written down in his patience.
+
+The third of March was the last entry in his book.
+
+*High water 21.40. Wind S.W., force 8, rising. Heavy sea. Boats warned. All in.*
+
+She read it twice. Force eight. A heavy sea. The boats all warned and all in, and her father, who had never in thirty-one years gone out in a heavy sea without a crew, had gone out alone and not come back.
+
+But the telegram had said calm. The coroner's letter, folded inside her coat, said calm: no weather of note, the body recovered at slack water the following noon. Somebody was wrong. Either the sea had been flat, as everybody said, or it had been wild enough to drown him, as the ledger said, and the ledger was her father's book.
+
+She ran her thumb down the page. The paper was soft with handling. Outside, the harbour lay quiet under a thin moon, the moorings ticking against the hulls, the same water that was supposed to have risen up and taken him.
+
+Mara closed the ledger and kept her hand flat on the cover for a long time, as if it might open again on its own and tell her something different.

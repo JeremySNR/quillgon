@@ -1,0 +1,36 @@
+id: s01
+title: Funeral Eve
+pov: mara
+location: harbour
+time: 1926-03-12 evening
+purpose: Bring Mara home; establish the estrangement and the calm-night contradiction.
+beats:
+  - Mara walks down into Porthwenna; the sea is flat
+  - Jory drinking on the harbour wall
+  - Jory needles her about her letters
+  - "Mara: the telegram said it was calm; Jory goes still"
+  - He leaves the bottle on the wall
+characters:
+  - mara
+  - jory
+threads_touched:
+  - mara-jory
+plot_points:
+  - pp-drowning
+reveals:
+  - walter-drowned
+mentions:
+  - character: jory
+    fact: walter-drowned
+  - character: mara
+    fact: walter-drowned
+deltas:
+  - character: mara
+    learns: []
+    forgets: []
+    location: harbour
+sets_up: []
+pays_off: []
+outcome: Mara is home, unwelcome, and already doubting the story.
+status: approved
+lock: none

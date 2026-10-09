@@ -1,0 +1,24 @@
+extracted_from: 0c695f3cebb6bdd6
+facts:
+  - subject: mara
+    predicate: mentions
+    object: walter-letter
+    confidence: 0.9
+  - subject: eliza
+    predicate: mentions
+    object: eliza-holds-debts
+    confidence: 0.9
+  - subject: eliza
+    predicate: knows
+    object: walter-letter
+    confidence: 0.9
+  - subject: mara
+    predicate: located_at
+    object: cannery
+    confidence: 0.95
+  - subject: eliza
+    predicate: located_at
+    object: cannery
+    confidence: 0.95
+contradictions: []
+obligations: []

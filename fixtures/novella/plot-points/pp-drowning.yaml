@@ -1,0 +1,12 @@
+id: pp-drowning
+title: The calm-night drowning
+description: Walter Penrose drowns on a flat-calm night; his tide ledger records a storm.
+position:
+  act: 1
+involves:
+  - mara
+  - jory
+threads:
+  - ledger
+locked: true
+proposed: false

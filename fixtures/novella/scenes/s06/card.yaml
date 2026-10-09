@@ -1,0 +1,41 @@
+id: s06
+title: The Unsent Letter
+pov: mara
+location: cottage
+time: 1926-03-14 afternoon
+purpose: Give Eliza a motive; deepen misdirection.
+beats:
+  - Tom brings Walter's things
+  - The letter to the County Fisheries Committee under the tin lining
+  - Short weights, column by column
+  - "Tom: he was taking it to Truro the week after"
+  - "Mara: she must have known"
+characters:
+  - mara
+  - tom
+threads_touched:
+  - cannery-debt
+plot_points: []
+reveals:
+  - walter-letter
+mentions:
+  - character: mara
+    fact: eliza-holds-debts
+  - character: tom
+    fact: walter-drowned
+deltas:
+  - character: mara
+    learns:
+      - walter-letter
+    forgets: []
+    location: cottage
+  - character: tom
+    learns:
+      - walter-letter
+    forgets: []
+sets_up:
+  - walter-letter-sent
+pays_off: []
+outcome: Eliza had a motive. Mara now suspects her.
+status: approved
+lock: none

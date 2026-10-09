@@ -1,0 +1,14 @@
+id: pp-confession
+title: Jory's confession
+description: Jory confesses he wrote the storm into the ledger to hide that Walter died going after Jory's drifting boat.
+position:
+  act: 3
+  after: pp-drowning
+involves:
+  - jory
+  - mara
+threads:
+  - ledger
+  - mara-jory
+locked: true
+proposed: false

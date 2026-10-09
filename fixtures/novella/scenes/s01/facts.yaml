@@ -1,0 +1,20 @@
+extracted_from: 9e0e7ac2777ba040
+facts:
+  - subject: jory
+    predicate: mentions
+    object: walter-drowned
+    confidence: 0.9
+  - subject: mara
+    predicate: mentions
+    object: walter-drowned
+    confidence: 0.9
+  - subject: mara
+    predicate: located_at
+    object: harbour
+    confidence: 0.95
+  - subject: jory
+    predicate: located_at
+    object: harbour
+    confidence: 0.95
+contradictions: []
+obligations: []

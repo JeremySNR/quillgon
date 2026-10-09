@@ -1,0 +1,19 @@
+facts:
+  - id: walter-drowned
+    statement: Walter Penrose drowned on the night of 3 March 1926.
+  - id: ledger-storm-entry
+    statement: The ledger records a force-8 storm on the night of 3 March.
+  - id: no-storm-that-night
+    statement: The night of 3 March was flat calm.
+  - id: eliza-holds-debts
+    statement: Eliza Trevaskis holds the debts of most of the village's boats.
+  - id: ink-mismatch
+    statement: The storm entry is in blue-black shop ink and an uncrossed hand, not Walter's.
+  - id: walter-letter
+    statement: Walter drafted a letter to the county exposing the cannery's short weights.
+  - id: jory-boat-lost
+    statement: Jory's boat, the Kittiwake, drifted out that night and Walter went after it.
+  - id: jory-forged-ledger
+    statement: Jory wrote the storm into the ledger to hide his part in Walter's death.
+  - id: eliza-knew
+    statement: Eliza knew about the forgery and used it to silence Jory.

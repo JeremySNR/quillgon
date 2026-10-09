@@ -1,0 +1,63 @@
+s01:
+  knows:
+    - walter-drowned
+    - jory-boat-lost
+    - jory-forged-ledger
+    - eliza-knew
+  wants: to keep his secret
+  feels:
+    mara: defensive
+  location: harbour
+  alive: true
+s05:
+  knows:
+    - walter-drowned
+    - jory-boat-lost
+    - jory-forged-ledger
+    - eliza-knew
+    - ink-mismatch
+  wants: to keep his secret
+  feels:
+    mara: afraid
+  location: harbour-office
+  alive: true
+s07:
+  knows:
+    - walter-drowned
+    - jory-boat-lost
+    - jory-forged-ledger
+    - eliza-knew
+    - ink-mismatch
+  wants: to keep his secret
+  feels:
+    mara: afraid
+    tom: cornered
+  location: ship-inn
+  alive: true
+s10:
+  knows:
+    - walter-drowned
+    - jory-boat-lost
+    - jory-forged-ledger
+    - eliza-knew
+    - ink-mismatch
+  wants: to be forgiven
+  feels:
+    mara: ashamed
+    tom: cornered
+  location: harbour-office
+  alive: true
+s12:
+  knows:
+    - walter-drowned
+    - jory-boat-lost
+    - jory-forged-ledger
+    - eliza-knew
+    - ink-mismatch
+    - walter-letter
+  wants: to correct the ledger
+  feels:
+    mara: hopeful
+    tom: grateful
+  location: harbour
+  alive: true

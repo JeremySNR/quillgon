@@ -1,0 +1,32 @@
+extracted_from: cbed571286ab2161
+facts:
+  - subject: mara
+    predicate: mentions
+    object: no-storm-that-night
+    confidence: 0.9
+  - subject: eliza
+    predicate: mentions
+    object: eliza-holds-debts
+    confidence: 0.9
+  - subject: mara
+    predicate: knows
+    object: eliza-holds-debts
+    confidence: 0.9
+  - subject: eliza
+    predicate: knows
+    object: no-storm-that-night
+    confidence: 0.9
+  - subject: eliza
+    predicate: knows
+    object: ledger-storm-entry
+    confidence: 0.9
+  - subject: mara
+    predicate: located_at
+    object: cannery
+    confidence: 0.95
+  - subject: eliza
+    predicate: located_at
+    object: cannery
+    confidence: 0.95
+contradictions: []
+obligations: []

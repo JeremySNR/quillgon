@@ -1,0 +1,13 @@
+id: two-inks
+kind: clue
+description: The storm entry is in blue-black shop ink, not Walter's iron-gall
+setup_scene: s05
+eligible_from: s09
+payoff_scene: s10
+status: paid
+threads:
+  - ledger
+facts:
+  - ink-mismatch
+  - jory-forged-ledger
+notes: ""

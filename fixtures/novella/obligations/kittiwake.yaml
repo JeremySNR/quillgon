@@ -1,0 +1,13 @@
+id: kittiwake
+kind: foreshadowing
+description: The Kittiwake slipped her mooring that night
+setup_scene: s07
+eligible_from: null
+payoff_scene: s09
+status: paid
+threads:
+  - ledger
+  - mara-jory
+facts:
+  - jory-boat-lost
+notes: ""

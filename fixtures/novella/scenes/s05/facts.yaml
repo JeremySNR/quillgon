@@ -1,0 +1,34 @@
+extracted_from: 9251b12acdf34106
+facts:
+  - subject: mara
+    predicate: mentions
+    object: ledger-storm-entry
+    confidence: 0.9
+  - subject: mara
+    predicate: mentions
+    object: no-storm-that-night
+    confidence: 0.9
+  - subject: jory
+    predicate: mentions
+    object: walter-drowned
+    confidence: 0.9
+  - subject: mara
+    predicate: knows
+    object: ink-mismatch
+    confidence: 0.9
+  - subject: jory
+    predicate: knows
+    object: ink-mismatch
+    confidence: 0.9
+  - subject: mara
+    predicate: located_at
+    object: harbour-office
+    confidence: 0.95
+  - subject: jory
+    predicate: located_at
+    object: harbour-office
+    confidence: 0.95
+contradictions: []
+obligations:
+  - id: two-inks
+    action: planted

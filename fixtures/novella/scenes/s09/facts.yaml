@@ -1,0 +1,28 @@
+extracted_from: 344d2017cc859cc0
+facts:
+  - subject: mara
+    predicate: mentions
+    object: ink-mismatch
+    confidence: 0.9
+  - subject: tom
+    predicate: mentions
+    object: jory-boat-lost
+    confidence: 0.9
+  - subject: mara
+    predicate: knows
+    object: jory-boat-lost
+    confidence: 0.9
+  - subject: mara
+    predicate: located_at
+    object: quay
+    confidence: 0.95
+  - subject: tom
+    predicate: located_at
+    object: quay
+    confidence: 0.95
+contradictions: []
+obligations:
+  - id: tom-holds-back
+    action: paid
+  - id: kittiwake
+    action: paid

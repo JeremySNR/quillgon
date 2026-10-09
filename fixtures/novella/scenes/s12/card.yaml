@@ -1,0 +1,36 @@
+id: s12
+title: Slack Water
+pov: mara
+location: harbour
+time: 1926-03-18 dawn
+purpose: "Close the relationship thread: Jory will correct the ledger in Walter's ink."
+beats:
+  - Jory on the wall, no bottle
+  - "Slack water: the only time the sea tells the truth"
+  - Jory signed the letter
+  - Mara will correct the ledger, not tear it
+  - "Jory: I'll use his ink"
+  - Mara stays, for a while
+characters:
+  - mara
+  - jory
+threads_touched:
+  - mara-jory
+plot_points: []
+reveals: []
+mentions:
+  - character: mara
+    fact: jory-forged-ledger
+  - character: jory
+    fact: walter-drowned
+deltas:
+  - character: jory
+    learns:
+      - walter-letter
+    forgets: []
+    location: harbour
+sets_up: []
+pays_off: []
+outcome: Truth recorded; a family partly mended.
+status: approved
+lock: none

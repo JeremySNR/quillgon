@@ -1,0 +1,154 @@
+s01:
+  knows:
+    - walter-drowned
+  wants: to bury her father and leave
+  feels:
+    jory: resentful
+  location: harbour
+  alive: true
+s02:
+  knows:
+    - walter-drowned
+    - ledger-storm-entry
+  wants: to understand the ledger
+  feels:
+    jory: resentful
+  location: harbour-office
+  alive: true
+s03:
+  knows:
+    - walter-drowned
+    - ledger-storm-entry
+    - no-storm-that-night
+  wants: to know why he wrote a storm
+  feels:
+    jory: resentful
+    tom: trusting
+  location: quay
+  alive: true
+s04:
+  knows:
+    - walter-drowned
+    - ledger-storm-entry
+    - no-storm-that-night
+    - eliza-holds-debts
+  wants: to know why he wrote a storm
+  feels:
+    jory: resentful
+    tom: trusting
+    eliza: wary
+  location: cannery
+  alive: true
+s05:
+  knows:
+    - walter-drowned
+    - ledger-storm-entry
+    - no-storm-that-night
+    - eliza-holds-debts
+    - ink-mismatch
+  wants: to find who wrote the entry
+  feels:
+    jory: suspicious
+    tom: trusting
+    eliza: wary
+  location: harbour-office
+  alive: true
+s06:
+  knows:
+    - walter-drowned
+    - ledger-storm-entry
+    - no-storm-that-night
+    - eliza-holds-debts
+    - ink-mismatch
+    - walter-letter
+  wants: to confront Eliza
+  feels:
+    jory: suspicious
+    tom: trusting
+    eliza: suspicious
+  location: cottage
+  alive: true
+s08:
+  knows:
+    - walter-drowned
+    - ledger-storm-entry
+    - no-storm-that-night
+    - eliza-holds-debts
+    - ink-mismatch
+    - walter-letter
+  wants: to find who wrote the entry
+  feels:
+    jory: suspicious
+    tom: trusting
+    eliza: hostile
+  location: cannery
+  alive: true
+s09:
+  knows:
+    - walter-drowned
+    - ledger-storm-entry
+    - no-storm-that-night
+    - eliza-holds-debts
+    - ink-mismatch
+    - walter-letter
+    - jory-boat-lost
+  wants: to hear it from Jory
+  feels:
+    jory: grieving
+    tom: hurt
+    eliza: hostile
+  location: quay
+  alive: true
+s10:
+  knows:
+    - walter-drowned
+    - ledger-storm-entry
+    - no-storm-that-night
+    - eliza-holds-debts
+    - ink-mismatch
+    - walter-letter
+    - jory-boat-lost
+    - jory-forged-ledger
+  wants: to set the record right
+  feels:
+    jory: grieving
+    tom: hurt
+    eliza: hostile
+  location: harbour-office
+  alive: true
+s11:
+  knows:
+    - walter-drowned
+    - ledger-storm-entry
+    - no-storm-that-night
+    - eliza-holds-debts
+    - ink-mismatch
+    - walter-letter
+    - jory-boat-lost
+    - jory-forged-ledger
+    - eliza-knew
+  wants: to finish the letter
+  feels:
+    jory: grieving
+    tom: trusting
+    eliza: cold
+  location: cannery
+  alive: true
+s12:
+  knows:
+    - walter-drowned
+    - ledger-storm-entry
+    - no-storm-that-night
+    - eliza-holds-debts
+    - ink-mismatch
+    - walter-letter
+    - jory-boat-lost
+    - jory-forged-ledger
+    - eliza-knew
+  wants: to keep the book
+  feels:
+    jory: forgiving
+    tom: trusting
+    eliza: cold
+  location: harbour
+  alive: true
