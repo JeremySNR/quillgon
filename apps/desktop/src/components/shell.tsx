@@ -418,7 +418,7 @@ export function useShortcuts(toggleRail: () => void) {
       } else if (e.key === '.') {
         e.preventDefault();
         setFocus(!focus);
-      } else if (/^[1-7]$/.test(e.key)) {
+      } else if (/^[1-8]$/.test(e.key)) {
         e.preventDefault();
         go(NAV[Number(e.key) - 1].view);
       } else if (e.key === ',') {
