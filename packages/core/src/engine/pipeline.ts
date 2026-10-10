@@ -448,8 +448,10 @@ export class Pipeline {
     const ex = await runExtraction(this.store, this.agents, sceneId);
     if (!ex.diff.graphLevel) {
       applyExtraction(this.store, ex);
+      // Only the prose side is reconciled. If the card had moved too, the scene stays
+      // card_ahead: the prose still needs to follow the card.
       const s = this.store.scene(sceneId);
-      if (sceneSync(s).state !== 'in_sync') this.store.markInSync(sceneId);
+      if (sceneSync(s).state === 'prose_ahead') this.store.markInSync(sceneId);
       await this.store.commit(`Edit prose of ${sceneId} (wording only)`);
       return { presentationOnly: true, extraction: ex };
     }

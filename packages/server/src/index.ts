@@ -24,6 +24,7 @@ import {
   suggestSheet,
   SchemaError,
   InvalidRefError,
+  RevertConflictError,
   sceneOrder,
   type Change,
   type ReaderReport,
@@ -263,6 +264,7 @@ export class NovelServer {
         if (e instanceof SchemaError) return send(res, 422, { error: e.message, issues: e.issues });
         if (e instanceof HttpError) return send(res, e.status, { error: e.message, data: e.data });
         if (e instanceof InvalidRefError) return send(res, 400, { error: e.message });
+        if (e instanceof RevertConflictError) return send(res, 409, { error: e.message, data: { files: e.files } });
         // Programming errors are the server's fault; everything else is a refused request.
         if (e instanceof TypeError || e instanceof ReferenceError || e instanceof RangeError) {
           console.error(e);

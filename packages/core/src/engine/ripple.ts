@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentSuite } from '../agents/contracts.js';
@@ -113,7 +114,8 @@ export class Ripple {
     await store.checkpoint('Work in progress before a ripple', { exclude: files });
     const originCommit = await store.commit(`Edit: ${impact.description}`, { files });
     const r = new Ripple(store, agents, {
-      id: timestamp(),
+      // Second-granular timestamps collide when two ripples start in the same second.
+      id: `${timestamp()}-${randomBytes(2).toString('hex')}`,
       created: new Date().toISOString(),
       description: impact.description,
       change,
@@ -199,9 +201,11 @@ export class Ripple {
   /** Ask the reviser for each pending card, in story order (or just one scene). */
   async propose(scene?: string, progress: Progress = () => undefined) {
     const p = this.store.project;
-    const targets = this.round.items.filter((i) => i.kind === 'card' && i.status === 'pending' && (!scene || i.scene === scene));
+    // A failed proposal (network, model refusal) is retried by proposing again.
+    const targets = this.round.items.filter((i) => i.kind === 'card' && (i.status === 'pending' || i.status === 'error') && (!scene || i.scene === scene));
     for (const it of targets) {
       progress('propose', `Reviewing ${it.scene} "${it.title}"`);
+      it.error = null;
       const card = this.store.scene(it.scene).card;
       try {
         const out = await this.agents.reviseCard({
@@ -238,7 +242,8 @@ export class Ripple {
     const it = this.item(scene);
     if (it.kind === 'conflict') throw new Error(`${scene} is a conflict; resolve it first`);
     if (!it.card) throw new Error(`${scene} has no proposal yet`);
-    if (edited) it.card.after = SceneCard.parse({ ...(edited as object), id: scene });
+    // An edited proposal keeps the scene's own status and lock: the reviser never changes those.
+    if (edited) it.card.after = SceneCard.parse({ ...(edited as object), id: scene, status: it.card.before.status, lock: it.card.before.lock });
     if (!it.card.after) throw new Error(`${scene}: nothing to accept (no_change)`);
     it.status = 'accepted';
     const s = this.store.scene(scene);
@@ -427,12 +432,19 @@ export class Ripple {
     return round;
   }
 
-  /** Revert every commit this ripple made, including the originating edit. */
+  /**
+   * Revert every commit this ripple made, including the originating edit, as one commit.
+   * All or nothing: if the author has since changed the same files, nothing is reverted
+   * and the error names them.
+   */
   async revert() {
     const hashes = [...this.data.rounds.map((r) => r.commit).filter((h): h is string => !!h).reverse(), ...(this.data.originCommit ? [this.data.originCommit] : [])];
     await this.store.checkpoint('Checkpoint before reverting ripple');
-    for (const h of hashes) await this.store.repo.revert(h);
-    this.store.reload();
+    try {
+      await this.store.repo.revertAll(hashes, `Revert ripple: ${this.data.description}`);
+    } finally {
+      this.store.reload();
+    }
     if (!this.data.originCommit) {
       // The originating edit was committed before the ripple started: restore it from the change.
       const c = this.data.change;
@@ -451,11 +463,42 @@ export class Ripple {
         let i = 0;
         for (const a of st.acts) for (const ch of a.chapters) ch.scenes = ch.scenes.map(() => c.before[i++]);
         this.store.saveStructure(st);
+      } else if (c.kind === 'delete-scene' || c.kind === 'character') {
+        // No "before" is kept in the change for these: take the files from just before the
+        // commit that last touched them before this ripple started.
+        const files = changeFiles(c).filter((f) => f !== paths.structure);
+        const before = await this.commitBefore(files[0]);
+        if (before) await this.store.repo.restore(before, files);
+        this.store.reload();
+        if (c.kind === 'delete-scene' && before) {
+          const st = structuredClone(this.store.project.structure);
+          const chapters = st.acts.flatMap((a) => a.chapters);
+          const prevIdx = c.orderBefore.indexOf(c.scene) - 1;
+          const prev = prevIdx >= 0 ? c.orderBefore[prevIdx] : null;
+          const ch = (prev && chapters.find((x) => x.scenes.includes(prev))) || chapters[0];
+          if (ch && !chapters.some((x) => x.scenes.includes(c.scene))) {
+            ch.scenes.splice(prev ? ch.scenes.indexOf(prev) + 1 : 0, 0, c.scene);
+            this.store.saveStructure(st);
+          }
+        }
+        await this.store.checkpoint(`Revert: ${this.data.description}`);
       }
       await this.store.commit(`Revert: ${this.data.description}`);
     }
     this.data.state = 'reverted';
     this.save();
+  }
+
+  /** The parent of the newest commit touching `rel` made before this ripple started. */
+  private async commitBefore(rel: string | undefined): Promise<string | null> {
+    if (!rel) return null;
+    const started = Date.parse(this.data.created);
+    const log = await this.store.repo.git.raw(['log', '--format=%H %cI', '--', `:(literal)${rel}`]).catch(() => '');
+    for (const line of log.split('\n').filter(Boolean)) {
+      const [hash, date] = line.split(' ');
+      if (Date.parse(date) <= started + 1000) return `${hash}~1`;
+    }
+    return null;
   }
 
   abandon() {

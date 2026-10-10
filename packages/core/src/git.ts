@@ -30,6 +30,13 @@ export function assertBranch(name: unknown): string {
 
 export class InvalidRefError extends Error {}
 
+/** A revert that would overwrite later work. Nothing was changed. */
+export class RevertConflictError extends Error {
+  constructor(readonly files: string[]) {
+    super(`these files changed again since, so the revert was not applied (nothing was changed): ${files.join(', ')}`);
+  }
+}
+
 export interface Commit {
   hash: string;
   date: string;
@@ -179,9 +186,52 @@ export class Repo {
     }
   }
 
-  async revert(hash: string) {
+  async head(): Promise<string | null> {
+    return this.git.raw(['rev-parse', '--verify', '-q', 'HEAD']).then((h) => h.trim() || null, () => null);
+  }
+
+  /** Revert one commit. All or nothing: on a conflict the tree is put back and this throws. */
+  async revert(hash: string): Promise<string | null> {
     assertRef(hash, 'commit');
-    await this.git.revert(hash, ['--no-edit']);
+    const subject = (await this.git.raw(['log', '-1', '--format=%s', hash])).trim();
+    return this.revertAll([hash], `Revert "${subject}"`);
+  }
+
+  /**
+   * Revert several commits (newest first) as one new commit. All or nothing: if any of
+   * them conflicts with later work, the tree is restored and RevertConflictError names
+   * the files. The working tree must be clean (checkpoint first).
+   */
+  async revertAll(hashes: string[], message: string): Promise<string | null> {
+    for (const h of hashes) assertRef(h, 'commit');
+    if (!hashes.length) return null;
+    const head = await this.head();
+    if (!head) throw new Error('nothing to revert: the book has no commits');
+    if ((await this.git.raw(['status', '--porcelain', '--untracked-files=no'])).trim()) {
+      throw new Error('commit or checkpoint pending changes before reverting');
+    }
+    try {
+      await this.git.raw(['revert', '--no-commit', ...hashes]);
+    } catch (e) {
+      const conflicted = (await this.git.status()).conflicted;
+      await this.git.raw(['revert', '--abort']).catch(() => this.git.raw(['reset', '-q', '--hard', head]));
+      // Belt and braces: whatever abort did, HEAD and the tree are as they were.
+      if ((await this.head()) !== head) await this.git.raw(['reset', '-q', '--hard', head]);
+      throw new RevertConflictError(conflicted.length ? conflicted : [(e as Error).message]);
+    }
+    if (!(await this.git.raw(['diff', '--cached', '--name-only'])).trim()) {
+      await this.git.raw(['revert', '--quit']).catch(() => undefined);
+      return null;
+    }
+    const r = await this.git.commit(message);
+    await this.git.raw(['revert', '--quit']).catch(() => undefined);
+    return r.commit || null;
+  }
+
+  /** Put files back as they were at a commit (e.g. a deleted scene, from before its deletion). */
+  async restore(ref: string, rels: string[]) {
+    assertRef(ref);
+    if (rels.length) await this.git.raw(['checkout', ref, '--', ...rels.map((r) => `:(literal)${r}`)]);
   }
 
   /** Read a file as it is on another branch (for scene-by-scene comparison). */
