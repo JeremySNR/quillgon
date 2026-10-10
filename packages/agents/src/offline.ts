@@ -6,6 +6,7 @@ import type {
   JudgeOutput,
   LineEditOutput,
   SampleTurnsOutput,
+  TalkOutput,
   CardsOutput,
   ExtractOutput,
   InterviewOutput,
@@ -22,33 +23,25 @@ import { slugify } from '@quillgon/core';
  * without an API key (provider: offline) and gives tests a predictable baseline.
  * Its prose is placeholder text built from the card; it is not meant to be good.
  */
-const STOP = new Set('never always about above after again against around because before being below between could every first other their there these thing those through under until where which while whose would should'.split(' '));
+const STOP = new Set('nobody somebody someone everyone anyone nothing everything never always about above after again against around because before being below between could every first other their there these thing those through under until where which while whose would should'.split(' '));
 
 export class OfflineSuite implements AgentSuite {
-  async interview({ premise, answers }: Parameters<AgentSuite['interview']>[0]): Promise<InterviewOutput> {
-    if (!answers.length) {
-      return {
-        done: false,
-        questions: [
-          'What is this book really about, underneath the plot?',
-          'How should it end, and what does the ending cost?',
-          'What must this book never do?',
-          'In one line, how should it feel to read?',
-        ],
-        needs_decision: [],
-      };
-    }
-    const a = (i: number) => answers[i]?.answer?.trim() ?? '';
+  async interview({ premise, answers, known }: Parameters<AgentSuite['interview']>[0]): Promise<InterviewOutput> {
+    // Only what is not already settled is asked; answers are matched back by question.
+    const asked = INTERVIEW.filter((q) => !known[q.key]?.length);
+    if (!answers.length && asked.length) return { done: false, questions: asked.map((q) => q.question), needs_decision: [] };
+    const a = (key: (typeof INTERVIEW)[number]['key']) => answers.find((x) => x.question === INTERVIEW.find((q) => q.key === key)!.question)?.answer?.trim() ?? '';
+    const known_ = new Set<string>(INTERVIEW.map((q) => q.question));
     return {
       done: true,
       questions: [],
       intent: {
         premise,
-        themes: splitList(a(0)).slice(0, 4),
-        ending_type: a(1),
-        hard_rules: splitList(a(2)),
-        tone: a(3) || 'Restrained and specific.',
-        notes: answers.slice(4).map((x) => `${x.question} ${x.answer}`).join('\n'),
+        themes: known.themes?.length ? known.themes : splitList(a('themes')).slice(0, 4),
+        ending_type: known.ending_type || a('ending_type'),
+        hard_rules: known.hard_rules?.length ? known.hard_rules : splitList(a('hard_rules')),
+        tone: known.tone || a('tone') || 'Restrained and specific.',
+        notes: answers.filter((x) => !known_.has(x.question)).map((x) => `${x.question} ${x.answer}`).join('\n'),
       },
       needs_decision: [],
     };
@@ -319,8 +312,7 @@ export class OfflineSuite implements AgentSuite {
   }
 
   async diverge(input: Parameters<AgentSuite['diverge']>[0]): Promise<DivergeOutput> {
-    // Nouns, roughly: long words that are not verb forms or plurals.
-    const nouns = [...new Set((input.seed.match(/\b[a-z]{5,}\b/gi) ?? []).map((w) => w.toLowerCase()))].filter((w) => !/(?:ing|ed|[^s]s)$/.test(w) && !STOP.has(w)).slice(0, 6);
+    const nouns = nounsOf(input.seed);
     const pick = (i: number) => nouns[i % Math.max(1, nouns.length)] ?? 'the secret';
     const persona = input.persona.split(' ').slice(0, 3).join(' ');
     const templates: Record<string, (i: number) => string> = {
@@ -351,9 +343,99 @@ export class OfflineSuite implements AgentSuite {
       cast: people.map((p, i) => ({ id: p.id, name: p.name, role: i === 0 ? 'protagonist' : 'supporting', want: i === 0 ? 'to put things back as they were' : 'to keep what they know hidden', need: i === 0 ? 'to accept what cannot be undone' : 'to be forgiven', wound: 'an old failure nobody mentions', lie: i === 0 ? 'that knowing the truth will make it bearable' : 'that silence is a kind of kindness', arc: i === 0 ? 'from control to acceptance' : 'refuses to change, at a cost' })),
     };
   }
+
+  /**
+   * A thinking partner with no model: it files what the author says where it obviously
+   * belongs, adds the people it can name, offers one idea of its own to sort, and asks
+   * about whatever the board is still missing.
+   */
+  async talk({ board, history, message, focus }: Parameters<AgentSuite['talk']>[0]): Promise<TalkOutput> {
+    const out: TalkOutput = {
+      reply: '',
+      set: { seed: null, genre: null, logline: null, paragraph: null, synopsis: null, tone: null, ending: null },
+      themes: null,
+      never: null,
+      open: null,
+      ideas: [],
+      keep: [],
+      bin: [],
+      cast: [],
+      uncast: [],
+      avoid: [],
+    };
+    const m = message.trim();
+    const first = m.split(/(?<=[.?!])\s/)[0];
+    const fields = ['seed', 'genre', 'logline', 'paragraph', 'synopsis', 'tone', 'ending'] as const;
+    const field = fields.find((f) => f === focus);
+    let filed = 'Noted on the board.';
+    if (field) (out.set[field] = m), (filed = 'Written onto the board as you put it.');
+    else if (focus?.startsWith('cast:')) {
+      const id = focus.slice(5);
+      const key = /\bneeds?\b/i.test(m) ? 'need' : /\b(wound|hurt)\b/i.test(m) ? 'wound' : /\bbelieves?\b/i.test(m) ? 'lie' : /\b(becomes|changes|ends up)\b/i.test(m) ? 'arc' : 'want';
+      out.cast.push({ id, [key]: m });
+      filed = `Added to ${board.cast.find((c) => c.id === id)?.name ?? id}.`;
+    } else if (focus?.startsWith('idea:')) {
+      const id = focus.slice(5);
+      if (/\b(no|bin|drop|not|hate)\b/i.test(m)) out.bin.push(id), (filed = 'Binned.');
+      else out.keep.push(id), out.ideas.push({ kind: 'note', text: m, from: 'author', probability: 0.5 }), (filed = 'Kept, with your note.');
+    } else if (!board.seed) (out.set.seed = m), (filed = 'That is the seed.');
+    else if (/\b(write|draft)\b.*\b(logline|sentence)\b/i.test(m)) {
+      const kept = board.pile.filter((i) => i.status === 'kept').map((i) => i.text);
+      out.set.logline = [board.seed.split(/(?<=[.?!])\s/)[0], kept[0]].filter(Boolean).join(' ');
+      filed = 'A first sentence, from the seed and what you kept.';
+    } else if (/\b(ends?|ending)\b/i.test(m)) (out.set.ending = m), (filed = 'That is the ending, for now.');
+    else if (/\b(never|must not|mustn't|don't want)\b/i.test(m)) (out.never = [...board.never, m]), (filed = 'Added to what the book must never do.');
+    else if (/\b(feel|feels|tone)\b/i.test(m)) (out.set.tone = m), (filed = 'That is the tone.');
+    else if (/\b(really|underneath)\b.*\babout\b|\babout\b.*\b(really|underneath)\b/i.test(m)) (out.themes = [...board.themes, first]), (filed = 'Added to the themes.');
+    else out.ideas.push({ kind: /^what if/i.test(m) ? 'what-if' : 'note', text: m, from: 'author', probability: 0.5 });
+
+    const known = new Set(board.cast.map((c) => c.id));
+    const names = properNames(m);
+    for (const name of names.slice(0, 3)) {
+      const id = slugify(name.split(' ')[0]);
+      if (known.has(id) || focus === `cast:${id}`) continue;
+      known.add(id);
+      out.cast.push({ id, name, role: board.cast.length || out.cast.length ? '' : 'protagonist' });
+    }
+
+    const noun = nounsOf(names.reduce((t, n) => t.replace(n, ''), `${m} ${board.seed}`))[history.length % 3] ?? 'secret';
+    const offers = [
+      `What if the ${noun} is the one thing nobody in the story lies about?`,
+      `What if the person who cares most about the ${noun} is the one who broke it?`,
+      `What if the ${noun} matters to a stranger more than to anyone in the family?`,
+    ];
+    out.ideas.push({ kind: 'what-if', text: offers[history.length % offers.length], from: 'partner', probability: 0.12 });
+
+    const after = { logline: out.set.logline ?? board.logline, ending: out.set.ending ?? board.ending, tone: out.set.tone ?? board.tone, never: out.never ?? board.never };
+    const missing = [
+      !after.logline && 'In one sentence: who wants what, and what stands in their way?',
+      !after.ending && 'How does it end, and what does the ending cost?',
+      !after.tone && 'How should it feel to read?',
+      !after.never.length && 'What must this book never do?',
+    ].filter((q): q is string => !!q);
+    if (!same(missing, board.open)) out.open = missing;
+    out.reply = `${filed} ${missing[0] ?? 'What is the part of this you are least sure about?'}`;
+    return out;
+  }
 }
 
 // ------------------------------------------------------------------ helpers
+
+const INTERVIEW = [
+  { key: 'themes', question: 'What is this book really about, underneath the plot?' },
+  { key: 'ending_type', question: 'How should it end, and what does the ending cost?' },
+  { key: 'hard_rules', question: 'What must this book never do?' },
+  { key: 'tone', question: 'In one line, how should it feel to read?' },
+] as const;
+
+/** Nouns, roughly: long words that are not verb forms or plurals. */
+function nounsOf(text: string): string[] {
+  return [...new Set((text.match(/\b[a-z]{5,}\b/gi) ?? []).map((w) => w.toLowerCase()))].filter((w) => !/(?:ing|ed|[^s]s)$/.test(w) && !STOP.has(w)).slice(0, 6);
+}
+
+function same(a: string[], b: string[]) {
+  return a.length === b.length && a.every((x, i) => x === b[i]);
+}
 
 function splitList(s: string): string[] {
   return s
@@ -376,13 +458,19 @@ function nameOf(chars: { id: string; name: string }[], id: string) {
 
 const COMMON = new Set(['The', 'A', 'An', 'When', 'After', 'Before', 'In', 'On', 'At', 'She', 'He', 'They', 'Her', 'His', 'It', 'But', 'And', 'One', 'Two', 'Three', 'Years', 'Now', 'Then', 'There', 'This', 'That']);
 
-function namesFrom(premise: string): { id: string; name: string; role: string }[] {
+/** Capitalised names that do not start a sentence. */
+function properNames(text: string, skip: Set<string> = COMMON): string[] {
   const found: string[] = [];
-  for (const m of premise.matchAll(/(?<![.!?]\s)(?<!^)\b([A-Z][a-z]{2,})(?:\s([A-Z][a-z]{2,}))?/g)) {
+  for (const m of text.matchAll(/(?<![.!?]\s)(?<!^)\b([A-Z][a-z]{2,})(?:\s([A-Z][a-z]{2,}))?/g)) {
     const n = m[0];
-    if (COMMON.has(m[1]) || found.includes(n)) continue;
+    if (skip.has(m[1]) || found.includes(n)) continue;
     found.push(n);
   }
+  return found;
+}
+
+function namesFrom(premise: string): { id: string; name: string; role: string }[] {
+  const found = properNames(premise);
   const people = found.slice(0, 4).map((n, i) => ({ id: slugify(n.split(' ')[0]), name: n, role: i === 0 ? 'protagonist' : '' }));
   if (people.length >= 2) return people;
   return [...people, ...[{ id: 'lead', name: 'Alex Morrow', role: 'protagonist' }, { id: 'sam', name: 'Sam Hale', role: 'confidant' }].slice(people.length)];
@@ -407,7 +495,7 @@ export class ScriptedSuite extends OfflineSuite {
   constructor(overrides: Partial<AgentSuite> = {}) {
     super();
     const self = this as unknown as Record<string, (i: unknown) => Promise<unknown>>;
-    for (const m of ['interview', 'plotPoints', 'structures', 'cards', 'write', 'voice', 'reviseLines', 'humanise', 'extract', 'reviseCard', 'reviseProse', 'read', 'continuity', 'judge', 'critique', 'sampleTurns', 'diverge', 'expand'] as const) {
+    for (const m of ['interview', 'plotPoints', 'structures', 'cards', 'write', 'voice', 'reviseLines', 'humanise', 'extract', 'reviseCard', 'reviseProse', 'read', 'continuity', 'judge', 'critique', 'sampleTurns', 'diverge', 'expand', 'talk'] as const) {
       const base = (overrides[m] as ((i: unknown) => Promise<unknown>) | undefined) ?? self[m].bind(this);
       self[m] = (i: unknown) => {
         this.calls.push({ method: m, input: i });

@@ -95,6 +95,16 @@ try {
   await until(async () => (await page.locator('article.idea').count()) > 3, 'ideas');
   await page.locator('article.idea').first().getByRole('button', { name: 'Keep' }).click();
   await until(async () => (await page.getByRole('button', { name: /Kept · 1/ }).count()) === 1, 'one kept idea');
+  const talk = page.getByLabel('Message the thinking partner');
+  await talk.fill('It belongs to Ines Varga now. It should feel humid and hushed.');
+  await talk.press('Enter');
+  await page.locator('.cast-card', { hasText: 'Ines Varga' }).waitFor();
+  const changes = await page.locator('.msg.partner .change').allTextContents();
+  if (!changes.includes('Tone written') || !changes.includes('Added Ines Varga') || !changes.some((c) => c.startsWith('Suggested:'))) throw new Error(`unexpected changes: ${changes}`);
+  step('talked it through: the partner wrote the tone, added Ines to the cast and suggested an idea to sort');
+  await page.locator('.msg.partner').last().getByRole('button', { name: 'Undo' }).click();
+  await until(async () => (await page.locator('.cast-card', { hasText: 'Ines Varga' }).count()) === 0, 'undo to take Ines off the board');
+  step('undid the turn: the board is back as it was');
   await page.locator('.rung').first().getByRole('button', { name: 'Draft options' }).click();
   await page.locator('.option-card').first().click();
   await page.getByRole('button', { name: 'Use this premise' }).click();

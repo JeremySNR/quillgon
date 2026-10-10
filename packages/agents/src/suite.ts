@@ -61,4 +61,5 @@ export class ModelSuite implements AgentSuite {
   sampleTurns: AgentSuite['sampleTurns'] = (i) => this.run(A.sampler, i);
   diverge: AgentSuite['diverge'] = (i) => this.run(A.museDiverge, i);
   expand: AgentSuite['expand'] = (i) => this.run(A.museExpand, i);
+  talk: AgentSuite['talk'] = (i) => this.run(A.museTalk, i);
 }

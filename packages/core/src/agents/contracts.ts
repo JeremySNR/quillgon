@@ -1,10 +1,13 @@
 import { z } from 'zod';
 import {
   Act,
+  CastSketch,
   CharacterBio,
   CharacterVoice,
   Fact,
   Id,
+  IdeaBoard,
+  IdeaItem,
   Intent,
   Obligation,
   PlotPoint,
@@ -26,6 +29,8 @@ const NeedsDecision = z.array(z.string()).default([]);
 export const InterviewInput = z.object({
   premise: z.string(),
   answers: z.array(z.object({ question: z.string(), answer: z.string() })).default([]),
+  /** Already decided (usually while talking the idea through): not to be asked again. */
+  known: Intent.pick({ themes: true, tone: true, ending_type: true, hard_rules: true }).partial().default({}),
 });
 export type InterviewInput = z.infer<typeof InterviewInput>;
 
@@ -462,6 +467,44 @@ export const ExpandOutput = z.object({
 });
 export type ExpandOutput = z.infer<typeof ExpandOutput>;
 
+export const TalkInput = z.object({
+  /** The board as it stands; the conversation's memory is what has been written here. */
+  board: IdeaBoard.omit({ talk: true, logline_options: true, paragraph_options: true, synopsis_options: true, done: true }),
+  history: z.array(z.object({ role: z.enum(['author', 'partner']), text: z.string(), undone: z.boolean().default(false) })).default([]),
+  message: z.string().min(1),
+  /** The part of the board the author is pointing at ("logline", "cast:mara", "idea:<id>"). */
+  focus: z.string().nullable().default(null),
+});
+export type TalkInput = z.infer<typeof TalkInput>;
+
+const Keep = z.string().nullable().default(null);
+
+export const TalkOutput = z.object({
+  /** What the partner says back: short, specific, usually ending in one question. */
+  reply: z.string().min(1),
+  /** Board fields to replace. null leaves a field exactly as it is. */
+  set: z
+    .object({ seed: Keep, genre: Keep, logline: Keep, paragraph: Keep, synopsis: Keep, tone: Keep, ending: Keep })
+    .default({ seed: null, genre: null, logline: null, paragraph: null, synopsis: null, tone: null, ending: null }),
+  /** Whole lists to replace; null leaves the list alone. */
+  themes: z.array(z.string()).nullable().default(null),
+  never: z.array(z.string()).nullable().default(null),
+  open: z.array(z.string()).nullable().default(null),
+  /** New ideas: the author's own (from what they said) or the partner's (to be sorted). */
+  ideas: z
+    .array(z.object({ kind: IdeaItem.shape.kind, text: z.string().min(1), from: z.enum(['author', 'partner']), probability: z.number().min(0).max(1).default(0.5) }))
+    .default([]),
+  /** Ids of ideas on the board the author has embraced or rejected in conversation. */
+  keep: z.array(z.string()).default([]),
+  bin: z.array(z.string()).default([]),
+  /** People to add, or to update by id. Empty fields leave what is there. */
+  cast: z.array(CastSketch.partial({ name: true, role: true, want: true, need: true, wound: true, lie: true, arc: true })).default([]),
+  uncast: z.array(Id).default([]),
+  /** Clichés the conversation has named, to steer away from. */
+  avoid: z.array(z.string()).default([]),
+});
+export type TalkOutput = z.infer<typeof TalkOutput>;
+
 // ------------------------------------------------------------------ the suite the core calls
 
 export interface CallInfo {
@@ -493,6 +536,8 @@ export interface AgentSuite {
   sampleTurns(input: SampleTurnsInput): Promise<SampleTurnsOutput>;
   diverge(input: DivergeInput): Promise<DivergeOutput>;
   expand(input: ExpandInput): Promise<ExpandOutput>;
+  /** One turn of the thinking-partner conversation: a reply, and the edits it makes to the board. */
+  talk(input: TalkInput): Promise<TalkOutput>;
 }
 
 export const Contracts = {
@@ -513,7 +558,7 @@ export const Contracts = {
   judge: { input: JudgeInput, output: JudgeOutput },
   critic: { input: CritiqueInput, output: CritiqueOutput },
   sampler: { input: SampleTurnsInput, output: SampleTurnsOutput },
-  muse: { diverge: { input: DivergeInput, output: DivergeOutput }, expand: { input: ExpandInput, output: ExpandOutput } },
+  muse: { diverge: { input: DivergeInput, output: DivergeOutput }, expand: { input: ExpandInput, output: ExpandOutput }, talk: { input: TalkInput, output: TalkOutput } },
   extractor: { input: ExtractInput, output: ExtractOutput },
   reader: { input: ReaderInput, output: ReaderOutput },
   continuity: { input: ContinuityInput, output: ContinuityOutput },

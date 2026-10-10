@@ -59,6 +59,8 @@ For development, `pnpm dev` runs the API and the Vite dev server with hot reload
 
 1. **Build** walks you through six gates, top down:
    1. **Idea** (optional): start from a seed. Four different personas propose what-ifs, loglines, characters and twists, each with its own estimate of how typical it is; the least typical come first, near-duplicates are dropped and anything close to a stock cliché is flagged. You keep or bin each one, add your own, then grow the premise one level at a time (one sentence → one paragraph → one page → the cast, with what each wants, needs, the wound and the lie they believe).
+
+      Beside the board, a **thinking partner** lets you talk the idea through. It asks one question at a time, pushes back on what is vague or familiar, and offers a few directions of its own. Every reply also edits the board: what you say is filed in your words (a person in the cast, the ending, the tone, something the book must never do), its own suggestions go to your pile to keep or bin, and questions still open are listed. The parts it just changed light up, each change is listed under the reply, and **Undo** takes a reply's changes back. The speech-bubble button on any part of the board (a rung, a character, an idea) points the conversation at it. Tone, ending, themes and never-rules settled here go into the intent, and the interviewer does not ask about them again.
    2. **Intent:** answer a few questions about your premise. Only what's missing is asked.
    3. **Plot points:** pin what must happen; the planner proposes the rest.
    4. **Structure:** pick one of **three** different act/chapter structures (expected, breaks an expectation, wild card). **Critique them first** runs a critic that looks for the shapes AI-planned stories fall into: one storyline, stakes that don't rise, everything resolving at once, a stated theme, a protagonist things happen to.
@@ -90,6 +92,7 @@ quillgon init <dir> [--title T] [--words 12000] [--offline]
 quillgon validate [dir]                 schema + reference check with file/field-precise errors
 quillgon status | sync | log | costs
 quillgon spark ["seed"] [--genre G]     idea → premise: diverge, keep/bin, logline → synopsis → cast
+quillgon talk ["message"] [--about logline|cast:<id>]   talk the idea through; what you settle goes on the board
 quillgon intent | plan | cards <chapter|all> [--default] | write <scene|chapter|all>
 quillgon ledger                         setups and payoffs, and what is unpaid
 quillgon style [check|learn|fit]        check prose against style.yaml; rules from your edits; dials from samples
@@ -120,7 +123,7 @@ fixtures/novella/    "The Tidekeeper's Ledger": 12 scenes, 4 characters, 3 threa
 ```
 
 - **Only the graph store writes to the manuscript.** Agents return structured output, validated with Zod, and the store writes files, updates the index and commits.
-- **A book is a git repo of Markdown and YAML** (`book.yaml`, `intent.md`, `plot-points/`, `threads/`, `characters/<id>/{bio.md,voice.md,state.yaml}`, `scenes/<id>/{card.yaml,prose.md,facts.yaml}`, `obligations/`, `idea.yaml`, `structure.yaml`, `timeline.yaml`, `style/` (samples, banned patterns, `style.yaml`), `reports/`). You can edit any of it in another editor; the app reloads.
+- **A book is a git repo of Markdown and YAML** (`book.yaml`, `intent.md`, `plot-points/`, `threads/`, `characters/<id>/{bio.md,voice.md,state.yaml}`, `scenes/<id>/{card.yaml,prose.md,facts.yaml}`, `obligations/`, `idea.yaml` (the idea board and its conversation), `structure.yaml`, `timeline.yaml`, `style/` (samples, banned patterns, `style.yaml`), `reports/`). You can edit any of it in another editor; the app reloads.
 - **The index is disposable.** `.engine/index.sqlite` holds entities, references, facts and scene embeddings. Delete it and it rebuilds. Embeddings are local and deterministic (hashed term vectors), so impact analysis needs no network.
 - **Sync** compares the card hash the prose was generated from with the prose hash at its last extraction. The result is `in_sync`, `card_ahead`, `prose_ahead` or `conflict`, and a conflict blocks generation.
 - **Impact analysis** walks references, facts and per-scene state. Hop 0 is the edited scene, hop 1 a direct reference, hop 2 a thread or character state, and hop 3 similarity only (listed, never proposed). Locked scenes become conflicts with three choices: unlock, keep (recorded in `reports/known-inconsistencies.md`), or revert.

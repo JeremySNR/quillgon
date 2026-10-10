@@ -541,6 +541,10 @@ export class NovelServer {
     r('POST', '/api/idea/own', ({ engine, body }) => idea(engine).addOwn(String(body.text), body.kind));
     r('POST', '/api/idea/expand', ({ engine, body, server }) => server.job('expand', () => idea(engine).expand(body.step)));
     r('POST', '/api/idea/choose', ({ engine, body }) => idea(engine).choose(body.step, String(body.text)));
+    r('POST', '/api/idea/update', ({ engine, body }) => idea(engine).update(body.patch ?? {}));
+    r('POST', '/api/idea/talk', ({ engine, body, server }) => server.job('talk', () => idea(engine).talk(String(body.message ?? ''), body.focus ? String(body.focus) : null)));
+    r('POST', '/api/idea/talk/undo', ({ engine, body }) => idea(engine).undoTalk(Number(body.turn)));
+    r('POST', '/api/idea/talk/clear', ({ engine }) => idea(engine).clearTalk());
     r('POST', '/api/idea/finish', async ({ engine }) => idea(engine).finish());
     r('POST', '/api/idea/skip', async ({ engine }) => {
       if (engine.store.book.stage === 'idea') engine.store.updateBook({ stage: 'intent' });
