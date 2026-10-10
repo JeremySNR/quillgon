@@ -44,9 +44,9 @@ export function allowUnload() {
 }
 
 /**
- * Block closing or reloading while something is unsaved. Browsers show their own prompt;
- * Electron's main process shows a native one (will-prevent-unload). `onBlocked` is for
- * hosts that do neither.
+ * Block closing or reloading while something is unsaved. Browsers show their own prompt.
+ * Electron closes silently instead of prompting, so there `onBlocked` gets a chance to ask
+ * in-app and then call allowUnload() and window.close().
  */
 export function installUnloadGuard(onBlocked?: (what: string[]) => void): () => void {
   const h = (e: BeforeUnloadEvent) => {
