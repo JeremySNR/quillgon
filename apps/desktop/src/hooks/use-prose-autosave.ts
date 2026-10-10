@@ -153,14 +153,17 @@ export function useProseAutosave<R = unknown>({ docKey, save, onSaved, onError, 
     };
   }, [docKey, run]);
 
-  // Closing the window: send a pending save with keepalive so it survives the unload.
+  // Closing the window: flush unsaved prose with keepalive so it survives the unload.
+  // Covers a pending debounce, an in-flight non-keepalive PUT that unload would abort, and retries.
   useEffect(() => {
     const h = () => {
-      if (!timer.current) return;
+      if (!hasUnsaved()) return;
       const value = textRef.current;
       if (new Blob([value]).size > KEEPALIVE_LIMIT) return;
-      clearTimeout(timer.current);
-      timer.current = null;
+      if (timer.current) {
+        clearTimeout(timer.current);
+        timer.current = null;
+      }
       void run(keyRef.current, value, true);
     };
     window.addEventListener('pagehide', h);
@@ -169,7 +172,7 @@ export function useProseAutosave<R = unknown>({ docKey, save, onSaved, onError, 
       window.removeEventListener('pagehide', h);
       window.removeEventListener('beforeunload', h);
     };
-  }, [run]);
+  }, [run, hasUnsaved]);
 
   const revision = useCallback(() => rev.current, []);
 

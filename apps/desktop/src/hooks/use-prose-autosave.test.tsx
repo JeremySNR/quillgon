@@ -216,6 +216,21 @@ describe('useProseAutosave', () => {
     expect(save).toHaveBeenCalledWith('s01', 'closing the lid', { keepalive: true });
   });
 
+  it('re-sends with keepalive on unload when an in-flight save is aborted', async () => {
+    const { save, calls } = controlledSave();
+    const { result } = renderHook(() => useProseAutosave({ docKey: 's01', save, onError: () => undefined, delay: 10 }));
+    act(() => result.current.edit('already sending'));
+    await act(async () => vi.advanceTimersByTime(10));
+    expect(calls).toHaveLength(1);
+    expect(calls[0].keepalive).toBe(false);
+    // Unload queues a keepalive save behind the in-flight PUT (which the browser aborts).
+    await act(async () => void window.dispatchEvent(new Event('pagehide')));
+    await act(async () => calls[0].reject(new Error('aborted')));
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toMatchObject({ text: 'already sending', keepalive: true });
+    await act(async () => calls[1].resolve('ok'));
+  });
+
   it('discard() drops a pending save', async () => {
     const save = vi.fn<Save>(async (_k, t) => t);
     const { result, unmount } = renderHook(() => useProseAutosave({ docKey: 's01', save, delay: 900 }));
