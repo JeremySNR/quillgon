@@ -162,3 +162,9 @@ pnpm test:live      # live-model tests; needs QUILLGON_LIVE=1 and an API key
 - **Two small additions to the data model:** `scenes/<id>/facts.yaml` holds extracted facts, so the index can rebuild from files, and an optional `locations.yaml` / `facts.yaml` glossary gives ids human-readable names.
 
 The UI design follows the research brief in [docs/design.md](docs/design.md).
+# Book covers
+
+Open **Book covers** to generate a front cover from your story, or choose an art
+style and add creative direction. Keep versions, check thumbnail readability,
+and download a PNG. Uses OpenAI's GPT Image 2.5 Sunburst with separate API billing.
+See the [cover workflow, research and setup](docs/book-covers.md).

@@ -7,6 +7,7 @@ declare global {
 }
 
 const BASE = window.quillgon?.apiBase ?? '';
+export const coverImageUrl = (id: string, download = false) => `${BASE}/api/covers/${encodeURIComponent(id)}/image${download ? '?download=1' : ''}`;
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public data?: any) {

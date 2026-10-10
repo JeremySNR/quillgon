@@ -29,6 +29,7 @@ import {
 import { builtinPrompt, createSuite, loadPrompt } from '@quillgon/agents';
 import { projectSnapshot, sceneDetail } from './snapshot.js';
 import { exportManuscript } from './export.js';
+import { coverAvailability, coverImage, CoverOptions, generateCover, listCovers } from './covers.js';
 
 type Handler = (ctx: Ctx) => Promise<unknown> | unknown;
 interface Ctx {
@@ -156,7 +157,7 @@ export class NovelServer {
       .finally(() => {
         this.broadcast('job', job);
         // Keep finished jobs a while for late pollers.
-        setTimeout(() => this.jobs.delete(id), 10 * 60_000);
+        setTimeout(() => this.jobs.delete(id), 10 * 60_000).unref();
       });
     return { job: id };
   }
@@ -199,6 +200,10 @@ export class NovelServer {
         if (!r.open && !this.engine) throw new HttpError(409, 'no project is open');
         const params = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
         const out = await r.handler({ params, query: url.searchParams, body, engine: this.engine!, server: this });
+        if (Buffer.isBuffer(out)) {
+          res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'no-store', ...(url.searchParams.has('download') ? { 'content-disposition': 'attachment; filename="book-cover.png"' } : {}) });
+          return void res.end(out);
+        }
         return send(res, 200, out === undefined ? { ok: true } : out);
       } catch (e) {
         if (e instanceof SchemaError) return send(res, 422, { error: e.message, issues: e.issues });
@@ -265,6 +270,21 @@ export class NovelServer {
     r('GET', '/api/jobs/:id', ({ params, server }) => server.jobs.get(params.id) ?? { id: params.id, state: 'gone' }, true);
 
     r('GET', '/api/project', ({ engine }) => projectSnapshot(engine));
+    r('GET', '/api/covers', ({ engine }) => ({ ...coverAvailability(engine.store.project), covers: listCovers(engine.store.dir) }));
+    r('GET', '/api/covers/:id/image', ({ engine, params }) => {
+      try { return coverImage(engine.store.dir, params.id); }
+      catch { throw new HttpError(404, 'Cover not found'); }
+    });
+    r('POST', '/api/covers/generate', ({ engine, body, server }) => {
+      const parsed = CoverOptions.safeParse(body);
+      if (!parsed.success) throw new HttpError(422, 'Invalid cover options', parsed.error.issues);
+      const available = coverAvailability(engine.store.project);
+      if (!available.ready) throw new HttpError(409, available.reason!);
+      if ([...server.jobs.values()].some(j => j.name === 'cover' && j.state === 'running')) throw new HttpError(409, 'A cover is already being generated.');
+      // Capture this project's data before starting: opening another book cannot redirect the result.
+      const project = structuredClone(engine.store.project);
+      return server.job('cover', progress => generateCover(project, parsed.data, progress));
+    });
     r('POST', '/api/reload', ({ engine }) => (engine.store.reload(), { ok: true }));
 
     // --- scenes
