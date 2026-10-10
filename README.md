@@ -105,7 +105,7 @@ quillgon branch [name | switch <b> | merge <b> | delete <b>]
 quillgon serve [--dir book] [--port 4317]
 ```
 
-Pass `--yes` to accept the defaults at every gate (useful for scripting), or `--record <dir>` / `--replay <dir>` to record model responses as test fixtures or replay them.
+Pass `--yes` to accept the defaults at every gate (useful for scripting). Without a terminal and without `--yes`, any choice that changes the book stops with an error rather than answering itself. Use `--record <dir>` / `--replay <dir>` to record model responses as test fixtures or replay them.
 
 ## Architecture
 
@@ -132,8 +132,9 @@ fixtures/novella/    "The Tidekeeper's Ledger": 12 scenes, 4 characters, 3 threa
 ## Tests and acceptance
 
 ```bash
-pnpm test           # 94 unit/integration tests, no model calls
+pnpm test           # unit, integration, CLI and UI tests, no model calls
 pnpm e2e            # drives the real UI in Chromium (offline models)
+pnpm scale-check    # prompt sizes and write latency on a 96-scene book
 pnpm screenshots    # regenerates docs/screenshots
 pnpm typecheck
 pnpm test:live      # live-model tests; needs QUILLGON_LIVE=1 and an API key

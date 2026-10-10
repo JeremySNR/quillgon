@@ -92,6 +92,11 @@ export class NovelServer {
   private watcher: fs.FSWatcher | null = null;
   private quietUntil = 0;
   private reloadTimer: NodeJS.Timeout | null = null;
+  /** Jobs run one at a time: they share one store, one index and one git repo. */
+  private queue: Promise<unknown> = Promise.resolve();
+  private active = 0;
+  /** An external edit that arrived while a job was running; reloaded when the queue drains. */
+  private pendingReload: string | null = null;
   readonly http: http.Server;
   readonly token: string;
   private allowedOrigins: Set<string>;
@@ -146,14 +151,26 @@ export class NovelServer {
         if (!file || /^(\.engine|\.git|reports)[\\/]?/.test(String(file))) return;
         if (Date.now() < this.quietUntil) return;
         if (this.reloadTimer) clearTimeout(this.reloadTimer);
-        this.reloadTimer = setTimeout(() => {
-          this.engine?.store.reload();
-          this.broadcast('reloaded', { file: String(file) });
-        }, 300);
+        this.reloadTimer = setTimeout(() => this.externalReload(String(file)), 300);
       });
     } catch {
       // Recursive watch unsupported: external edits show up on next reload.
     }
+  }
+
+  /** Never swap the project out from under a running job: wait for the queue to drain. */
+  private externalReload(file: string) {
+    if (this.active) {
+      this.pendingReload = file;
+      return;
+    }
+    this.engine?.store.reload();
+    this.broadcast('reloaded', { file });
+  }
+
+  /** Refuse operations that replace the whole project (branch switch, revert) while a job runs. */
+  assertIdle(what: string) {
+    if (this.active) throw new HttpError(409, `wait for the running job to finish before you ${what}`);
   }
 
   // ------------------------------------------------------------------ events and jobs
@@ -166,15 +183,22 @@ export class NovelServer {
   /** Run a long operation in the background; progress and completion go out over SSE. */
   job(name: string, fn: (progress: (stage: string, detail?: string) => void) => Promise<unknown>): { job: string } {
     const id = `${name}-${randomUUID().slice(0, 8)}`;
-    const job: Job = { id, name, state: 'running', stage: 'starting', detail: '', started: Date.now() };
+    const queued = this.active > 0;
+    const job: Job = { id, name, state: 'running', stage: queued ? 'queued' : 'starting', detail: queued ? 'Waiting for the current job to finish' : '', started: Date.now() };
     this.jobs.set(id, job);
+    this.active++;
     this.broadcast('job', job);
     const progress = (stage: string, detail = '') => {
       job.stage = stage;
       job.detail = detail;
       this.broadcast('job', job);
     };
-    fn(progress)
+    const run = this.queue.then(() => {
+      if (queued) progress('starting');
+      return fn(progress);
+    });
+    this.queue = run.catch(() => undefined);
+    run
       .then((result) => {
         job.state = 'done';
         job.result = result;
@@ -184,7 +208,13 @@ export class NovelServer {
         job.error = e.message;
       })
       .finally(() => {
+        this.active--;
         this.broadcast('job', job);
+        if (!this.active && this.pendingReload) {
+          const file = this.pendingReload;
+          this.pendingReload = null;
+          this.externalReload(file);
+        }
         // Keep finished jobs a while for late pollers.
         setTimeout(() => this.jobs.delete(id), 10 * 60_000);
       });
@@ -304,7 +334,7 @@ export class NovelServer {
 
     // --- app & projects
     r('GET', '/api/health', ({ server }) => ({ ok: true, open: server.engine?.store.dir ?? null, recent: recent() }), true);
-    r('POST', '/api/open', ({ body, server }) => (server.open(body.dir), { ok: true }), true);
+    r('POST', '/api/open', ({ body, server }) => (server.assertIdle('open another book'), server.open(body.dir), { ok: true }), true);
     r(
       'POST',
       '/api/init',
@@ -340,7 +370,7 @@ export class NovelServer {
     r('GET', '/api/jobs/:id', ({ params, server }) => server.jobs.get(params.id) ?? { id: params.id, state: 'gone' }, true);
 
     r('GET', '/api/project', ({ engine }) => projectSnapshot(engine));
-    r('POST', '/api/reload', ({ engine }) => (engine.store.reload(), { ok: true }));
+    r('POST', '/api/reload', ({ engine, server }) => (server.assertIdle('reload'), engine.store.reload(), { ok: true }));
 
     // --- scenes
     r('GET', '/api/scenes/:id', ({ engine, params }) => sceneDetail(engine.store, params.id));
@@ -657,14 +687,19 @@ export class NovelServer {
       return { ok: true };
     }));
     r('GET', '/api/branches', async ({ engine }) => engine.store.repo.branches());
-    r('POST', '/api/branches', async ({ engine, body }) => (await engine.store.repo.createBranch(body.name), engine.store.reload(), { ok: true }));
-    r('POST', '/api/branches/switch', async ({ engine, body }) => (await engine.store.repo.switchBranch(body.name), engine.store.reload(), { ok: true }));
-    r('POST', '/api/branches/merge', async ({ engine, body }) => {
+    r('POST', '/api/branches', async ({ engine, body, server }) => (server.assertIdle('start a what-if'), await engine.store.repo.createBranch(body.name), engine.store.reload(), { ok: true }));
+    r('POST', '/api/branches/switch', async ({ engine, body, server }) => (server.assertIdle('switch what-ifs'), await engine.store.repo.switchBranch(body.name), engine.store.reload(), { ok: true }));
+    r('POST', '/api/branches/merge', async ({ engine, body, server }) => {
+      server.assertIdle('merge a what-if');
       const out = await engine.store.repo.merge(body.from);
       engine.store.reload();
       return out;
     });
-    r('DELETE', '/api/branches/:name', async ({ engine, params }) => (await engine.store.repo.deleteBranch(params.name), { ok: true }));
+    r('DELETE', '/api/branches/:name', async ({ engine, params, server }) => {
+      server.assertIdle('delete a what-if');
+      await engine.store.repo.deleteBranch(params.name);
+      return { ok: true };
+    });
     r('GET', '/api/branches/compare', async ({ engine, query }) => {
       const a = query.get('a') ?? 'main';
       const b = query.get('b') ?? (await engine.store.repo.currentBranch());

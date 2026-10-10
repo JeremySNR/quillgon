@@ -242,3 +242,34 @@ describe('server API boundary', () => {
     }
   });
 });
+
+describe('server jobs', () => {
+  it('run one at a time, and refuse a branch switch while one runs', async () => {
+    const order: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const a = server.job('a', async () => {
+      order.push('a start');
+      await gate;
+      order.push('a end');
+    });
+    const b = server.job('b', async () => {
+      order.push('b start');
+    });
+    const queued = await api('GET', `/api/jobs/${b.job}`);
+    expect(queued.stage).toBe('queued');
+    await expect(api('POST', '/api/branches/switch', { name: 'main' })).rejects.toMatchObject({ status: 409 });
+    release();
+    for (;;) {
+      if ((await api('GET', `/api/jobs/${b.job}`)).state === 'done') break;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    expect(order).toEqual(['a start', 'a end', 'b start']);
+    expect((await api('GET', `/api/jobs/${a.job}`)).state).toBe('done');
+  });
+
+  it('a failed job does not block the queue', async () => {
+    await expect(job('/api/scenes/nope/write')).rejects.toThrow();
+    expect((await job('/api/quality/reader', { mode: 'outline' })).mode).toBe('outline');
+  });
+});

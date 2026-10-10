@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
+import { chromePath } from './browser.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const out = path.resolve(here, '..', 'docs', 'screenshots');
@@ -34,8 +35,7 @@ const waitJob = async (p: string, body: unknown = {}) => {
   }
 };
 
-const exe = process.env.CHROME ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
-const browser = await chromium.launch({ executablePath: exe });
+const browser = await chromium.launch({ executablePath: chromePath() });
 const errors: string[] = [];
 
 async function shoot(name: string, hash: string, theme: 'dark' | 'light', prep?: (page: import('playwright-core').Page) => Promise<void>, size = { width: 1440, height: 900 }) {

@@ -12,6 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Page } from 'playwright-core';
+import { chromePath } from './browser.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 process.env.HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'ne-e2e-'));
@@ -20,7 +21,7 @@ const { NovelServer } = await import('@quillgon/server');
 const server = new NovelServer({ staticDir: path.resolve(here, '..', 'apps', 'desktop', 'dist') });
 const base = `http://127.0.0.1:${await server.listen(0)}`;
 const api = async (p: string) => (await fetch(`${base}/api${p}`, { headers: { 'x-quillgon-token': server.token } })).json() as Promise<any>;
-const browser = await chromium.launch({ executablePath: process.env.CHROME ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const browser = await chromium.launch({ executablePath: chromePath() });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const errors: string[] = [];
 page.on('pageerror', (e) => errors.push(e.stack ?? e.message));

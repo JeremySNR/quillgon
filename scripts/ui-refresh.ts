@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
+import { chromePath } from './browser.js';
 import { GraphStore } from '@quillgon/core';
 import { NovelServer } from '@quillgon/server';
 
@@ -23,7 +24,7 @@ await seed.checkpoint('Sample manuscript');
 seed.close();
 const server = new NovelServer({ staticDir: path.join(root, 'apps/desktop/dist') });
 const base = `http://127.0.0.1:${await server.listen(0)}`;
-const browser = await chromium.launch({ executablePath: process.env.CHROME ?? '/usr/bin/chromium', args: ['--no-sandbox'] });
+const browser = await chromium.launch({ executablePath: chromePath(), args: ['--no-sandbox'] });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, colorScheme: 'light' });
 const errors: string[] = [];
 page.on('pageerror', e => errors.push(e.message));
