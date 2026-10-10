@@ -1,0 +1,165 @@
+# Frozen eval set for `quillgon eval` (docs/research.md §11). Do not edit premises between
+# runs you want to compare: add new ones with new ids instead. Each premise carries a fixed
+# intent so every run starts from the same place; the interview is skipped.
+target_words: 6000
+premises:
+  - id: salt-registry
+    title: The Salt Registry
+    genre: literary mystery
+    premise: A clerk who records every boat that leaves a fishing town finds an entry in her own handwriting for a boat she has no memory of logging, on the night her father vanished at sea.
+    tone: quiet, cold, precise
+    themes: [memory, complicity, inheritance]
+    ending_type: bittersweet
+    hard_rules: [No supernatural explanation for the entry.]
+  - id: night-ferry
+    title: The Night Ferry
+    genre: thriller
+    premise: A ferry engineer discovers the overnight crossing has been carrying one more passenger than the manifest every week for a year, and the company pays him to stop counting.
+    tone: tense, procedural
+    themes: [complicity, small courage]
+    ending_type: open
+    hard_rules: [The extra passenger is never a ghost.]
+  - id: second-violin
+    title: Second Violin
+    genre: literary
+    premise: Twin violinists audition for a single seat in a city orchestra; the one who loses is asked to play the winner's part, unseen, when the winner's hands begin to fail.
+    tone: intimate, restrained
+    themes: [rivalry, love, credit]
+    ending_type: bittersweet
+    hard_rules: [Nobody is cured.]
+  - id: orchard-heir
+    title: The Orchard Heir
+    genre: family saga
+    premise: Three estranged siblings inherit an apple orchard on condition that they bring in one full harvest together, and each has a private buyer lined up.
+    tone: warm, wry
+    themes: [family, land, forgiveness]
+    ending_type: happy
+    hard_rules: [The will is not forged.]
+  - id: glass-moon
+    title: Glass Moon
+    genre: science fiction
+    premise: On a mining moon where air is rationed by productivity, a safety inspector finds that the deadliest shift is the one with the best numbers.
+    tone: spare, grim, humane
+    themes: [labour, value of life]
+    ending_type: bittersweet
+    hard_rules: [No chosen one; no uprising led by the protagonist.]
+  - id: archive-of-rain
+    title: The Archive of Rain
+    genre: fantasy
+    premise: In a city where every rainfall is recorded and sold as prophecy, an apprentice archivist notices that the records for her birth year have been rewritten.
+    tone: lyrical, curious
+    themes: [truth, authority, apprenticeship]
+    ending_type: open
+    hard_rules: [Magic has a price paid by someone visible on the page.]
+  - id: last-dispatch
+    title: The Last Dispatch
+    genre: historical
+    premise: In 1919 a telegraph operator in a border town delays a single message by one night, and spends the next decade learning what that night cost.
+    tone: measured, elegiac
+    themes: [consequence, guilt, ordinary people in history]
+    ending_type: tragic
+    hard_rules: [No real historical figure appears on the page.]
+  - id: borrowed-kitchen
+    title: The Borrowed Kitchen
+    genre: romantic comedy
+    premise: Two rival caterers are forced to share one commercial kitchen for a summer, on alternating shifts, communicating only through notes taped to the fridge.
+    tone: light, quick, affectionate
+    themes: [pride, collaboration]
+    ending_type: happy
+    hard_rules: [No misunderstanding that one honest sentence would fix.]
+  - id: quiet-floor
+    title: The Quiet Floor
+    genre: horror
+    premise: A night nurse on a hospital ward that is officially closed keeps receiving call-bell alerts from bed nine, and the patient records say bed nine was never installed.
+    tone: unhurried, dread
+    themes: [care, neglect, institutions]
+    ending_type: open
+    hard_rules: [No jump scares; the threat is never fully shown.]
+  - id: hill-census
+    title: The Hill Census
+    genre: literary
+    premise: A census taker assigned to a remote hill parish finds every household reports one more child than she can find.
+    tone: plain, patient
+    themes: [belonging, record and truth]
+    ending_type: bittersweet
+    hard_rules: [No crime is the explanation.]
+  - id: debt-of-stars
+    title: A Debt of Stars
+    genre: space opera
+    premise: A navigator who sold her ship's star charts to pay a family debt must now guide the same ship through the route she sold to its enemies.
+    tone: propulsive, warm
+    themes: [loyalty, debt, crew as family]
+    ending_type: happy
+    hard_rules: [She is not forgiven easily.]
+  - id: inspector-of-bridges
+    title: The Inspector of Bridges
+    genre: crime
+    premise: A bridge inspector who signed off on a crossing that later collapsed is asked by the dead driver's daughter to prove the signature on the report is not his.
+    tone: dry, methodical
+    themes: [responsibility, institutional blame]
+    ending_type: bittersweet
+    hard_rules: [The signature is his.]
+  - id: tidewater-school
+    title: Tidewater School
+    genre: young adult
+    premise: The only school on an island accessible at low tide loses a student to the water, and the class decides to finish her unfinished project as their exam.
+    tone: honest, tender
+    themes: [grief, friendship, growing up]
+    ending_type: bittersweet
+    hard_rules: [The death is not a mystery to be solved.]
+  - id: map-thief
+    title: The Map Thief
+    genre: adventure
+    premise: A retired cartographer is accused of stealing a famous map she drew herself forty years ago, and the only proof lies in a deliberate error she hid in it.
+    tone: brisk, witty
+    themes: [authorship, ageing, reputation]
+    ending_type: happy
+    hard_rules: [No chase sequence longer than a page.]
+  - id: weather-house
+    title: The Weather House
+    genre: gothic
+    premise: A meteorologist takes a post at a remote weather station whose previous keeper's logs describe storms that never appear on any satellite record.
+    tone: atmospheric, controlled
+    themes: [isolation, evidence, obsession]
+    ending_type: open
+    hard_rules: [The station is not haunted.]
+  - id: union-hall
+    title: Union Hall
+    genre: political drama
+    premise: A shop steward negotiating a strike settlement learns that her own brother is the company's anonymous negotiator.
+    tone: sharp, humane
+    themes: [solidarity, family, compromise]
+    ending_type: bittersweet
+    hard_rules: [Neither side is simply right.]
+  - id: lantern-court
+    title: Lantern Court
+    genre: courtroom
+    premise: A junior barrister defends a lamplighter accused of arson in the one street he was responsible for lighting, and the only witness is the barrister's former teacher.
+    tone: formal, taut
+    themes: [justice, mentorship, class]
+    ending_type: open
+    hard_rules: [No surprise confession on the stand.]
+  - id: honey-years
+    title: The Honey Years
+    genre: literary
+    premise: A beekeeper with early dementia writes letters to her future self about the hives, and her son starts answering them.
+    tone: gentle, unsentimental
+    themes: [memory, care, deception out of love]
+    ending_type: bittersweet
+    hard_rules: [No miracle recovery.]
+  - id: border-choir
+    title: The Border Choir
+    genre: historical
+    premise: A village choir split by a newly drawn border keeps rehearsing the same piece on opposite banks of a river, a song the authorities on both sides have banned.
+    tone: hopeful, wary
+    themes: [music, resistance, division]
+    ending_type: bittersweet
+    hard_rules: [The song is never named.]
+  - id: clockmaker-lie
+    title: The Clockmaker's Lie
+    genre: mystery
+    premise: Every clock in a small town stops at the same minute on the same night, and the clockmaker who could explain it has just announced his retirement.
+    tone: playful, puzzling
+    themes: [time, community, secrets]
+    ending_type: happy
+    hard_rules: [The explanation is mechanical, not magical.]

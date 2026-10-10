@@ -8,3 +8,4 @@ coverage/
 .vite/
 .vercel/
 release/
+evals/runs/

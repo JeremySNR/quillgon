@@ -132,6 +132,8 @@ quillgon read [--act act-1] [--outline] | check [--mechanical] | voice | estimat
 quillgon export [--format md|docx|epub]   (docx/epub need Pandoc)
 quillgon branch [name | switch <b> | merge <b> | delete <b>]
 quillgon serve [--dir book] [--port 4317]
+quillgon eval [--offline|--codex] [--limit N] [--only a,b] [--all-scenes]   score the frozen premise set
+quillgon eval compare <runA> <runB>     judge run B's key scenes against run A's, both ways
 ```
 
 Pass `--yes` to accept the defaults at every gate (useful for scripting). Without a terminal and without `--yes`, any choice that changes the book stops with an error rather than answering itself. Use `--record <dir>` / `--replay <dir>` to record model responses as test fixtures or replay them.
@@ -164,10 +166,25 @@ fixtures/novella/    "The Tidekeeper's Ledger": 12 scenes, 4 characters, 3 threa
 pnpm test           # unit, integration, CLI and UI tests, no model calls
 pnpm e2e            # drives the real UI in Chromium (offline models)
 pnpm scale-check    # prompt sizes and write latency on a 96-scene book
+pnpm quillgon eval --offline --limit 2   # the eval harness, offline (see below)
 pnpm screenshots    # regenerates docs/screenshots
 pnpm typecheck
 pnpm test:live      # live-model tests; needs QUILLGON_LIVE=1 and an API key
 ```
+
+### Evaluating prompt and model changes
+
+`quillgon eval` runs the frozen set in `evals/premises.yaml` (20 premises, each with a fixed intent) through every gate: plot points, structure, scene cards, then the opening, the turn and the ending (or every scene with `--all-scenes`), and the simulated reader. It scores each run with deterministic measures:
+
+| Measure | What it catches |
+| --- | --- |
+| Slop per 1,000 words | Banned patterns and stock machine phrasing |
+| Style violations per 1,000 words | Breaks of the code-checked style sheet |
+| Continuity errors, structural tells | Knowledge errors; single-track plots, sagging middles, tidy endings |
+| Twists guessed early, engagement | The simulated reader's predictions and interest |
+| Shared names, trigram overlap, plan diversity | Books in one run converging on the same story |
+
+Results and a report go to `evals/runs/<id>/`, with the generated books. To test a change, run the set before and after it, then `quillgon eval compare <before> <after>`: every key scene is judged against its counterpart in both orders, a split verdict counts as a tie, and the result is a win rate and the Elo difference it implies. A live run calls the model for every gate, so start with `--limit`. Pass `--record <dir>` to keep the model responses and `--replay <dir>` to re-score them without new calls.
 
 | Phase | Status |
 | --- | --- |

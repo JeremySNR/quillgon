@@ -584,6 +584,46 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
     },
   },
 
+  eval: {
+    help: 'eval [--offline|--codex] [--limit N] [--only a,b] [--all-scenes]   Run the frozen premise set (evals/premises.yaml) and score it\n        eval compare <runA> <runB> [--offline|--codex]   Judge run B\'s key scenes against run A\'s, both ways',
+    async run() {
+      const { runEval, compareRuns, loadPremises } = await import('./eval.js');
+      const here = path.dirname(fileURLToPath(import.meta.url));
+      const models = flags.offline ? 'offline' : flags.codex ? 'codex' : 'openai';
+      if (args[0] === 'compare') {
+        const [, a, b] = args;
+        if (!a || !b) throw new Error('usage: quillgon eval compare <runA> <runB>');
+        if (models !== 'offline' && !yes && !(await confirm('Judge every key scene pair twice with live models?', false))) return;
+        const c = await compareRuns(a, b, { models, progress: (l) => say(dim(`  · ${l}`)) });
+        say(bold(`\n${c.b} vs ${c.a}: ${c.pairs} pairs`));
+        say(`  B wins ${c.b_wins}, A wins ${c.a_wins}, ties ${c.ties}. B win rate ${c.b_win_rate} (Elo ${c.elo >= 0 ? '+' : ''}${c.elo}).`);
+        for (const [role, r] of Object.entries(c.by_role)) say(dim(`  ${role}: B ${r.b_wins}, A ${r.a_wins}, ties ${r.ties}`));
+        if (models === 'offline') say(yellow('  Offline judging is a placeholder: use live models for real verdicts.'));
+        return;
+      }
+      const premises = (flags.premises as string) ?? path.resolve(here, '../../../evals/premises.yaml');
+      const n = Math.min(Number(flags.limit) || Infinity, loadPremises(premises).premises.filter((p) => !flags.only || String(flags.only).split(',').includes(p.id)).length);
+      if (models !== 'offline' && !yes && !(await confirm(`Run ${n} premise(s) through every gate with live models (${models})? Each one plans a book and writes ${flags['all-scenes'] ? 'every scene' : 'three scenes'}.`, false))) return;
+      const { dir, run } = await runEval({
+        premises,
+        out: (flags.out as string) ?? path.resolve(here, '../../../evals/runs'),
+        models,
+        scenes: flags['all-scenes'] ? 'all' : 'key',
+        only: flags.only ? String(flags.only).split(',') : undefined,
+        limit: Number(flags.limit) || undefined,
+        record: flags.record as string | undefined,
+        replay: flags.replay as string | undefined,
+        progress: (l) => say(dim(l)),
+      });
+      const s = run.summary;
+      say(bold(`\nEval ${run.id}: ${s.books} of ${run.books.length} books, $${s.cost_usd}`));
+      say(`  slop/1k ${s.mean.slop_per_1k}  style/1k ${s.mean.style_per_1k}  continuity ${s.mean.continuity_errors}  tells ${s.mean.shape_findings}`);
+      say(`  twists guessed ${s.mean.twist_guess_rate ?? '—'}  engagement ${s.mean.engagement ?? '—'}  shared names ${s.shared_name_rate}  trigram overlap ${s.trigram_overlap}  plan diversity ${s.plan_diversity}`);
+      say(dim(`  ${path.join(dir, 'report.md')}`));
+      if (run.books.some((b) => b.error)) process.exitCode = 1;
+    },
+  },
+
   serve: {
     help: 'serve [--port 4317]   Run the local API (and the UI if built)',
     async run() {
