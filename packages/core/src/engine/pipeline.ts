@@ -11,8 +11,9 @@ import type {
 import { Intent, SceneCard, type PipelineStage, type StateSnapshot } from '../schemas/index.js';
 import type { GraphStore } from '../store.js';
 import { paths, sceneOrder } from '../project.js';
-import { canGenerate, sceneSync } from '../sync.js';
+import { canGenerate, cardHash, sceneSync } from '../sync.js';
 import { writerContext } from '../context.js';
+import { relevantFacts, unrevealedFacts, wordsPerScene } from '../scope.js';
 import { fromYaml, slugify, uniq } from '../util.js';
 import { runStylePasses, type Progress, type StylePassReport } from './style-passes.js';
 import { resolveObligationScenes } from '../obligations.js';
@@ -226,8 +227,10 @@ export class Pipeline {
     const ch = chapters[ci];
     const before = chapters.slice(0, ci).flatMap((c) => c.scenes);
     const lastBefore = before[before.length - 1];
-    const plannedTotal = chapters.reduce((n, c) => n + (c.scenes.length || c.planned_scenes || 1), 0);
-    const maxNum = Math.max(0, ...[...this.p.scenes.keys()].map((id) => Number(id.replace(/\D+/g, '')) || 0));
+    // Scene ids are s<number>, possibly with a suffix ("s04-2"): only the leading number counts.
+    const maxNum = Math.max(0, ...[...this.p.scenes.keys()].map((id) => Number(/^s(\d+)/.exec(id)?.[1]) || 0));
+    const previous = before.slice(-3).map((id) => this.store.scene(id).card);
+    const plotPoints = [...this.p.plotPoints.values()];
     return {
       intent: this.p.intent,
       chapter: { id: ch.id, title: ch.title, summary: ch.summary, scene_count: ch.planned_scenes || 2 },
@@ -243,10 +246,14 @@ export class Pipeline {
         knows: lastBefore ? (this.store.stateAt(c.id, lastBefore)?.snapshot.knows ?? []) : [],
       })),
       locations: this.p.locations.locations.map((l) => ({ id: l.id, name: l.name })),
-      facts: this.p.factGlossary.facts,
+      facts: relevantFacts(this.p, {
+        must: previous.flatMap((c) => [...c.reveals, ...c.mentions.map((m) => m.fact)]),
+        query: `${ch.title} ${ch.summary} ${plotPoints.map((pp) => pp.description).join(' ')} ${previous.map((c) => c.outcome).join(' ')}`,
+        prefer: unrevealedFacts(this.p),
+      }),
       obligations: [...this.p.obligations.values()].filter((o) => o.status !== 'paid' && o.status !== 'dropped'),
-      previous_cards: before.slice(-3).map((id) => this.store.scene(id).card),
-      words_per_scene: Math.round(this.p.book.target_words / plannedTotal / 50) * 50 || 1200,
+      previous_cards: previous,
+      words_per_scene: wordsPerScene(this.p),
     };
   }
 
@@ -418,12 +425,24 @@ export class Pipeline {
     return { before, after: out.prose };
   }
 
-  /** The card as last committed: what the current prose was written against, if the card has since moved. */
+  /**
+   * The card the current prose was written against: the version in history whose hash is
+   * the prose's `generated_from`. HEAD is not reliable, because the edited card may already
+   * have been committed (by a checkpoint, or any later commit) before regenerating.
+   */
   private async committedCard(sceneId: string): Promise<SceneCard | null> {
-    const text = await this.store.repo.readAt('HEAD', paths.card(sceneId)).catch(() => null);
-    if (!text) return null;
-    const r = SceneCard.safeParse(fromYaml(text));
-    return r.success ? r.data : null;
+    const rel = paths.card(sceneId);
+    const want = this.store.scene(sceneId).prose?.meta.generated_from ?? null;
+    let head: SceneCard | null = null;
+    for (const hash of await this.store.repo.history(rel, 50)) {
+      const text = await this.store.repo.readAt(hash, rel).catch(() => null);
+      if (!text) continue;
+      const r = SceneCard.safeParse(fromYaml(text));
+      if (!r.success) continue;
+      head ??= r.data;
+      if (!want || cardHash(r.data) === want) return r.data;
+    }
+    return head;
   }
 
   async acceptProse(sceneId: string, prose: string) {
@@ -449,8 +468,10 @@ export class Pipeline {
     const ex = await runExtraction(this.store, this.agents, sceneId);
     if (!ex.diff.graphLevel) {
       applyExtraction(this.store, ex);
+      // Only the prose side is reconciled. If the card had moved too, the scene stays
+      // card_ahead: the prose still needs to follow the card.
       const s = this.store.scene(sceneId);
-      if (sceneSync(s).state !== 'in_sync') this.store.markInSync(sceneId);
+      if (sceneSync(s).state === 'prose_ahead') this.store.markInSync(sceneId);
       await this.store.commit(`Edit prose of ${sceneId} (wording only)`);
       return { presentationOnly: true, extraction: ex };
     }

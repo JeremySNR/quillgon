@@ -18,7 +18,36 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
       - run: pnpm test
       - run: pnpm typecheck
+      # Prompts must grow with the scene, not the book (see scripts/scale-check.ts).
+      - run: pnpm scale-check --max-prompt 8000
       - run: pnpm site:build
       - run: pnpm site:check
+
+  e2e:
+    # The real UI in Chromium against the real server, with offline models.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright-core install --with-deps chromium
+      - run: pnpm e2e
+      - run: pnpm tsx scripts/ui-refresh.ts
+      - run: pnpm tsx scripts/e2e-covers.ts
+      - name: Keep screenshots of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: docs/screenshots
+          retention-days: 7

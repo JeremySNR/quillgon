@@ -1,14 +1,16 @@
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AgentSuite } from '../agents/contracts.js';
+import type { AgentSuite, ReviseCardInput } from '../agents/contracts.js';
 import { SceneCard } from '../schemas/index.js';
 import type { GraphStore } from '../store.js';
-import { paths, sceneOrder, stateBefore } from '../project.js';
-import { analyseImpact, cardDiffSummary, partitionImpacts, type Change, type Impact } from '../impact.js';
+import { paths, sceneOrder, stateBefore, type Project } from '../project.js';
+import { analyseImpact, cardDiffSummary, changeFiles, partitionImpacts, type Change, type Impact } from '../impact.js';
 import { applyExtraction, runExtraction } from './extraction.js';
 import type { Progress } from './style-passes.js';
 import { cardHash } from '../sync.js';
 import { timestamp } from '../util.js';
+import { relevantFacts } from '../scope.js';
 
 export type ItemStatus = 'pending' | 'proposed' | 'accepted' | 'rejected' | 'no_change' | 'conflict' | 'resolved' | 'error';
 export type ProseStatus = 'none' | 'pending' | 'proposed' | 'accepted' | 'rejected' | 'locked';
@@ -102,15 +104,19 @@ export class Ripple {
 
   /**
    * Start a ripple for a change the author has already made through the store.
-   * The originating edit is committed first, so the whole ripple can be reverted.
+   * The originating edit is committed first, so the whole ripple can be reverted. Any other
+   * uncommitted work is checkpointed separately beforehand, so a revert cannot undo it.
    */
   static async start(store: GraphStore, agents: AgentSuite, change: Change, opts: { hopLimit?: number; roundCap?: number } = {}): Promise<Ripple> {
     const existing = Ripple.current(store, agents);
     if (existing) existing.abandon();
     const impact = analyseImpact(store.project, change, store.index);
-    const originCommit = await store.commit(`Edit: ${impact.description}`);
+    const files = changeFiles(change);
+    await store.checkpoint('Work in progress before a ripple', { exclude: files });
+    const originCommit = await store.commit(`Edit: ${impact.description}`, { files });
     const r = new Ripple(store, agents, {
-      id: timestamp(),
+      // Second-granular timestamps collide when two ripples start in the same second.
+      id: `${timestamp()}-${randomBytes(2).toString('hex')}`,
       created: new Date().toISOString(),
       description: impact.description,
       change,
@@ -196,20 +202,14 @@ export class Ripple {
   /** Ask the reviser for each pending card, in story order (or just one scene). */
   async propose(scene?: string, progress: Progress = () => undefined) {
     const p = this.store.project;
-    const targets = this.round.items.filter((i) => i.kind === 'card' && i.status === 'pending' && (!scene || i.scene === scene));
+    // A failed proposal (network, model refusal) is retried by proposing again.
+    const targets = this.round.items.filter((i) => i.kind === 'card' && (i.status === 'pending' || i.status === 'error') && (!scene || i.scene === scene));
     for (const it of targets) {
       progress('propose', `Reviewing ${it.scene} "${it.title}"`);
+      it.error = null;
       const card = this.store.scene(it.scene).card;
       try {
-        const out = await this.agents.reviseCard({
-          intent: p.intent,
-          change: this.data.description,
-          reasons: it.reasons,
-          card,
-          facts: p.factGlossary.facts,
-          characters: [...p.characters.values()].map((c) => ({ id: c.id, name: c.bio.name })),
-          states_before: card.characters.map((c) => ({ character: c, knows: stateBefore(p, c, it.scene)?.snapshot.knows ?? [] })),
-        });
+        const out = await this.agents.reviseCard(reviseCardInput(p, it.scene, this.data.description, it.reasons));
         if (out.action === 'no_change' || !out.card) {
           it.status = 'no_change';
           it.card = { before: card, after: null, justification: out.justification, needs_decision: out.needs_decision };
@@ -235,7 +235,8 @@ export class Ripple {
     const it = this.item(scene);
     if (it.kind === 'conflict') throw new Error(`${scene} is a conflict; resolve it first`);
     if (!it.card) throw new Error(`${scene} has no proposal yet`);
-    if (edited) it.card.after = SceneCard.parse({ ...(edited as object), id: scene });
+    // An edited proposal keeps the scene's own status and lock: the reviser never changes those.
+    if (edited) it.card.after = SceneCard.parse({ ...(edited as object), id: scene, status: it.card.before.status, lock: it.card.before.lock });
     if (!it.card.after) throw new Error(`${scene}: nothing to accept (no_change)`);
     it.status = 'accepted';
     const s = this.store.scene(scene);
@@ -366,6 +367,9 @@ export class Ripple {
     const blockers = this.blockers();
     if (blockers.length) throw new Error(`round ${this.round.n} still needs decisions:\n${blockers.join('\n')}`);
     const round = this.round;
+    // Commit the round alone: earlier work (an autosave elsewhere during review) goes first.
+    await this.store.commit('Work in progress before a ripple round');
+    const mark = this.store.writeMark();
     const changed: { scene: string; before: SceneCard; after: SceneCard }[] = [];
     for (const it of round.items) {
       if ((it.status === 'accepted') && it.card?.after && it.kind === 'card') {
@@ -396,7 +400,14 @@ export class Ripple {
       ...(kept.length ? [`Kept locked: ${kept.join(', ')}`] : []),
       ...round.items.filter((i) => i.status === 'no_change').map((i) => `No change needed in ${i.scene}: ${i.card?.justification ?? ''}`),
     ].join('\n');
-    round.commit = await this.store.commit(msg);
+    // Only this round's writes: an author's autosave in another scene during a slow
+    // extraction is left for its own commit, so reverting the ripple cannot undo it.
+    const inRound = new Set(round.items.map((i) => i.scene));
+    const files = this.store.writtenSince(mark).filter((f) => {
+      const scene = /^scenes\/([^/]+)\//.exec(f)?.[1];
+      return !scene || inRound.has(scene);
+    });
+    round.commit = await this.store.commit(msg, { files });
     round.applied = true;
 
     // Cascade: impact of the accepted card changes.
@@ -421,35 +432,81 @@ export class Ripple {
     return round;
   }
 
-  /** Revert every commit this ripple made, including the originating edit. */
+  /**
+   * Revert every commit this ripple made, including the originating edit, as one commit.
+   * All or nothing: if the author has since changed the same files, nothing is reverted
+   * and the error names them.
+   */
   async revert() {
     const hashes = [...this.data.rounds.map((r) => r.commit).filter((h): h is string => !!h).reverse(), ...(this.data.originCommit ? [this.data.originCommit] : [])];
-    await this.store.commit('Checkpoint before reverting ripple');
-    for (const h of hashes) await this.store.repo.revert(h);
-    this.store.reload();
-    if (!this.data.originCommit) {
-      // The originating edit was committed before the ripple started: restore it from the change.
-      const c = this.data.change;
-      if (c.kind === 'card') this.store.saveCard(c.before);
-      else if (c.kind === 'state') {
-        const ch = this.store.project.characters.get(c.character);
-        if (ch) {
-          const { [c.scene]: _drop, ...rest } = ch.state;
-          this.store.saveCharacterState(c.character, c.before ? { ...rest, [c.scene]: c.before } : rest);
-        }
-      } else if (c.kind === 'thread') c.before ? this.store.saveThread(c.before) : c.after && this.store.deleteThread(c.after.id);
-      else if (c.kind === 'plot') c.before ? this.store.savePlotPoint(c.before) : c.after && this.store.deletePlotPoint(c.after.id);
-      else if (c.kind === 'obligation') c.before ? this.store.saveObligation(c.before) : c.after && this.store.deleteObligation(c.after.id);
-      else if (c.kind === 'reorder') {
-        const st = structuredClone(this.store.project.structure);
-        let i = 0;
-        for (const a of st.acts) for (const ch of a.chapters) ch.scenes = ch.scenes.map(() => c.before[i++]);
-        this.store.saveStructure(st);
-      }
-      await this.store.commit(`Revert: ${this.data.description}`);
+    try {
+      await this.store.revertCommits(hashes, `Revert ripple: ${this.data.description}`);
+    } finally {
+      this.store.reload();
     }
+    if (!this.data.originCommit) await this.restoreOrigin();
     this.data.state = 'reverted';
     this.save();
+  }
+
+  /** The originating edit was committed before the ripple started: put it back from the change. */
+  private async restoreOrigin() {
+    const c = this.data.change;
+    if (c.kind === 'delete-scene' || c.kind === 'character') {
+      // No "before" is kept in the change for these: restore every file the commit that made
+      // the edit touched (the scene, and the state files a deletion rewrote) from its parent.
+      const dir = c.kind === 'delete-scene' ? `scenes/${c.scene}` : `characters/${c.character}`;
+      const commit = await this.lastCommitBefore(dir);
+      if (commit) {
+        // Only the deletion's own files: that commit may also hold unrelated work.
+        const states = c.kind === 'delete-scene' ? new Set((c.states ?? [c.card.pov, ...c.card.characters]).map(paths.state)) : new Set<string>();
+        const files = (await this.store.repo.show(commit)).files.filter((f) => f.startsWith(`${dir}/`) || states.has(f));
+        await this.store.repo.restore(`${commit}~1`, files);
+      }
+      this.store.reload();
+      if (c.kind === 'delete-scene' && commit) {
+        const st = structuredClone(this.store.project.structure);
+        const chapters = st.acts.flatMap((a) => a.chapters);
+        const prevIdx = c.orderBefore.indexOf(c.scene) - 1;
+        const prev = prevIdx >= 0 ? c.orderBefore[prevIdx] : null;
+        const ch = (prev && chapters.find((x) => x.scenes.includes(prev))) || chapters[0];
+        if (ch && !chapters.some((x) => x.scenes.includes(c.scene))) {
+          ch.scenes.splice(prev ? ch.scenes.indexOf(prev) + 1 : 0, 0, c.scene);
+          this.store.saveStructure(st);
+        }
+      }
+      // Files restored by git are not store writes: commit the whole tree.
+      await this.store.checkpoint(`Revert: ${this.data.description}`);
+      return;
+    }
+    if (c.kind === 'card') this.store.saveCard(c.before);
+    else if (c.kind === 'state') {
+      const ch = this.store.project.characters.get(c.character);
+      if (ch) {
+        const { [c.scene]: _drop, ...rest } = ch.state;
+        this.store.saveCharacterState(c.character, c.before ? { ...rest, [c.scene]: c.before } : rest);
+      }
+    } else if (c.kind === 'thread') c.before ? this.store.saveThread(c.before) : c.after && this.store.deleteThread(c.after.id);
+    else if (c.kind === 'plot') c.before ? this.store.savePlotPoint(c.before) : c.after && this.store.deletePlotPoint(c.after.id);
+    else if (c.kind === 'obligation') c.before ? this.store.saveObligation(c.before) : c.after && this.store.deleteObligation(c.after.id);
+    else if (c.kind === 'reorder') {
+      const st = structuredClone(this.store.project.structure);
+      let i = 0;
+      for (const a of st.acts) for (const ch of a.chapters) ch.scenes = ch.scenes.map(() => c.before[i++]);
+      this.store.saveStructure(st);
+    }
+    await this.store.commit(`Revert: ${this.data.description}`);
+  }
+
+  /** The newest commit touching anything under `dir`, made before this ripple started. */
+  private async lastCommitBefore(dir: string): Promise<string | null> {
+    const started = Date.parse(this.data.created);
+    const log = await this.store.repo.git.raw(['log', '--format=%H %cI', '--', `:(literal)${dir}`]).catch(() => '');
+    for (const line of log.split('\n').filter(Boolean)) {
+      const [hash, date] = line.split(' ');
+      if (Date.parse(date) <= started + 1000) return hash;
+    }
+    return null;
   }
 
   abandon() {
@@ -474,4 +531,22 @@ export class Ripple {
       },
     };
   }
+}
+
+/** What the card reviser sees for one scene: the card, who knows what, and the facts in play. */
+export function reviseCardInput(p: Project, sceneId: string, change: string, reasons: string[]): ReviseCardInput {
+  const card = p.scenes.get(sceneId)!.card;
+  const statesBefore = card.characters.map((c) => ({ character: c, knows: stateBefore(p, c, sceneId)?.snapshot.knows ?? [] }));
+  return {
+    intent: p.intent,
+    change,
+    reasons,
+    card,
+    facts: relevantFacts(p, {
+      must: [...card.reveals, ...card.mentions.map((m) => m.fact), ...statesBefore.flatMap((s) => s.knows)],
+      query: `${change} ${reasons.join(' ')} ${card.purpose} ${card.outcome}`,
+    }),
+    characters: [...p.characters.values()].map((c) => ({ id: c.id, name: c.bio.name })),
+    states_before: statesBefore,
+  };
 }

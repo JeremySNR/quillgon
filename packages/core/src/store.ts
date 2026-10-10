@@ -34,7 +34,7 @@ import {
   type ProseFile,
 } from './project.js';
 import { ProjectIndex } from './index-db.js';
-import { Repo } from './git.js';
+import { DirtyTreeError, Repo } from './git.js';
 import { cardHash, proseHash, projectSync, sceneSync } from './sync.js';
 import { parseBannedPatterns } from './style.js';
 import { timestamp, toYaml, wordCount } from './util.js';
@@ -57,8 +57,9 @@ export class GraphStore {
   private fileIssues: Issue[] = [];
   index: ProjectIndex | null = null;
   readonly repo: Repo;
-  /** Files written since the last commit. */
-  private dirty = new Set<string>();
+  /** Files written since they were last committed, with the write sequence of the latest write. */
+  private dirty = new Map<string, number>();
+  private writeSeq = 0;
   private listeners = new Set<(e: StoreEvent) => void>();
 
   private constructor(readonly dir: string, private opts: OpenOptions) {
@@ -67,6 +68,8 @@ export class GraphStore {
 
   static open(dir: string, opts: OpenOptions = {}): GraphStore {
     const s = new GraphStore(path.resolve(dir), opts);
+    // Checkpoints stage the whole tree, so the index must be ignored even in an older repo.
+    if (s.repo.isRepo()) s.repo.ensureIgnored();
     s.reload();
     return s;
   }
@@ -137,18 +140,18 @@ export class GraphStore {
     const abs = path.join(this.dir, rel);
     fs.mkdirSync(path.dirname(abs), { recursive: true });
     fs.writeFileSync(abs, text);
-    this.dirty.add(rel);
+    this.dirty.set(rel, ++this.writeSeq);
   }
 
   private remove(rel: string) {
     const abs = path.join(this.dir, rel);
     if (fs.existsSync(abs)) fs.rmSync(abs, { recursive: true, force: true });
-    this.dirty.add(rel);
+    this.dirty.set(rel, ++this.writeSeq);
   }
 
   private after(entity: string) {
     // File-level problems persist until that file is rewritten; reference problems are recomputed.
-    for (const rel of this.dirty) this.fileIssues = this.fileIssues.filter((i) => i.file !== rel);
+    for (const rel of this.dirty.keys()) this.fileIssues = this.fileIssues.filter((i) => i.file !== rel);
     this.issues = [...this.fileIssues, ...validateReferences(this.project)];
     this.index?.update(this.project);
     this.emit({ type: 'changed', entity });
@@ -397,7 +400,9 @@ export class GraphStore {
     }
   }
 
-  deleteScene(id: string) {
+  /** Delete a scene. Returns the characters whose state had an entry for it. */
+  deleteScene(id: string): string[] {
+    const states: string[] = [];
     this.remove(`scenes/${id}`);
     this.project.scenes.delete(id);
     const st = structuredClone(this.project.structure);
@@ -407,9 +412,11 @@ export class GraphStore {
       if (ch.state[id]) {
         const { [id]: _gone, ...rest } = ch.state;
         this.saveCharacterState(ch.id, rest);
+        states.push(ch.id);
       }
     }
     this.after(`scene:${id}`);
+    return states;
   }
 
   // --------------------------------------------------------------- reports
@@ -438,20 +445,89 @@ export class GraphStore {
     const abs = path.join(this.dir, paths.reports, name);
     fs.mkdirSync(path.dirname(abs), { recursive: true });
     fs.appendFileSync(abs, line.endsWith('\n') ? line : line + '\n');
-    this.dirty.add(`${paths.reports}/${name}`);
+    this.dirty.set(`${paths.reports}/${name}`, ++this.writeSeq);
   }
 
   // --------------------------------------------------------------- git
 
-  async commit(message: string): Promise<string | null> {
-    const hash = await this.repo.commit(message);
-    this.dirty.clear();
+  /**
+   * Commit what the store has written (or just `files`), and nothing else. Edits made in
+   * another editor, or files the author is still working on elsewhere, never ride along
+   * in an unrelated commit, so reverting that commit cannot undo them.
+   */
+  async commit(message: string, opts: { files?: string[] } = {}): Promise<string | null> {
+    if (!this.repo.isRepo()) return null;
+    const files = opts.files ?? [...this.dirty.keys()];
+    const seq = this.writeSeq;
+    const hash = await this.repo.commit(message, { files });
+    this.settle(files, seq);
     if (hash) this.emit({ type: 'committed', hash, message });
     return hash;
   }
 
+  /**
+   * Commit everything in the working tree, including edits made outside the app (or
+   * everything except `exclude`). For explicit checkpoints: a new book, before a revert.
+   */
+  async checkpoint(message: string, opts: { exclude?: string[] } = {}): Promise<string | null> {
+    if (!this.repo.isRepo()) return null;
+    const seq = this.writeSeq;
+    const exclude = opts.exclude ?? [];
+    const hash = await this.repo.commit(message, exclude.length ? { exclude } : {});
+    const ex = new Set(exclude);
+    this.settle([...this.dirty.keys()].filter((f) => !ex.has(f)), seq);
+    if (hash) this.emit({ type: 'committed', hash, message });
+    return hash;
+  }
+
+  /**
+   * Revert commits (newest first) as one commit, after checkpointing pending work. An
+   * autosave can land between the checkpoint and the revert; then checkpoint again.
+   */
+  async revertCommits(hashes: string[], message: string): Promise<string | null> {
+    for (let attempt = 1; ; attempt++) {
+      await this.checkpoint('Checkpoint before revert');
+      try {
+        return await this.repo.revertAll(hashes, message);
+      } catch (e) {
+        if (!(e instanceof DirtyTreeError) || attempt >= 3) throw e;
+      }
+    }
+  }
+
+  /** Forget files that are now committed, unless they were written again while committing. */
+  private settle(files: string[], seq: number) {
+    for (const f of files) if ((this.dirty.get(f) ?? Infinity) <= seq) this.dirty.delete(f);
+  }
+
   hasUncommitted() {
     return this.dirty.size > 0;
+  }
+
+  /** A point in the write history; see writtenSince. */
+  writeMark(): number {
+    return this.writeSeq;
+  }
+
+  /** Uncommitted files written after a writeMark. */
+  writtenSince(mark: number): string[] {
+    return [...this.dirty].filter(([, seq]) => seq > mark).map(([f]) => f);
+  }
+
+  /** Files written and not yet committed. */
+  uncommitted(): string[] {
+    return [...this.dirty.keys()];
+  }
+
+  // --------------------------------------------------------------- prompts
+
+  /** Save (or with null, remove) the book's override of an agent's prompt. */
+  savePrompt(agent: string, text: string | null) {
+    if (!/^[a-z][a-z-]*$/.test(agent)) throw new Error(`invalid agent name "${agent}"`);
+    const rel = `prompts/${agent}.md`;
+    if (text === null) this.remove(rel);
+    else this.write(rel, text);
+    this.emit({ type: 'changed', entity: `prompt:${agent}` });
   }
 
   stamp() {

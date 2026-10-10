@@ -158,12 +158,12 @@ pnpm serve          # http://127.0.0.1:4317, then "Open the sample novella"
 > [!TIP]
 > **No API key? No problem.** Choose **Offline** models when you create a book (or set `QUILLGON_OFFLINE=1`). Offline output is placeholder text, but every screen and workflow works, so you can explore the whole app for free.
 
-For the Electron shell, stop the server and run `pnpm desktop` (it also needs Node.js on your `PATH`). For development, `pnpm dev` runs the API and the Vite dev server with hot reload on http://localhost:5173.
+For the Electron shell, stop the server and run `pnpm desktop` (it also needs Node.js on your `PATH`). To build an installer instead, see [Desktop app and installers](#desktop-app-and-installers). For development, `pnpm dev` runs the API and the Vite dev server with hot reload on http://localhost:5173.
 
 Books are stored in local Markdown and YAML files. Connected AI providers receive relevant story context when you use generation or analysis.
 
 > [!NOTE]
-> **Quillgon is an early-stage source preview.** The sample novella and offline workflows are tested end to end. A complete 80,000-word novel with live models has not yet been validated, and there are no packaged installers yet. [Tell us what breaks](https://github.com/JeremySNR/quillgon/issues).
+> **Quillgon is an early-stage source preview.** The sample novella and offline workflows are tested end to end. A complete 80,000-word novel with live models has not yet been validated. No installers have been published yet; you can build one with `pnpm dist` (see [Desktop app and installers](#desktop-app-and-installers)). [Tell us what breaks](https://github.com/JeremySNR/quillgon/issues).
 
 ### 🔌 Connect a model
 
@@ -194,6 +194,35 @@ Your subscription's usage limits, available models, workspace rules, and data po
 Verification: a short synthetic request through the real Codex SDK and local ChatGPT sign-in succeeded. API adapter behavior is covered by mocked SDK tests; a live Responses API call still needs `OPENAI_API_KEY`. This is not a full-novel quality evaluation.
 
 </details>
+
+## Desktop app and installers
+
+`pnpm desktop` runs the Electron shell from your checkout. To build an installer for the computer you are on:
+
+```bash
+pnpm install
+pnpm dist           # installers in apps/desktop/release/
+```
+
+| Platform | Output |
+| --- | --- |
+| macOS (Apple silicon) | `.dmg` and `.zip` |
+| Windows (x64) | NSIS installer (`.exe`) |
+| Linux (x64) | `.AppImage` and `.deb` |
+
+`pnpm dist` builds the UI, bundles the server into a single file with esbuild, rebuilds `better-sqlite3` for Electron, and runs electron-builder (see `apps/desktop/scripts/prepare-package.mjs` and `apps/desktop/electron-builder.config.cjs`). The installed app runs that bundled server with its own Electron runtime, so it needs neither Node.js nor the source tree. The `better-sqlite3` rebuild needs a C/C++ toolchain, Python 3 and network access to electronjs.org for the Electron headers. `pnpm -C apps/desktop dist:dir` skips the installer and leaves the unpacked app in `apps/desktop/release/`.
+
+Pushing a `v*` tag runs [`.github/workflows/release.yml`](.github/workflows/release.yml), which builds all three platforms and attaches the installers to a draft GitHub release.
+
+Before you install one:
+
+- **Installers are unsigned unless you configure signing.** macOS builds are only ad-hoc signed, so macOS reports an unidentified developer: Control-click the app and choose **Open** the first time. Windows SmartScreen warns about an unknown publisher. To sign, set electron-builder's variables (`CSC_LINK` and `CSC_KEY_PASSWORD`, plus `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID` to notarize); the release workflow reads them from the repository secrets listed at its top.
+- **Git must be installed.** Every book is a Git repository. The `.deb` depends on `git`.
+- **API keys come from the environment.** An app started from the Dock, the Start menu or a launcher does not see variables set in your shell profile. Start it from a terminal where `OPENAI_API_KEY` is set (on macOS, `/Applications/Quillgon.app/Contents/MacOS/Quillgon`), or use Offline models.
+- **Codex subscription in an installed app needs your own Codex binary.** The Codex SDK runs the binary from its own npm package, which the installer does not include. Install the Codex CLI and set `QUILLGON_CODEX_PATH` to its path (the output of `which codex`) in the environment that launches Quillgon.
+- The installers use Electron's default icon.
+
+Verified so far: on Linux x64, electron-builder produces the AppImage, the `.deb` and the unpacked app, and the packaged app starts its bundled server and shows the UI. Not yet verified: opening a book in an installed build, which needs `better-sqlite3` rebuilt for Electron (the release workflow does this; it could not be done where the packaging was developed), and the macOS and Windows installers, which so far are built only by the release workflow.
 
 ## 🛠️ How it works
 
@@ -260,11 +289,13 @@ quillgon read [--act act-1] [--outline] | check [--mechanical] | voice | estimat
 quillgon export [--format md|docx|epub]   (docx/epub need Pandoc)
 quillgon branch [name | switch <b> | merge <b> | delete <b>]
 quillgon serve [--dir book] [--port 4317]
+quillgon eval [--offline|--codex] [--limit N] [--only a,b] [--all-scenes]   score the frozen premise set
+quillgon eval compare <runA> <runB>     judge run B's key scenes against run A's, both ways
 ```
 
 </details>
 
-Pass `--yes` to accept the defaults at every gate (useful for scripting), or `--record <dir>` / `--replay <dir>` to record model responses as test fixtures or replay them.
+Pass `--yes` to accept the defaults at every gate (useful for scripting). Without a terminal and without `--yes`, any choice that changes the book stops with an error rather than answering itself. Use `--record <dir>` / `--replay <dir>` to record model responses as test fixtures or replay them.
 
 ## 🏗️ Architecture
 
@@ -284,6 +315,7 @@ fixtures/novella/    "The Tidekeeper's Ledger": 12 scenes, 4 characters, 3 threa
 
 <br>
 
+- **The local API is locked to the app.** The server binds to 127.0.0.1 and requires a per-launch token on every API request; the UI reads it from the page the server serves. Requests with a non-loopback `Host` (DNS rebinding) or a foreign `Origin` are refused, request bodies must be JSON, and git refs from the UI are validated before they reach git. Set `QUILLGON_TOKEN` to choose the token yourself, for example to script against `pnpm serve`. A book's `api_key_env` must name a variable ending in `_API_KEY`, so a shared book file cannot send another secret to a model endpoint.
 - **Only the graph store writes to the manuscript.** Agents return structured output, validated with Zod, and the store writes files, updates the index and commits.
 - **A book is a git repo of Markdown and YAML** (`book.yaml`, `intent.md`, `plot-points/`, `threads/`, `characters/<id>/{bio.md,voice.md,state.yaml}`, `scenes/<id>/{card.yaml,prose.md,facts.yaml}`, `obligations/`, `idea.yaml` (the idea board and its conversation), `structure.yaml`, `timeline.yaml`, `style/` (samples, banned patterns, `style.yaml`), `reports/`). You can edit any of it in another editor; the app reloads.
 - **The index is disposable.** `.engine/index.sqlite` holds entities, references, facts and scene embeddings. Delete it and it rebuilds. Embeddings are local and deterministic (hashed term vectors), so impact analysis needs no network.
@@ -300,12 +332,28 @@ The UI design follows the research brief in [docs/design.md](docs/design.md); th
 ## 🧪 Tests and roadmap
 
 ```bash
-pnpm test           # 94 unit/integration tests, no model calls
+pnpm test           # unit, integration, CLI and UI tests, no model calls
 pnpm e2e            # drives the real UI in Chromium (offline models)
+pnpm scale-check    # prompt sizes and write latency on a 96-scene book
+pnpm quillgon eval --offline --limit 2   # the eval harness, offline (see below)
 pnpm screenshots    # regenerates docs/screenshots
 pnpm typecheck
 pnpm test:live      # live-model tests; needs QUILLGON_LIVE=1 and an API key
 ```
+
+### Evaluating prompt and model changes
+
+`quillgon eval` runs the frozen set in `evals/premises.yaml` (20 premises, each with a fixed intent) through every gate: plot points, structure, scene cards, then the opening, the turn and the ending (or every scene with `--all-scenes`), and the simulated reader. It scores each run with deterministic measures:
+
+| Measure | What it catches |
+| --- | --- |
+| Slop per 1,000 words | Banned patterns and stock machine phrasing |
+| Style violations per 1,000 words | Breaks of the code-checked style sheet |
+| Continuity errors, structural tells | Knowledge errors; single-track plots, sagging middles, tidy endings |
+| Twists guessed early, engagement | The simulated reader's predictions and interest |
+| Shared names, trigram overlap, plan diversity | Books in one run converging on the same story |
+
+Results and a report go to `evals/runs/<id>/`, with the generated books. To test a change, run the set before and after it, then `quillgon eval compare <before> <after>`: every key scene is judged against its counterpart in both orders, a split verdict counts as a tie, and the result is a win rate and the Elo difference it implies. A live run calls the model for every gate, so start with `--limit`. Pass `--record <dir>` to keep the model responses and `--replay <dir>` to re-score them without new calls.
 
 | Phase | Status |
 | --- | --- |
@@ -326,7 +374,7 @@ pnpm test:live      # live-model tests; needs QUILLGON_LIVE=1 and an API key
 <br>
 
 - **OpenAI Responses API and Codex SDK.** Quillgon owns the story graph and review workflow; each writing agent requests a structured result through the official OpenAI SDK. A hosted Agents API execution environment is unnecessary for these calls. The local Codex SDK provides a separate path for users signing in with ChatGPT.
-- **Electron runs the core as a plain Node process.** This lets `better-sqlite3` load without an Electron rebuild. It needs `node` on your `PATH` (or set `QUILLGON_NODE`).
+- **Electron runs the core as a separate process.** From a checkout (`pnpm desktop`) it is a plain Node process running the CLI through tsx, so `better-sqlite3` needs no Electron rebuild; it needs `node` on your `PATH` (or set `QUILLGON_NODE`). An installed app runs the bundled server with Electron's own Node (`ELECTRON_RUN_AS_NODE`) and a `better-sqlite3` rebuilt for it. Either way the window only shows the server's own pages: other navigation is blocked, web and mail links open in your browser, permission requests are denied, and if the server stops the app offers to restart it.
 - **Reader prediction matching is mechanical** (embedding similarity, synonym folding, and the prediction must name the right person). A cheap model judge would be more accurate and is an easy swap.
 - **Two small additions to the data model:** `scenes/<id>/facts.yaml` holds extracted facts, so the index can rebuild from files, and an optional `locations.yaml` / `facts.yaml` glossary gives ids human-readable names.
 

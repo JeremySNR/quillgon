@@ -37,23 +37,15 @@ import {
 } from '@quillgon/core';
 import { createSuite, suiteMode } from '@quillgon/agents';
 import { diffLines, diffWords } from 'diff';
+import { parseArgs } from './args.js';
 
 // ------------------------------------------------------------------ args & output
 
-const argv = process.argv.slice(2);
-const flags: Record<string, string | boolean> = {};
-const args: string[] = [];
-for (let i = 0; i < argv.length; i++) {
-  const a = argv[i];
-  if (a.startsWith('--')) {
-    const [k, v] = a.slice(2).split('=');
-    if (v !== undefined) flags[k] = v;
-    else if (argv[i + 1] && !argv[i + 1].startsWith('-')) flags[k] = argv[++i];
-    else flags[k] = true;
-  } else args.push(a);
-}
+const { flags, args } = parseArgs(process.argv.slice(2));
 const cmd = args.shift() ?? 'help';
-const yes = !!flags.yes || !process.stdin.isTTY;
+const yes = !!flags.yes;
+/** Without a terminal there is nobody to answer: questions take their defaults, but confirmations refuse. */
+const interactive = !!process.stdin.isTTY;
 
 process.stdout.on('error', (e: NodeJS.ErrnoException) => {
   if (e.code === 'EPIPE') process.exit(0);
@@ -72,13 +64,22 @@ const say = (...s: unknown[]) => console.log(...s);
 
 const rl = () => createInterface({ input: process.stdin, output: process.stdout });
 async function ask(q: string, def = ''): Promise<string> {
-  if (yes) return def;
+  if (yes || !interactive) return def;
   const r = rl();
   const a = (await r.question(`${q}${def ? dim(` [${def}]`) : ''} `)).trim();
   r.close();
   return a || def;
 }
+/** A choice that changes the book: like confirm, never answered by default without a terminal. */
+async function decide(q: string, def: string): Promise<string> {
+  if (!yes && !interactive) throw new Error(`"${q}" needs an answer. Run this in a terminal, or pass --yes to accept the defaults.`);
+  return ask(q, def);
+}
 async function confirm(q: string, def = true): Promise<boolean> {
+  if (!yes && !interactive) {
+    // A piped or scripted run must not silently accept a change (and commit it).
+    throw new Error(`"${q}" needs an answer. Run this in a terminal, or pass --yes to accept the defaults.`);
+  }
   const a = (await ask(`${q} ${dim(def ? '(Y/n)' : '(y/N)')}`, def ? 'y' : 'n')).toLowerCase();
   return a.startsWith('y');
 }
@@ -366,7 +367,7 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
         for (const id of created) {
           const pp = e.store.project.plotPoints.get(id)!;
           say(`\n${bold(pp.title || pp.id)} ${dim(`act ${pp.position.act ?? '?'}`)}\n${pp.description}`);
-          const a = (await ask('[a]ccept, [r]eject, [e]dit?', 'a')).toLowerCase();
+          const a = (await decide('[a]ccept, [r]eject, [e]dit?', 'a')).toLowerCase();
           if (a.startsWith('r')) pl.rejectPlotPoint(id);
           else if (a.startsWith('e')) pl.acceptPlotPoint(id, { description: await ask('  New description:', pp.description) });
           else pl.acceptPlotPoint(id);
@@ -382,7 +383,7 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
             say(`\n${cyan(`[${i}]`)} ${bold(a.label)} ${dim(a.kind)}\n${a.rationale}`);
             for (const act of a.acts) say(`    ${act.title}: ${act.chapters.map((c) => c.title).join(' · ')}`);
           });
-          const pick = (flags.pick as string) ?? (await ask('\nPick one (number), or [m]ore:', '0'));
+          const pick = (flags.pick as string) ?? (await decide('\nPick one (number), or [m]ore:', '0'));
           if (pick.startsWith('m')) {
             alts = await pl.proposeStructures({ more: true });
             continue;
@@ -413,7 +414,7 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
           say(`\n${cyan(`[${i}]`)} ${bold(a.label)} ${dim(a.kind)} — ${a.rationale}`);
           for (const card of a.cards) say(`    ${card.id} ${bold(card.title)} ${dim(`(${card.pov} @ ${card.location})`)}\n      ${card.beats.join(' → ')}`);
         });
-        const pick = (await ask('Pick (number), or [d]efault for all remaining:', '0')).toLowerCase();
+        const pick = (await decide('Pick (number), or [d]efault for all remaining:', '0')).toLowerCase();
         if (pick.startsWith('d')) {
           await pl.pickCards(ch.id, 0);
           await pl.defaultCards(progress);
@@ -614,6 +615,46 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
     },
   },
 
+  eval: {
+    help: 'eval [--offline|--codex] [--limit N] [--only a,b] [--all-scenes]   Run the frozen premise set (evals/premises.yaml) and score it\n        eval compare <runA> <runB> [--offline|--codex]   Judge run B\'s key scenes against run A\'s, both ways',
+    async run() {
+      const { runEval, compareRuns, loadPremises } = await import('./eval.js');
+      const here = path.dirname(fileURLToPath(import.meta.url));
+      const models = flags.offline ? 'offline' : flags.codex ? 'codex' : 'openai';
+      if (args[0] === 'compare') {
+        const [, a, b] = args;
+        if (!a || !b) throw new Error('usage: quillgon eval compare <runA> <runB>');
+        if (models !== 'offline' && !yes && !(await confirm('Judge every key scene pair twice with live models?', false))) return;
+        const c = await compareRuns(a, b, { models, progress: (l) => say(dim(`  · ${l}`)) });
+        say(bold(`\n${c.b} vs ${c.a}: ${c.pairs} pairs`));
+        say(`  B wins ${c.b_wins}, A wins ${c.a_wins}, ties ${c.ties}. B win rate ${c.b_win_rate} (Elo ${c.elo >= 0 ? '+' : ''}${c.elo}).`);
+        for (const [role, r] of Object.entries(c.by_role)) say(dim(`  ${role}: B ${r.b_wins}, A ${r.a_wins}, ties ${r.ties}`));
+        if (models === 'offline') say(yellow('  Offline judging is a placeholder: use live models for real verdicts.'));
+        return;
+      }
+      const premises = (flags.premises as string) ?? path.resolve(here, '../../../evals/premises.yaml');
+      const n = Math.min(Number(flags.limit) || Infinity, loadPremises(premises).premises.filter((p) => !flags.only || String(flags.only).split(',').includes(p.id)).length);
+      if (models !== 'offline' && !yes && !(await confirm(`Run ${n} premise(s) through every gate with live models (${models})? Each one plans a book and writes ${flags['all-scenes'] ? 'every scene' : 'three scenes'}.`, false))) return;
+      const { dir, run } = await runEval({
+        premises,
+        out: (flags.out as string) ?? path.resolve(here, '../../../evals/runs'),
+        models,
+        scenes: flags['all-scenes'] ? 'all' : 'key',
+        only: flags.only ? String(flags.only).split(',') : undefined,
+        limit: Number(flags.limit) || undefined,
+        record: flags.record as string | undefined,
+        replay: flags.replay as string | undefined,
+        progress: (l) => say(dim(l)),
+      });
+      const s = run.summary;
+      say(bold(`\nEval ${run.id}: ${s.books} of ${run.books.length} books, $${s.cost_usd}`));
+      say(`  slop/1k ${s.mean.slop_per_1k}  style/1k ${s.mean.style_per_1k}  continuity ${s.mean.continuity_errors}  tells ${s.mean.shape_findings}`);
+      say(`  twists guessed ${s.mean.twist_guess_rate ?? '—'}  engagement ${s.mean.engagement ?? '—'}  shared names ${s.shared_name_rate}  trigram overlap ${s.trigram_overlap}  plan diversity ${s.plan_diversity}`);
+      say(dim(`  ${path.join(dir, 'report.md')}`));
+      if (run.books.some((b) => b.error)) process.exitCode = 1;
+    },
+  },
+
   serve: {
     help: 'serve [--port 4317]   Run the local API (and the UI if built)',
     async run() {
@@ -623,7 +664,7 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
       const server = new NovelServer({ staticDir });
       const dir = (flags.dir as string) ?? args[0];
       if (dir) server.open(dir);
-      const port = await server.listen(Number(flags.port) || 4317);
+      const port = await server.listen(flags.port === undefined ? 4317 : Number(flags.port));
       say(`${green('●')} Quillgon on ${bold(`http://127.0.0.1:${port}`)}${dir ? dim(`  (${path.resolve(dir)})`) : ''}`);
     },
   },
@@ -714,7 +755,7 @@ async function rippleLoop(e: Engine, r: Ripple) {
       if (it.status !== 'proposed') continue;
       say(`\n${yellow('●')} ${bold(`${it.scene} ${it.title}`)} ${dim(`hop ${it.hop}`)}\n  ${it.reasons.join('\n  ')}\n  ${cyan(it.card!.justification)}`);
       printDiff(YAML.stringify(it.card!.before), YAML.stringify(it.card!.after));
-      const a = (await ask('[a]ccept, [r]eject?', 'a')).toLowerCase();
+      const a = (await decide('[a]ccept, [r]eject?', 'a')).toLowerCase();
       if (a.startsWith('r')) r.reject(it.scene);
       else r.accept(it.scene);
     }
@@ -725,7 +766,7 @@ async function rippleLoop(e: Engine, r: Ripple) {
     for (const it of round.items.filter((i) => i.prose.status === 'proposed')) {
       say(`\n${bold(`Prose: ${it.scene} ${it.title}`)} ${dim(it.prose.summary)}`);
       printDiff(it.prose.before, it.prose.after ?? '', true);
-      if ((await ask('[a]ccept, [r]eject?', 'a')).toLowerCase().startsWith('r')) r.rejectProse(it.scene);
+      if ((await decide('[a]ccept, [r]eject?', 'a')).toLowerCase().startsWith('r')) r.rejectProse(it.scene);
       else r.acceptProse(it.scene);
     }
     for (const it of round.items.filter((i) => i.prose.status === 'locked')) say(yellow(`  ${it.scene}: prose is locked; its card moved ahead of it.`));
@@ -742,7 +783,7 @@ async function rippleLoop(e: Engine, r: Ripple) {
 
 async function resolveConflict(r: Ripple, it: RippleItem) {
   say(`\n${red('■ Conflict')} ${bold(`${it.scene} ${it.title}`)} is locked (${it.conflict!.lock}).\n  ${it.reasons.join('\n  ')}`);
-  const a = (await ask('[u]nlock and include, [k]eep the lock and record the inconsistency, or [r]evert the original change?', 'k')).toLowerCase();
+  const a = (await decide('[u]nlock and include, [k]eep the lock and record the inconsistency, or [r]evert the original change?', 'k')).toLowerCase();
   await r.resolveConflict(it.scene, a.startsWith('u') ? 'unlock' : a.startsWith('r') ? 'revert' : 'keep');
 }
 

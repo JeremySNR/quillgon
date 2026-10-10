@@ -11,7 +11,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium, type Page } from 'playwright-core';
+import { chromium } from 'playwright-core';
+import { chromePath } from './browser.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 process.env.HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'ne-e2e-'));
@@ -19,8 +20,8 @@ process.env.QUILLGON_OFFLINE = '1';
 const { NovelServer } = await import('@quillgon/server');
 const server = new NovelServer({ staticDir: path.resolve(here, '..', 'apps', 'desktop', 'dist') });
 const base = `http://127.0.0.1:${await server.listen(0)}`;
-const api = async (p: string) => (await fetch(`${base}/api${p}`)).json() as Promise<any>;
-const browser = await chromium.launch({ executablePath: process.env.CHROME ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const api = async (p: string) => (await fetch(`${base}/api${p}`, { headers: { 'x-quillgon-token': server.token } })).json() as Promise<any>;
+const browser = await chromium.launch({ executablePath: chromePath() });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const errors: string[] = [];
 page.on('pageerror', (e) => errors.push(e.stack ?? e.message));
@@ -88,7 +89,7 @@ try {
 
   // ---------------------------------------------------------------- B
   console.log('B. A new book through every gate in the UI');
-  await page.evaluate(() => fetch('/api/init', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dir: '~/Novels/Glasshouse', title: 'The Glasshouse', target_words: 12000, offline: true }) }));
+  await page.evaluate(() => fetch('/api/init', { method: 'POST', headers: { 'content-type': 'application/json', 'x-quillgon-token': document.querySelector<HTMLMetaElement>('meta[name="quillgon-token"]')!.content }, body: JSON.stringify({ dir: '~/Novels/Glasshouse', title: 'The Glasshouse', target_words: 12000, offline: true }) }));
   await page.goto(`${base}/#/build`);
   await page.getByPlaceholder(/harbourmaster drowns/).fill('A glasshouse whose orchids are watered every night, though the house has been empty for a year.');
   const talk = page.getByLabel('Message the thinking partner');

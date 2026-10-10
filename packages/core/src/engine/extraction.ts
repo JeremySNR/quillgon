@@ -1,4 +1,5 @@
 import type { AgentSuite, ExtractInput, ExtractOutput } from '../agents/contracts.js';
+import { relevantFacts } from '../scope.js';
 import type { Contradiction, Fact, SceneCard, StateSnapshot } from '../schemas/index.js';
 import type { GraphStore } from '../store.js';
 import { sceneOrder, stateBefore } from '../project.js';
@@ -10,13 +11,19 @@ export function extractInput(store: GraphStore, sceneId: string, prose?: string)
   const p = store.project;
   const s = store.scene(sceneId);
   const order = sceneOrder(p);
+  const text = prose ?? s.prose?.body ?? '';
+  const statesBefore = s.card.characters.map((c) => ({ character: c, snapshot: stateBefore(p, c, sceneId, order)?.snapshot ?? null }));
   return {
     card: s.card,
-    prose: prose ?? s.prose?.body ?? '',
+    prose: text,
     characters: [...p.characters.values()].map((c) => ({ id: c.id, name: c.bio.name, aliases: c.bio.aliases })),
-    facts: p.factGlossary.facts,
+    // The glossary the prose is most likely to touch, so known facts keep their ids.
+    facts: relevantFacts(p, {
+      must: [...s.card.reveals, ...s.card.mentions.map((m) => m.fact), ...statesBefore.flatMap((b) => b.snapshot?.knows ?? [])],
+      query: `${s.card.purpose} ${s.card.outcome} ${text.slice(0, 6000)}`,
+    }),
     locations: p.locations.locations.map((l) => ({ id: l.id, name: l.name })),
-    states_before: s.card.characters.map((c) => ({ character: c, snapshot: stateBefore(p, c, sceneId, order)?.snapshot ?? null })),
+    states_before: statesBefore,
     obligations: [...p.obligations.values()].filter(
       (o) => s.card.sets_up.includes(o.id) || s.card.pays_off.includes(o.id) || (o.status === 'open' && o.setup_scene && order.indexOf(o.setup_scene) < order.indexOf(sceneId)),
     ),

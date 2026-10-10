@@ -13,6 +13,14 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'ui',
+          include: ['apps/desktop/src/**/*.test.{ts,tsx}'],
+          environment: 'happy-dom',
+          testTimeout: 20000,
+        },
+      },
+      {
+        test: {
           name: 'live',
           include: ['packages/*/test/**/*.live.test.ts'],
           testTimeout: 600000,

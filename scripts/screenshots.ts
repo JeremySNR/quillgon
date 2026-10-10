@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
+import { chromePath } from './browser.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const out = path.resolve(here, '..', 'docs', 'screenshots');
@@ -19,7 +20,7 @@ const server = new NovelServer({ staticDir: path.resolve(here, '..', 'apps', 'de
 const port = await server.listen(0);
 const base = `http://127.0.0.1:${port}`;
 const api = async (method: string, p: string, body?: unknown) => {
-  const r = await fetch(`${base}/api${p}`, { method, headers: { 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch(`${base}/api${p}`, { method, headers: { 'content-type': 'application/json', 'x-quillgon-token': server.token }, body: body ? JSON.stringify(body) : undefined });
   const j: any = await r.json();
   if (!r.ok) throw new Error(`${p}: ${j.error}`);
   return j;
@@ -34,8 +35,7 @@ const waitJob = async (p: string, body: unknown = {}) => {
   }
 };
 
-const exe = process.env.CHROME ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
-const browser = await chromium.launch({ executablePath: exe });
+const browser = await chromium.launch({ executablePath: chromePath() });
 const errors: string[] = [];
 
 async function shoot(name: string, hash: string, theme: 'dark' | 'light', prep?: (page: import('playwright-core').Page) => Promise<void>, size = { width: 1440, height: 900 }) {

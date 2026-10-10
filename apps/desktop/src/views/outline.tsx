@@ -5,35 +5,11 @@ import { CSS } from '@dnd-kit/utilities';
 import { AlertTriangle, GripVertical, Lock, Plus, ListTree, Hammer, FileText } from 'lucide-react';
 import { post, put } from '../lib/api';
 import { useApp } from '../lib/app';
-import type { SceneSummary, Snapshot, Structure } from '../lib/types';
+import type { SceneSummary, Snapshot } from '../lib/types';
 import { cx, firstName, plural } from '../lib/util';
 import { Avatar, Badge, Button, Chip, Empty, Kbd, SyncBadge } from '../components/ui';
 
-type Row = { key: string; kind: 'act' | 'chapter' | 'scene'; id: string };
-
-function flatten(st: Structure): Row[] {
-  const rows: Row[] = [];
-  for (const a of st.acts) {
-    rows.push({ key: `act:${a.id}`, kind: 'act', id: a.id });
-    for (const c of a.chapters) {
-      rows.push({ key: `ch:${c.id}`, kind: 'chapter', id: c.id });
-      for (const s of c.scenes) rows.push({ key: s, kind: 'scene', id: s });
-    }
-  }
-  return rows;
-}
-
-function rebuild(st: Structure, rows: Row[]): Structure {
-  const next: Structure = structuredClone(st);
-  const chapters = new Map(next.acts.flatMap((a) => a.chapters).map((c) => [c.id, c]));
-  for (const c of chapters.values()) c.scenes = [];
-  let current: Structure['acts'][number]['chapters'][number] | undefined = next.acts[0]?.chapters[0];
-  for (const r of rows) {
-    if (r.kind === 'chapter') current = chapters.get(r.id);
-    else if (r.kind === 'scene' && current) current.scenes.push(r.id);
-  }
-  return next;
-}
+import { flatten, rebuild, type Row } from '../lib/outline';
 
 export function Outline() {
   const { project: p, go, toast, refresh, markSaved } = useApp();

@@ -23,7 +23,7 @@ describe('phase 1: schemas and store', () => {
 
   const corruptions: [string, string, (t: string) => string, { file: string; path: string; message: RegExp }][] = [
     ['unknown pov character', 'scenes/s03/card.yaml', (t) => t.replace('pov: mara', 'pov: nobody'), { file: 'scenes/s03/card.yaml', path: 'pov', message: /character "nobody" does not exist/ }],
-    ['beats is not a list', 'scenes/s05/card.yaml', (t) => t.replace(/beats:\n(  - .*\n)+/, 'beats: just one beat\n'), { file: 'scenes/s05/card.yaml', path: 'beats', message: /expected array/ }],
+    ['beats is not a list', 'scenes/s05/card.yaml', (t) => t.replace(/beats:\n( {2}- .*\n)+/, 'beats: just one beat\n'), { file: 'scenes/s05/card.yaml', path: 'beats', message: /expected array/ }],
     ['bad status value', 'scenes/s02/card.yaml', (t) => t.replace('status: approved', 'status: finished'), { file: 'scenes/s02/card.yaml', path: 'status', message: /Invalid option/ }],
     ['broken YAML', 'threads/ledger.yaml', (t) => t.replace('kind: mystery', 'kind: [mystery'), { file: 'threads/ledger.yaml', path: '', message: /invalid YAML/ }],
     ['id is not a slug', 'plot-points/pp-drowning.yaml', (t) => t.replace('id: pp-drowning', 'id: PP Drowning'), { file: 'plot-points/pp-drowning.yaml', path: 'id', message: /lowercase slugs/ }],
@@ -73,7 +73,7 @@ describe('phase 1: schemas and store', () => {
     const dir = copyFixture();
     const store = GraphStore.open(dir, { memoryIndex: true });
     await store.repo.init();
-    await store.commit('Initial');
+    await store.checkpoint('Initial');
     const card = { ...store.scene('s03').card, location: 'harbour' };
     store.saveCard(card);
     expect(store.sceneSync('s03').state).toBe('card_ahead');

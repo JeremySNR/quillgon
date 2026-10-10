@@ -8,6 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
+import { chromePath } from './browser.js';
 import { GraphStore } from '@quillgon/core';
 import { NovelServer } from '@quillgon/server';
 
@@ -19,16 +20,16 @@ fs.mkdirSync(out, { recursive: true });
 fs.cpSync(path.join(root, 'fixtures/novella'), dir, { recursive: true });
 const seed = GraphStore.open(dir, { noIndex: true });
 await seed.repo.init();
-await seed.commit('Sample manuscript');
+await seed.checkpoint('Sample manuscript');
 seed.close();
 const server = new NovelServer({ staticDir: path.join(root, 'apps/desktop/dist') });
 const base = `http://127.0.0.1:${await server.listen(0)}`;
-const browser = await chromium.launch({ executablePath: process.env.CHROME ?? '/usr/bin/chromium', args: ['--no-sandbox'] });
+const browser = await chromium.launch({ executablePath: chromePath(), args: ['--no-sandbox'] });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, colorScheme: 'light' });
 const errors: string[] = [];
 page.on('pageerror', e => errors.push(e.message));
 const api = async (method: string, route: string, body?: unknown) => {
-  const r = await fetch(`${base}/api${route}`, { method, headers: { 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch(`${base}/api${route}`, { method, headers: { 'content-type': 'application/json', 'x-quillgon-token': server.token }, body: body ? JSON.stringify(body) : undefined });
   assert.ok(r.ok, `${method} ${route}: ${r.status}`);
   return r.json();
 };

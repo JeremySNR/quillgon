@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
+import { chromePath } from './browser.js';
 import { NovelServer } from '@quillgon/server';
 import { copyFixture } from '../packages/core/test/helpers.js';
 
@@ -31,8 +32,7 @@ globalThis.fetch = async (input, init) => {
   return originalFetch(input, init);
 };
 const base = `http://127.0.0.1:${await server.listen(0)}`;
-const executablePath = process.env.CHROME || (process.platform === 'win32' ? 'C:/Program Files/Google/Chrome/Application/chrome.exe' : '/opt/pw-browsers/chromium-1194/chrome-linux/chrome');
-const browser = await chromium.launch({ executablePath });
+const browser = await chromium.launch({ executablePath: chromePath() });
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 const errors: string[] = [];
 page.on('pageerror', e => errors.push(e.message));

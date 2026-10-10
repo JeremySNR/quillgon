@@ -24,8 +24,13 @@ import {
   SpellCheck,
   PanelRight,
 } from 'lucide-react';
-import { del, get, post, put, runJob } from '../lib/api';
-import { useApp } from '../lib/app';
+import { del, post, put, runJob } from '../lib/api';
+import { errorMessage, useApp } from '../lib/app';
+import { useUnsavedChanges } from '../lib/unsaved';
+import { useConfirm } from '../components/confirm';
+import { useProseAutosave } from '../hooks/use-prose-autosave';
+import { useSceneDetail } from '../hooks/use-scene-detail';
+import { useStyleCheck } from '../hooks/use-style-check';
 import type { ExtractionResult, Fact, ImpactResult, SceneCard, SceneDetail, StyleReport, StyleViolation } from '../lib/types';
 import { factLabel, firstName, keys, loadPref, plural, savePref } from '../lib/util';
 import { Avatar, Badge, Button, Chip, Dialog, Empty, Field, ListEditor, StatusBadge, SyncBadge, TagSelect, Working } from '../components/ui';
@@ -37,95 +42,109 @@ import { CardDiff, ProseDiff, ProseSideBySide } from '../components/diff';
 type ProseReview = { title: string; before: string; after: string; summary?: string; apply: (text: string) => Promise<void> };
 
 export function SceneEditor({ id }: { id: string }) {
-  const { project: p, go, toast, refresh, markSaved, focus, setFocus, jobs } = useApp();
-  const [detail, setDetail] = useState<SceneDetail | null>(null);
-  const [card, setCard] = useState<SceneCard | null>(null);
-  const [prose, setProse] = useState('');
+  const { project: p, go, toast, refresh, markSaved, markSaveFailed, fail, focus, setFocus, jobs } = useApp();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState<string | null>(null);
   const [impact, setImpact] = useState<{ result: ImpactResult; change: any } | null>(null);
   const [review, setReview] = useState<ProseReview | null>(null);
   const [facts, setFacts] = useState<ExtractionResult['diff'] | null>(null);
-  const saveTimer = useRef<number | null>(null);
-  const [styleReport, setStyleReport] = useState<StyleReport | null>(null);
   const [styleOpen, setStyleOpen] = useState(false);
   const [inspector, setInspector] = useState(() => loadPref('sceneInspector', false));
   useEffect(() => { if (p) savePref(`lastScene:${p.dir}`, id); }, [p?.dir, id]);
   const [jump, setJump] = useState<{ from: number; to: number } | null>(null);
-  const checkTimer = useRef<number | null>(null);
-  // Check every word against the style sheet shortly after typing stops.
+  const mounted = useRef(true);
   useEffect(() => {
-    if (checkTimer.current) clearTimeout(checkTimer.current);
-    if (!prose.trim()) return setStyleReport(null);
-    checkTimer.current = window.setTimeout(() => {
-      post<StyleReport>('/style/check', { text: prose }).then(setStyleReport).catch(() => undefined);
-    }, 450);
+    mounted.current = true;
     return () => {
-      if (checkTimer.current) clearTimeout(checkTimer.current);
+      mounted.current = false;
     };
-  }, [prose, p?.style.sheet]);
+  }, []);
+
+  // Prose autosave. A failure keeps the text, says so (once per streak, and always once the
+  // editor has gone), and retries on the next edit.
+  const setDetailRef = useRef<(fn: (cur: SceneDetail | null) => SceneDetail | null) => void>(() => undefined);
+  const failureShown = useRef(false);
+  const prose = useProseAutosave<SceneDetail>({
+    docKey: id,
+    save: (key, body, { keepalive }) => put<SceneDetail>(`/scenes/${key}/prose`, { body }, { keepalive }),
+    onSaved: (d, key) => {
+      failureShown.current = false;
+      if (key === id && mounted.current) setDetailRef.current((cur) => (cur ? { ...cur, prose: d.prose, sync: d.sync } : cur));
+      markSaved();
+    },
+    onError: (e, key, retry) => {
+      const message = errorMessage(e);
+      markSaveFailed(`Prose for ${key} not saved: ${message}`);
+      const gone = key !== id || !mounted.current;
+      if (failureShown.current && !gone) return;
+      failureShown.current = true;
+      toast({
+        kind: 'error',
+        message: gone ? `Your last edits to ${key} were not saved` : 'Your latest edits are not saved',
+        detail: gone ? message : `${message}. The text is kept here and saving retries when you type.`,
+        action: { label: 'Retry', run: () => void retry() },
+      });
+    },
+  });
+
+  const { detail, setDetail, card, setCard, cardDirty, load, accept, discardCard, loadError } = useSceneDetail(id, { refreshKey: p?.scenes, prose });
+  setDetailRef.current = setDetail;
+  useUnsavedChanges(cardDirty, 'scene card edits');
+  // Typing not yet confirmed by the server (waiting, in flight or failed) blocks closing the
+  // window; in-app navigation saves it on unmount instead of asking.
+  useUnsavedChanges(prose.hasUnsaved, 'scene prose', { inApp: false, flush: prose.flush });
+
+  const styleReport = useStyleCheck(prose.text, p?.style.sheet);
   const marks = useMemo<StyleMark[]>(() => (styleReport?.violations ?? []).filter((v) => v.end > v.start).map((v) => ({ from: v.start, to: v.end, kind: v.kind, message: v.message })), [styleReport]);
-
-  const load = useCallback(async () => {
-    const d = await get<SceneDetail>(`/scenes/${id}`).catch(() => null);
-    setDetail(d);
-    if (d) {
-      setCard(d.card);
-      setProse(d.prose?.body ?? '');
-    }
-  }, [id]);
-  useEffect(() => {
-    setDetail(null);
-    load();
-  }, [load]);
-  // Reload when the project changes underneath (ripple applied, file edited elsewhere) unless we have local edits.
-  const cardDirty = !!(detail && card && JSON.stringify(card) !== JSON.stringify(detail.card));
-  useEffect(() => {
-    if (!cardDirty && !saveTimer.current) load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p?.scenes]);
-
   const banned = useMemo(() => bannedRegexes(p?.style.banned ?? ''), [p?.style.banned]);
+  const words = useMemo(() => (prose.text.trim() ? prose.text.trim().split(/\s+/).length : 0), [prose.text]);
 
   const saveCard = useCallback(async () => {
     if (!card || !cardDirty) return;
     try {
       const r = await put<{ scene: SceneDetail; change: any; impact: ImpactResult }>(`/scenes/${id}/card`, { card });
-      setDetail(r.scene);
-      setCard(r.scene.card);
+      accept(r.scene);
       markSaved();
       const others = r.impact.impacts.filter((i) => i.scene !== id && i.hop <= 2);
       if (others.length) setImpact({ result: r.impact, change: r.change });
       else toast({ kind: 'success', message: 'Card saved', detail: r.scene.prose ? 'No other scene is affected.' : undefined });
       refresh();
     } catch (e) {
-      toast({ kind: 'error', message: 'Card not saved', detail: (e as Error).message });
+      toast({ kind: 'error', message: 'Card not saved', detail: errorMessage(e) });
     }
-  }, [card, cardDirty, id, markSaved, refresh, toast]);
+  }, [accept, card, cardDirty, id, markSaved, refresh, toast]);
 
+  const flushProse = prose.flush;
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        saveCard();
+        void saveCard();
+        void flushProse();
       }
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [saveCard]);
-
-  const onProse = (text: string) => {
-    setProse(text);
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = window.setTimeout(async () => {
-      saveTimer.current = null;
-      const d = await put<SceneDetail>(`/scenes/${id}/prose`, { body: text });
-      setDetail((cur) => (cur ? { ...cur, prose: d.prose, sync: d.sync } : d));
-      markSaved();
-    }, 900);
-  };
+  }, [saveCard, flushProse]);
 
   if (!p) return null;
-  if (!detail || !card) return <div className="page"><div className="page-inner"><div className="skeleton" style={{ height: 32, width: 320, marginBottom: 16 }} /><div className="skeleton" style={{ height: 420 }} /></div></div>;
+  if (!detail || !card)
+    return (
+      <div className="page">
+        <div className="page-inner">
+          {loadError ? (
+            <Empty icon={<AlertTriangle />} title="This scene could not be loaded" actions={<Button icon={<RefreshCw />} onClick={() => void load()}>Try again</Button>}>
+              {loadError}
+            </Empty>
+          ) : (
+            <>
+              <div className="skeleton" style={{ height: 32, width: 320, marginBottom: 16 }} />
+              <div className="skeleton" style={{ height: 420 }} />
+            </>
+          )}
+        </div>
+      </div>
+    );
 
   const job = jobs[jobs.length - 1];
   const sync = detail.sync.state;
@@ -135,29 +154,34 @@ export function SceneEditor({ id }: { id: string }) {
   const factOpts = p.facts.map((f) => ({ id: f.id, label: f.statement.length > 60 ? f.statement.slice(0, 58) + '…' : f.statement }));
   const set = <K extends keyof SceneCard>(k: K, v: SceneCard[K]) => setCard({ ...card, [k]: v });
   const proseLocked = card.lock === 'prose' || card.lock === 'both';
-  const words = prose.trim() ? prose.trim().split(/\s+/).length : 0;
 
   const withBusy = async (label: string, fn: () => Promise<void>) => {
     setBusy(label);
     try {
       await fn();
     } catch (e) {
-      toast({ kind: 'error', message: `${label} failed`, detail: (e as Error).message });
+      toast({ kind: 'error', message: `${label} failed`, detail: errorMessage(e) });
     } finally {
       setBusy(null);
-      load();
+      void load();
       refresh();
     }
+  };
+  /** Jobs read the prose from disk: make sure it has what is on screen first. */
+  const saveProseFirst = async () => {
+    if (!(await prose.flush())) throw new Error('Your latest prose edits could not be saved, so nothing was run');
   };
 
   const write = () =>
     withBusy('Writing', async () => {
+      await saveProseFirst();
       const r = await runJob<{ words: number; contradictions: unknown[] }>(`/scenes/${id}/write`);
       toast({ kind: r.contradictions.length ? 'warning' : 'success', message: `Wrote ${r.words} words`, detail: r.contradictions.length ? 'The prose disagrees with the card in places; see the flags.' : 'Style passes and extraction done.' });
     });
 
   const regenerate = (mode: 'minimal' | 'fresh') =>
     withBusy(mode === 'fresh' ? 'Rewriting' : 'Revising', async () => {
+      await saveProseFirst();
       const r = await runJob<{ before: string; after: string }>(`/scenes/${id}/regenerate`, { mode });
       if (mode === 'fresh') return void toast({ kind: 'success', message: 'Scene rewritten from its card' });
       setReview({
@@ -173,6 +197,7 @@ export function SceneEditor({ id }: { id: string }) {
 
   const style = () =>
     withBusy('Style passes', async () => {
+      await saveProseFirst();
       const r = await runJob<{ before: string; after: string; report: { voiceFlags: unknown[]; autoFixes: number; enforcedBefore: number; enforcedAfter: number; rounds: { kept: boolean; applied: number; why: string }[] } }>(`/scenes/${id}/style`);
       const kept = r.report.rounds.filter((x) => x.kept);
       setReview({
@@ -195,11 +220,7 @@ export function SceneEditor({ id }: { id: string }) {
 
   const readBack = () =>
     withBusy('Reading back', async () => {
-      if (saveTimer.current) {
-        clearTimeout(saveTimer.current);
-        saveTimer.current = null;
-        await put(`/scenes/${id}/prose`, { body: prose });
-      }
+      await saveProseFirst();
       const r = await runJob<{ presentationOnly: boolean; diff: ExtractionResult['diff'] }>(`/scenes/${id}/reconcile`);
       if (r.presentationOnly) toast({ kind: 'success', message: 'Wording only', detail: 'Nothing in the story changed. The scene is in sync.' });
       else setFacts(r.diff);
@@ -224,11 +245,24 @@ export function SceneEditor({ id }: { id: string }) {
     });
 
   const remove = async () => {
-    if (!confirm(`Delete ${id} “${card.title}”? Other scenes that depend on it will be offered a ripple.`)) return;
-    const r = await del<{ ripple?: unknown; impact?: ImpactResult }>(`/scenes/${id}?ripple=1`);
-    toast({ kind: 'info', message: `Deleted ${id}` });
-    await refresh();
-    go(r.ripple ? 'ripple' : 'outline');
+    const ok = await confirm({
+      title: `Delete ${id}?`,
+      message: `“${card.title || 'Untitled scene'}” will be removed. Other scenes that depend on it will be offered a ripple.`,
+      confirmLabel: 'Delete scene',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      // The scene is going: nothing typed into it should be saved after this.
+      prose.discard();
+      const r = await del<{ ripple?: unknown; impact?: ImpactResult }>(`/scenes/${id}?ripple=1`);
+      discardCard();
+      toast({ kind: 'info', message: `Deleted ${id}` });
+      await refresh();
+      go(r.ripple ? 'ripple' : 'outline');
+    } catch (e) {
+      toast({ kind: 'error', message: `Could not delete ${id}`, detail: errorMessage(e) });
+    }
   };
 
   const pov = chars.find((c) => c.id === card.pov);
@@ -341,7 +375,7 @@ export function SceneEditor({ id }: { id: string }) {
               <Button variant="primary" icon={<Check />} kbd={keys('S')} onClick={saveCard}>
                 Save card
               </Button>
-              <Button variant="ghost" icon={<Undo2 />} onClick={() => setCard(detail.card)}>
+              <Button variant="ghost" icon={<Undo2 />} onClick={discardCard}>
                 Discard
               </Button>
             </div>
@@ -431,7 +465,7 @@ export function SceneEditor({ id }: { id: string }) {
               </div>
             ) : null}
 
-            {!detail.prose && !prose ? (
+            {!detail.prose && !prose.text ? (
               <Empty
                 icon={<PenLine />}
                 title="This scene hasn’t been written yet"
@@ -444,8 +478,22 @@ export function SceneEditor({ id }: { id: string }) {
                 {card.beats.length ? `The writer will follow the ${plural(card.beats.length, 'beat')} on the card, then run the style passes and read the result back into the story. Or just start typing.` : 'Add some beats to the card first, or just start typing.'}
               </Empty>
             ) : null}
+            {prose.error && (
+              <div className="banner danger" role="alert">
+                <AlertTriangle />
+                <div className="banner-body">
+                  <span className="banner-title">Your latest edits are not saved</span>
+                  <span>{prose.error}. The text stays here, and saving retries when you type.</span>
+                  <div className="btn-row">
+                    <Button size="sm" icon={<RefreshCw />} onClick={() => void prose.flush()} disabled={prose.status === 'saving'}>
+                      Retry now
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
             {styleOpen && styleReport && <StylePanel report={styleReport} onJump={(v) => setJump({ from: v.start, to: v.end })} onClose={() => setStyleOpen(false)} onSettings={() => go('settings', 'style')} />}
-            <ProseEditor value={prose} onChange={onProse} banned={banned} readOnly={proseLocked} marks={marks} jump={jump} placeholder={detail.prose ? undefined : 'Or start writing here…'} />
+            <ProseEditor value={prose.text} onChange={prose.edit} banned={banned} readOnly={proseLocked} marks={marks} jump={jump} placeholder={detail.prose ? undefined : 'Or start writing here…'} />
           </div>
         </div>
       </section>
@@ -459,7 +507,7 @@ export function SceneEditor({ id }: { id: string }) {
               <Button variant="ghost" onClick={() => setImpact(null)}>
                 Not now
               </Button>
-              <Button variant="primary" icon={<Waves />} onClick={async () => (await post('/ripple/start', { change: impact.change }), setImpact(null), go('ripple'))}>
+              <Button variant="primary" icon={<Waves />} onClick={() => post('/ripple/start', { change: impact.change }).then(() => (setImpact(null), go('ripple')), fail('Could not start the ripple'))}>
                 Review the ripple
               </Button>
             </>
@@ -632,6 +680,7 @@ function KnowledgePanel({ detail, name, facts, onOpen }: { detail: SceneDetail; 
 }
 
 export function ProseReviewDialog({ review, onClose, onDone }: { review: ProseReview; onClose: () => void; onDone: () => void }) {
+  const { fail } = useApp();
   const [mode, setMode] = useState<'inline' | 'side'>('inline');
   const [busy, setBusy] = useState(false);
   return (
@@ -661,6 +710,8 @@ export function ProseReviewDialog({ review, onClose, onDone }: { review: ProseRe
               try {
                 await review.apply(review.after);
                 onDone();
+              } catch (e) {
+                fail('Could not apply the revision')(e);
               } finally {
                 setBusy(false);
               }

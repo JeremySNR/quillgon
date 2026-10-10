@@ -1,9 +1,10 @@
 export * from './adapter/types.js';
 export * from './adapter/structured.js';
-export { AnthropicBackend, strictify } from './adapter/anthropic.js';
+export { AnthropicBackend } from './adapter/anthropic.js';
+export { nativeSchema, strictify, stripInventedNulls, type SchemaDialect } from './adapter/schema.js';
 export { OpenAICompatibleBackend } from './adapter/openai.js';
 export { OpenAIBackend } from './adapter/responses.js';
-export { CodexBackend } from './adapter/codex.js';
+export { CodexBackend, codexEnv } from './adapter/codex.js';
 export { RecordReplayBackend, requestKey } from './adapter/record.js';
 export * from './agents/index.js';
 export { ModelSuite, type SuiteContext } from './suite.js';

@@ -157,5 +157,6 @@ Off-the-shelf LLM judges agreed with humans only 73% of the time on fiction ([Li
 | 3 | Style system | ✅ Built: `style/style.yaml` dials, code-checked spans, deterministic fixes, span-level line edits gated by code and both-ways judging, live underlines in the editor, fingerprinting samples, rules learned from edits, `quillgon style` |
 | 4 | Plan-level critics | ✅ Built: structural critic (book and per structure), predictability test per scene, outline reader, two-sided twist verdicts, `quillgon critique` |
 | 7 | Caching | ✅ Prompt caching on the system prompt with cache-aware cost. Batch API not yet |
+| 5 | Eval harness | ◐ Built: frozen set of 20 premises, deterministic metrics (slop, style, continuity, structural tells, twist guessing, engagement, name and n-gram overlap, plan diversity), both-ways pairwise comparison with a win rate and Elo, record/replay (`quillgon eval`). Human spot checks and author decisions as preference data not yet |
 | 8 | Graph views | ◐ Ripple blast-radius map and the ledger chart built; scene local graph and fact flow not yet |
-| 5, 6, 9–11 | Eval harness, tension curve, character agents, provenance, orchestration | Not yet |
+| 6, 9–11 | Tension curve, character agents, provenance, orchestration | Not yet |

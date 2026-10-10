@@ -57,3 +57,19 @@ export function savePref(key: string, value: unknown) {
 
 /** A shortcut label for this platform: ⌘K on macOS, Ctrl K elsewhere. */
 export const keys = (k: string) => (isMac ? `⌘${k}` : `Ctrl ${k}`);
+
+/** Structural equality for plain JSON-like values (cards, style sheets). Undefined keys count as absent. */
+export function deepEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    const bb = b as unknown[];
+    return a.length === bb.length && a.every((x, i) => deepEqual(x, bb[i]));
+  }
+  const ra = a as Record<string, unknown>;
+  const rb = b as Record<string, unknown>;
+  const ka = Object.keys(ra).filter((k) => ra[k] !== undefined);
+  const kb = Object.keys(rb).filter((k) => rb[k] !== undefined);
+  return ka.length === kb.length && ka.every((k) => Object.prototype.hasOwnProperty.call(rb, k) && deepEqual(ra[k], rb[k]));
+}

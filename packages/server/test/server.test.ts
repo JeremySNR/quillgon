@@ -1,3 +1,7 @@
+import fs from 'node:fs';
+import http from 'node:http';
+import os from 'node:os';
+import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GraphStore } from '@quillgon/core';
 import { NovelServer } from '../src/index.js';
@@ -8,7 +12,7 @@ let server: NovelServer;
 let base = '';
 
 async function api(method: string, path: string, body?: unknown) {
-  const res = await fetch(base + path, { method, headers: { 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(base + path, { method, headers: { 'content-type': 'application/json', 'x-quillgon-token': server.token }, body: body ? JSON.stringify(body) : undefined });
   const json: any = await res.json();
   if (!res.ok) throw Object.assign(new Error(json.error), { status: res.status, json });
   return json;
@@ -28,7 +32,7 @@ beforeAll(async () => {
   const dir = copyFixture();
   const s = GraphStore.open(dir, { memoryIndex: true });
   await s.repo.init();
-  await s.commit('Fixture');
+  await s.checkpoint('Fixture');
   s.close();
   server = new NovelServer();
   server.open(dir);
@@ -171,5 +175,134 @@ describe('server API', () => {
     expect(prompts.map((p: any) => p.name)).toContain('writer');
     await api('PUT', '/api/prompts/reader', { text: '# Reader\nBe brief.' });
     expect((await api('GET', '/api/prompts')).find((p: any) => p.name === 'reader')).toMatchObject({ overridden: true, text: '# Reader\nBe brief.' });
+  });
+});
+
+/** Raw HTTP, so tests can forge the Host and Origin headers a browser would send. */
+function raw(opts: { method?: string; path: string; headers?: Record<string, string>; body?: string; port?: number }): Promise<{ status: number; body: string; headers: http.IncomingHttpHeaders }> {
+  return new Promise((resolve, reject) => {
+    const req = http.request({ host: '127.0.0.1', port: opts.port ?? Number(new URL(base).port), method: opts.method ?? 'GET', path: opts.path, headers: opts.headers }, (res) => {
+      let body = '';
+      res.on('data', (c) => {
+        body += c;
+        // The event stream never ends; the first event is enough.
+        if (String(res.headers['content-type']).startsWith('text/event-stream')) req.destroy();
+      });
+      res.on('end', () => resolve({ status: res.statusCode!, body, headers: res.headers }));
+      res.on('close', () => resolve({ status: res.statusCode!, body, headers: res.headers }));
+    });
+    req.on('error', reject);
+    if (opts.body) req.write(opts.body);
+    req.end();
+  });
+}
+
+describe('server API boundary', () => {
+  const auth = () => ({ 'x-quillgon-token': server.token });
+
+  it('refuses API requests without the per-launch token', async () => {
+    expect((await raw({ path: '/api/project' })).status).toBe(401);
+    expect((await raw({ path: '/api/project', headers: { 'x-quillgon-token': 'nope' } })).status).toBe(401);
+    expect((await raw({ path: '/api/project', headers: auth() })).status).toBe(200);
+  });
+
+  it('refuses a cross-site text/plain POST, the request a hostile page can send without a preflight', async () => {
+    const r = await raw({ method: 'POST', path: '/api/commit', headers: { 'content-type': 'text/plain', origin: 'https://evil.example' }, body: '{"message":"pwned"}' });
+    expect(r.status).toBe(403);
+    expect(r.headers['access-control-allow-origin']).toBeUndefined();
+    // Even with the token, a non-JSON body never reaches a handler.
+    expect((await raw({ method: 'POST', path: '/api/commit', headers: { ...auth(), 'content-type': 'text/plain' }, body: '{"message":"x"}' })).status).toBe(415);
+  });
+
+  it('refuses DNS-rebound requests by Host, and look-alike origins', async () => {
+    expect((await raw({ path: '/api/project', headers: { ...auth(), host: 'attacker.example:4317' } })).status).toBe(421);
+    expect((await raw({ path: '/', headers: { host: 'attacker.example' } })).status).toBe(421);
+    expect((await raw({ path: '/api/project', headers: { ...auth(), origin: 'http://localhost.evil.com' } })).status).toBe(403);
+    expect((await raw({ method: 'OPTIONS', path: '/api/commit', headers: { origin: 'http://localhost:9999' } })).status).toBe(403);
+    // Same origin is fine.
+    expect((await raw({ path: '/api/project', headers: { ...auth(), origin: base } })).status).toBe(200);
+  });
+
+  it('accepts the token in the URL only for read-only GETs that cannot send headers', async () => {
+    const id = '00000000-0000-0000-0000-000000000000';
+    const q = `?token=${encodeURIComponent(server.token)}`;
+    expect((await raw({ path: `/api/covers/${id}/image` })).status).toBe(401);
+    expect((await raw({ path: `/api/covers/${id}/image${q}` })).status).toBe(404); // authorised; no such cover
+    expect((await raw({ path: `/api/project${q}` })).status).toBe(401);
+    expect((await raw({ method: 'POST', path: `/api/commit${q}`, headers: { 'content-type': 'application/json' }, body: '{}' })).status).toBe(401);
+  });
+
+  it('streams events only with the token', async () => {
+    expect((await raw({ path: '/api/events' })).status).toBe(401);
+    const ok = await raw({ path: `/api/events?token=${encodeURIComponent(server.token)}` });
+    expect(ok.status).toBe(200);
+    expect(ok.body).toContain('event: hello');
+  });
+
+  it('refuses git refs that could be read as options', async () => {
+    await expect(api('POST', '/api/branches', { name: '--output=/tmp/x' })).rejects.toMatchObject({ status: 400 });
+    await expect(api('GET', `/api/history/${encodeURIComponent('--output=/tmp/x')}`)).rejects.toMatchObject({ status: 400 });
+    await expect(api('GET', '/api/branches/compare?a=-p&b=main')).rejects.toMatchObject({ status: 400 });
+    await expect(api('GET', '/api/export?format=../../x')).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('refuses a model config that would send an arbitrary secret to an endpoint', async () => {
+    const p = await api('GET', '/api/project');
+    const models = { ...p.book.models, frontier: { provider: 'openai-compatible', model: 'x', base_url: 'https://evil.example/v1', api_key_env: 'AWS_SECRET_ACCESS_KEY' } };
+    await expect(api('PUT', '/api/book', { book: { models } })).rejects.toMatchObject({ status: 422 });
+    expect((await api('GET', '/api/project')).book.models.frontier?.api_key_env).toBeUndefined();
+  });
+
+  it('keeps the current book open when another fails to open', async () => {
+    const bad = fs.mkdtempSync(path.join(os.tmpdir(), 'ql-bad-'));
+    fs.mkdirSync(path.join(bad, 'book.yaml')); // exists, but cannot be read
+    await expect(api('POST', '/api/open', { dir: bad })).rejects.toBeTruthy();
+    expect((await api('GET', '/api/project')).book.title).toBe("The Tidekeeper's Ledger");
+  });
+
+  it('injects the token into the UI it serves', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ql-ui-'));
+    fs.writeFileSync(path.join(dir, 'index.html'), '<html><head><title>x</title></head><body></body></html>');
+    const ui = new NovelServer({ staticDir: dir, token: 'fixed-token' });
+    const port = await ui.listen(0);
+    try {
+      const r = await raw({ path: '/', port });
+      expect(r.body).toContain('<meta name="quillgon-token" content="fixed-token" />');
+      expect(r.headers['cache-control']).toBe('no-store');
+      expect((await raw({ path: '/../../etc/passwd', port })).body).toContain('quillgon-token');
+    } finally {
+      ui.close();
+    }
+  });
+});
+
+describe('server jobs', () => {
+  it('run one at a time, and refuse a branch switch while one runs', async () => {
+    const order: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const a = server.job('a', async () => {
+      order.push('a start');
+      await gate;
+      order.push('a end');
+    });
+    const b = server.job('b', async () => {
+      order.push('b start');
+    });
+    const queued = await api('GET', `/api/jobs/${b.job}`);
+    expect(queued.stage).toBe('queued');
+    await expect(api('POST', '/api/branches/switch', { name: 'main' })).rejects.toMatchObject({ status: 409 });
+    release();
+    for (;;) {
+      if ((await api('GET', `/api/jobs/${b.job}`)).state === 'done') break;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    expect(order).toEqual(['a start', 'a end', 'b start']);
+    expect((await api('GET', `/api/jobs/${a.job}`)).state).toBe('done');
+  });
+
+  it('a failed job does not block the queue', async () => {
+    await expect(job('/api/scenes/nope/write')).rejects.toThrow();
+    expect((await job('/api/quality/reader', { mode: 'outline' })).mode).toBe('outline');
   });
 });
