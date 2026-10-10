@@ -25,11 +25,11 @@ export function SettingsView({ tab }: { tab?: string }) {
         <div className="page-head">
           <div>
             <h1>Settings</h1>
-            <p className="sub">Everything here is a plain file in your book’s folder: book.yaml, style/, prompts/.</p>
+            <p className="sub">Make this space your own. Manage your book, writing style, and preferences.</p>
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '200px 1fr', gap: 28, alignItems: 'start' }}>
-          <nav className="settings-nav list">
+        <div className="settings-layout">
+          <nav className="settings-nav list" aria-label="Settings">
             {TABS.map((t) => (
               <button key={t.id} className="nav-item" aria-current={current === t.id ? 'page' : undefined} onClick={() => go('settings', t.id)}>
                 <t.icon /> <span className="label">{t.label}</span>

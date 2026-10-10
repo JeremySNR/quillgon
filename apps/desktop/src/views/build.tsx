@@ -35,8 +35,8 @@ export function Build({ step }: { step?: string }) {
       <div className="page-inner">
         <div className="page-head">
           <div>
-            <h1>Build</h1>
-            <p className="sub">Seven steps, top down. Each choice is cheap to make here and expensive to make later, so the decisions come first and the prose comes last.</p>
+            <span className="eyebrow">FROM AN IDEA TO A MANUSCRIPT</span><h1>Story planning</h1>
+            <p className="sub">Find your premise, shape the story, and bring each scene to life.</p>
           </div>
         </div>
         <Stepper stage={stage} current={current} onPick={(id) => go('build', id)} />

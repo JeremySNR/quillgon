@@ -62,9 +62,10 @@ function Shell() {
 
   return (
     <div className={cx('app', rail && 'rail', focus && route.view === 'scene' && 'focus')}>
+      <a className="skip-link" href="#main" onClick={(e) => { e.preventDefault(); document.getElementById('main')?.focus(); }}>Skip to content</a>
       <Sidebar rail={rail} onToggle={toggleRail} />
       <TopBar />
-      <main className="main" id="main">
+      <main className="main" id="main" tabIndex={-1}>
         {view}
       </main>
       <StatusBar />

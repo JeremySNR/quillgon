@@ -32,6 +32,8 @@ import {
   Focus,
   ShieldCheck,
   Download,
+  Feather,
+  ChevronRight,
 } from 'lucide-react';
 import { useApp, type View } from '../lib/app';
 import { get, post } from '../lib/api';
@@ -39,9 +41,9 @@ import { ago, cx, isMac, keys, loadPref, mod, plural, savePref } from '../lib/ut
 import { Button, Kbd, stageName } from './ui';
 
 const NAV: { view: View; label: string; icon: typeof LayoutDashboard; shortcut: string }[] = [
-  { view: 'dashboard', label: 'Overview', icon: LayoutDashboard, shortcut: '1' },
-  { view: 'build', label: 'Build', icon: Hammer, shortcut: '2' },
-  { view: 'outline', label: 'Outline', icon: ListTree, shortcut: '3' },
+  { view: 'dashboard', label: 'Writing desk', icon: LayoutDashboard, shortcut: '1' },
+  { view: 'build', label: 'Story planning', icon: Hammer, shortcut: '2' },
+  { view: 'outline', label: 'Manuscript', icon: ListTree, shortcut: '3' },
   { view: 'ripple', label: 'Ripple review', icon: Waves, shortcut: '4' },
   { view: 'threads', label: 'Threads', icon: Spline, shortcut: '5' },
   { view: 'characters', label: 'Characters', icon: Users, shortcut: '6' },
@@ -49,7 +51,7 @@ const NAV: { view: View; label: string; icon: typeof LayoutDashboard; shortcut: 
 ];
 
 export function Sidebar({ rail, onToggle }: { rail: boolean; onToggle: () => void }) {
-  const { project, route, go } = useApp();
+  const { project, route, go, setPalette } = useApp();
   if (!project) return null;
   const counts: Partial<Record<View, { n: number; alert?: boolean }>> = {
     outline: { n: project.totals.scenes },
@@ -61,22 +63,30 @@ export function Sidebar({ rail, onToggle }: { rail: boolean; onToggle: () => voi
     <aside className="sidebar">
       <div className="brand">
         <span className="brand-mark">
-          <BookOpen size={13} strokeWidth={2.4} />
+          <Feather size={21} strokeWidth={1.5} />
         </span>
-        <span className="brand-name">Quillgon</span>
+        <span className="brand-name">Quillgon<span className="brand-caption">A SPACE FOR YOUR STORY</span></span>
       </div>
       <button className="book-switch" onClick={() => go('settings', 'book')} title={project.dir}>
-        <span className="book-title">{project.book.title}</span>
+        <span className="eyebrow">CURRENT MANUSCRIPT</span><span className="book-title">{project.book.title}</span>
         <span className="faint" style={{ fontSize: 'var(--fs-caption)' }}>
           {plural(project.totals.words, 'word')} · {project.book.genre || 'novel'}
         </span>
       </button>
+      <button className="sidebar-search" onClick={() => setPalette(true)} title="Search and commands"><Search size={15} /><span>Find anything</span><Kbd>{keys('K')}</Kbd></button>
       <nav className="nav" aria-label="Main">
-        <div className="nav-group">Book</div>
+        <div className="nav-group">Workspace</div>
         {NAV.slice(0, 3).map((n) => (
           <NavItem key={n.view} {...n} current={route.view === n.view || (n.view === 'outline' && route.view === 'scene')} count={counts[n.view]} onClick={() => go(n.view)} />
         ))}
-        <div className="nav-group">Review</div>
+        {!rail && project.structure.acts.length > 0 && <div className="manuscript-tree">
+          <div className="nav-group">Chapters</div>
+          {project.structure.acts.flatMap(a => a.chapters).map((c, index) => <details key={c.id} open={route.view === 'scene' && c.scenes.includes(route.id ?? '') || undefined}>
+            <summary><ChevronRight size={12} /><span className="tree-number">{String(index + 1).padStart(2, '0')}</span><span>{c.title || c.id}</span></summary>
+            {c.scenes.map(id => { const scene = project.scenes.find(s => s.id === id); return scene ? <button key={id} aria-current={route.view === 'scene' && route.id === id ? 'page' : undefined} onClick={() => go('scene', id)}><span className={`tree-dot ${scene.sync === 'unwritten' ? '' : 'written'}`} /><span>{scene.card.title || 'Untitled scene'}</span></button> : null; })}
+          </details>)}
+        </div>}
+        <div className="nav-group">Story & review</div>
         {NAV.slice(3).map((n) => (
           <NavItem key={n.view} {...n} current={route.view === n.view} count={counts[n.view]} onClick={() => go(n.view)} />
         ))}
@@ -104,9 +114,9 @@ function NavItem({ label, icon: Icon, current, count, onClick }: { view: View; l
 }
 
 const TITLES: Record<View, string> = {
-  dashboard: 'Overview',
-  build: 'Build',
-  outline: 'Outline',
+  dashboard: 'Writing desk',
+  build: 'Story planning',
+  outline: 'Manuscript',
   scene: 'Scene',
   ripple: 'Ripple review',
   threads: 'Threads',
@@ -158,7 +168,7 @@ export function TopBar() {
   return (
     <header className="topbar">
       <div className="crumbs">
-        <span className="muted">{TITLES[route.view]}</span>
+        <button className="crumb-book" onClick={() => go('dashboard')}>{project.book.title}</button><span className="sep">/</span><span className="muted">{TITLES[route.view]}</span>
         {scene && (
           <>
             <span className="sep">/</span>
@@ -168,7 +178,7 @@ export function TopBar() {
           </>
         )}
       </div>
-      <div className="spacer" />
+      <div className="spacer" /><ThemeToggle />
       {project.mode === 'offline' && (
         <span className="badge warning" title="book.yaml uses the offline provider: placeholder output, no API calls. Change models in Settings.">
           <CloudOff /> Offline models
@@ -208,6 +218,19 @@ export function TopBar() {
       </Button>
     </header>
   );
+}
+
+function ThemeToggle() {
+  const [theme, setTheme] = useState(() => document.documentElement.dataset.theme ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  useEffect(() => {
+    const observer = new MutationObserver(() => setTheme(document.documentElement.dataset.theme ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')));
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => observer.disconnect();
+  }, []);
+  return <Button size="sm" variant="ghost" iconOnly icon={theme === 'dark' ? <Sun /> : <Moon />} tip={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`} onClick={() => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    savePref('theme', next); document.documentElement.dataset.theme = next; setTheme(next);
+  }} />;
 }
 
 export function StatusBar() {

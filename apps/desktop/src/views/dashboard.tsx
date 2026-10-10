@@ -11,7 +11,6 @@ import {
   Layers,
   ShieldCheck,
   Waves,
-  Feather,
   Lightbulb,
   ListChecks,
   BookText,
@@ -24,9 +23,8 @@ import {
 import { get } from '../lib/api';
 import { useApp } from '../lib/app';
 import type { Commit, Snapshot } from '../lib/types';
-import { ago, money, plural } from '../lib/util';
-import { Badge, Button, Ring, SyncBadge } from '../components/ui';
-import { Sparkline } from '../components/chart';
+import { ago, loadPref, money, plural } from '../lib/util';
+import { Badge, Button, SyncBadge } from '../components/ui';
 
 export const STAGES = [
   { id: 'idea', name: 'Idea', desc: 'Find the story', icon: Sparkles },
@@ -108,184 +106,66 @@ export function Dashboard() {
     attention.push({ icon: <CircleAlert size={16} style={{ color: 'var(--danger)' }} />, title: e.message, sub: `${e.file}${e.path ? ` › ${e.path}` : ''}`, onClick: () => go('settings') });
 
   const t = p.totals;
-  const inSync = t.bySync.in_sync ?? 0;
   const written = p.scenes.filter((s) => s.sync !== 'unwritten').length;
-  const styled = p.scenes.filter((s) => s.style);
-  const engagement = p.scenes.map((s) => s.engagement).filter((x): x is number => x !== null);
+  const lastScene = loadPref<string>(`lastScene:${p.dir}`, '');
+  const resume = p.scenes.find((s) => s.id === lastScene) ?? p.scenes.find((s) => s.sync !== 'unwritten') ?? p.scenes[0];
+  const progress = Math.min(100, Math.round(t.words / Math.max(1, p.book.target_words) * 100));
+  const chapters = p.structure.acts.flatMap((a) => a.chapters);
 
   return (
-    <div className="page">
-      <div className="page-inner">
-        <section className="hero">
-          <div>
+    <div className="page desk-page">
+      <div className="page-inner desk-inner">
+        <div className="desk-heading"><span className="eyebrow">YOUR WRITING DESK</span><span className="desk-edition">{p.book.genre || 'A work in progress'}</span></div>
+        <section className="book-intro">
+          <div className="book-cover" aria-hidden="true"><span>QUILLGON / MANUSCRIPT</span><div className="cover-rule" /><strong>{p.book.title}</strong><div className="cover-ornament">Q</div><small>{p.book.genre || 'A novel'}</small></div>
+          <div className="book-intro-copy">
+            <span className="eyebrow">{p.book.stage === 'complete' ? 'IN REVIEW' : 'WORK IN PROGRESS'}</span>
             <h1>{p.book.title}</h1>
-            <div className="meta">
-              {p.book.genre && <span>{p.book.genre}</span>}
-              <Badge kind="outline">{p.book.pov_mode.replace('-', ' ')} · {p.book.tense} tense</Badge>
-              {p.branches.current !== 'main' && <Badge kind="info">What-if: {p.branches.current}</Badge>}
-            </div>
-            {p.intent.premise && <p className="premise">{p.intent.premise}</p>}
-            <div className="btn-row" style={{ marginTop: 20 }}>
-              <Button variant="primary" size="lg" icon={<ArrowRight />} onClick={() => go(next.view, next.id)}>
-                {next.label}
-              </Button>
-              {written > 0 && (
-                <Button size="lg" variant="ghost" icon={<Feather />} onClick={() => go('outline')}>
-                  Browse the manuscript
-                </Button>
-              )}
+            {p.intent.premise && <p className="book-premise">{p.intent.premise}</p>}
+            <div className="book-metadata"><span>{plural(chapters.length, 'chapter')}</span><span>{plural(t.scenes, 'scene')}</span><span>{p.book.pov_mode.replaceAll('-', ' ')} · {p.book.tense} tense</span></div>
+            <div className="btn-row">
+              <Button variant="primary" size="lg" icon={<PenLine />} onClick={() => resume ? go('scene', resume.id) : go(next.view, next.id)}>{resume ? 'Continue writing' : next.label}</Button>
+              <Button variant="ghost" size="lg" icon={<ArrowRight />} onClick={() => go('outline')}>View manuscript</Button>
             </div>
           </div>
-          <Ring value={t.words} max={p.book.target_words} label={t.words >= 1000 ? `${(t.words / 1000).toFixed(1)}k` : t.words} sub={`of ${(p.book.target_words / 1000).toFixed(0)}k words`} />
         </section>
-
-        <Stepper stage={p.book.stage} onPick={(id) => go('build', id)} />
-
-        <div className="tiles">
-          <button className="tile" onClick={() => go('outline')}>
-            <span className="tile-label">
-              <Layers /> Scenes
-            </span>
-            <span className="tile-value">
-              {written}
-              <small>of {t.scenes} written</small>
-            </span>
-            <div className="bar" aria-label="Scenes by status">
-              <span style={{ width: `${((t.byStatus.locked ?? 0) / Math.max(1, t.scenes)) * 100}%`, background: 'var(--info)' }} />
-              <span style={{ width: `${((t.byStatus.approved ?? 0) / Math.max(1, t.scenes)) * 100}%`, background: 'var(--success)' }} />
-              <span style={{ width: `${((t.byStatus.draft ?? 0) / Math.max(1, t.scenes)) * 100}%`, background: 'var(--border-strong)' }} />
-            </div>
-            <span className="tile-foot">
-              {t.byStatus.approved ?? 0} approved · {t.byStatus.locked ?? 0} locked · {t.byStatus.draft ?? 0} draft
-            </span>
-          </button>
-          <button className="tile" onClick={() => go('outline')}>
-            <span className="tile-label">
-              <ShieldCheck /> Graph and prose
-            </span>
-            <span className="tile-value">
-              {written ? Math.round((inSync / Math.max(1, written)) * 100) : 100}
-              <small>% in sync</small>
-            </span>
-            <span className="tile-foot">{written - inSync > 0 ? `${written - inSync} scene${written - inSync === 1 ? '' : 's'} need attention` : 'Nothing has drifted'}</span>
-          </button>
-          <button className="tile" onClick={() => go('reader')}>
-            <span className="tile-label">
-              <Activity /> First reader
-            </span>
-            {p.reader ? (
-              <>
-                <span className="tile-value">
-                  {p.reader.mean.toFixed(1)}
-                  <small>/ 5 engagement</small>
-                </span>
-                <Sparkline values={engagement} width={180} height={28} />
-                <span className="tile-foot">
-                  {p.reader.predictions ? `${plural(p.reader.predictions, 'twist')} guessed early` : 'No twist guessed early'} · {ago(p.reader.ran_at)}
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="tile-value faint">—</span>
-                <span className="tile-foot">Not run yet</span>
-              </>
-            )}
-          </button>
-          <button className="tile" onClick={() => go('threads', 'ledger')}>
-            <span className="tile-label">
-              <Link2 /> Setups and payoffs
-            </span>
-            {p.obligations.length ? (
-              <>
-                <span className="tile-value">
-                  {p.obligations.filter((o) => o.payoff_scene).length}
-                  <small>of {p.obligations.length} paid off</small>
-                </span>
-                <span className="tile-foot">{p.obligationIssues.length ? `${plural(p.obligationIssues.length, 'problem')} in the ledger` : 'Every promise is kept'}</span>
-              </>
-            ) : (
-              <>
-                <span className="tile-value faint">—</span>
-                <span className="tile-foot">Scene cards add clues and promises here</span>
-              </>
-            )}
-          </button>
-          <button className="tile" onClick={() => go('settings', 'style')}>
-            <span className="tile-label">
-              <SpellCheck /> Style
-            </span>
-            {styled.length ? (
-              <>
-                <span className="tile-value">
-                  {styled.filter((s) => !s.style!.enforced).length}
-                  <small>of {styled.length} scenes clean</small>
-                </span>
-                <span className="tile-foot">{styled.reduce((n, s) => n + s.style!.guided, 0)} softer notes · checked on every word</span>
-              </>
-            ) : (
-              <>
-                <span className="tile-value faint">—</span>
-                <span className="tile-foot">Set your style dials</span>
-              </>
-            )}
-          </button>
-          <button className="tile" onClick={() => go('settings', 'models')}>
-            <span className="tile-label">
-              <Coins /> Cost
-            </span>
-            <span className="tile-value">
-              {money(p.costs.total_usd)}
-              <small>spent</small>
-            </span>
-            <span className="tile-foot">≈ {money(p.estimate.total_usd)} to finish {p.estimate.scenes_to_write ? `${p.estimate.scenes_to_write} scenes` : 'reviews'}</span>
-          </button>
+        <div className="manuscript-progress">
+          <div><strong>{t.words.toLocaleString('en')}</strong><span> of {p.book.target_words.toLocaleString('en')} words</span></div>
+          <div className="progress-track" role="progressbar" aria-label="Manuscript word target" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${progress}%` }} /></div>
+          <span>{progress}% of your goal</span>
+          <span className="progress-scenes">{written} of {t.scenes} scenes written</span>
         </div>
-
-        <div className="two-col">
-          <div className="card">
-            <div className="card-head">
-              <h3>Needs your attention</h3>
-              {attention.length > 0 && <Badge kind="warning">{attention.length}</Badge>}
+        <div className="desk-columns">
+          <section className="desk-manuscript">
+            <div className="section-heading"><h2>The manuscript</h2><Button variant="ghost" size="sm" onClick={() => go('outline')}>All scenes <ArrowRight size={14} /></Button></div>
+            {resume && <button className="resume-scene" onClick={() => go('scene', resume.id)}>
+              <span className="eyebrow">{lastScene === resume.id ? 'PICK UP WHERE YOU LEFT OFF' : 'OPEN YOUR MANUSCRIPT'}</span>
+              <span className="resume-title">{resume.card.title || 'Untitled scene'}<ArrowRight size={20} /></span>
+              <span className="resume-excerpt">{resume.excerpt || resume.card.purpose || 'The next page is yours.'}</span>
+              <span className="resume-meta">Scene {String(resume.index + 1).padStart(2, '0')}<span>·</span>{resume.words.toLocaleString('en')} words<SyncBadge state={resume.sync} compact /></span>
+            </button>}
+            <div className="chapter-list">
+              {chapters.slice(0, 5).map((c, i) => {
+                const scenes = p.scenes.filter((s) => c.scenes.includes(s.id));
+                return <button className="chapter-row" key={c.id} onClick={() => scenes[0] ? go('scene', scenes[0].id) : go('outline')}>
+                  <span className="chapter-number">{String(i + 1).padStart(2, '0')}</span>
+                  <span className="grow"><strong>{c.title || c.id}</strong><small>{plural(c.scenes.length, 'scene')} · {scenes.reduce((n, s) => n + s.words, 0).toLocaleString('en')} words</small></span>
+                  <span className="chapter-dots" aria-label={`${scenes.filter(s => s.sync !== 'unwritten').length} scenes written`}>{scenes.map(s => <i key={s.id} className={s.sync !== 'unwritten' ? 'written' : ''} />)}</span><ArrowRight size={15} />
+                </button>;
+              })}
+              {!chapters.length && <div className="desk-empty"><p>Give your story a shape.</p><Button onClick={() => go('build', 'structure')}>Plan your chapters</Button></div>}
             </div>
-            {attention.length ? (
-              <div className="list">
-                {attention.slice(0, 10).map((a, i) => (
-                  <button key={i} className="list-item" onClick={a.onClick}>
-                    {a.icon}
-                    <span className="grow">
-                      <div className="primary-text">{a.title}</div>
-                      <div className="secondary-text">{a.sub}</div>
-                    </span>
-                    <span className="end">{a.badge}</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="row muted" style={{ padding: '8px 4px' }}>
-                <ShieldCheck size={16} style={{ color: 'var(--success)' }} /> Everything agrees. No conflicts, no drift, no continuity issues.
-              </div>
-            )}
-          </div>
-          <div className="card">
-            <div className="card-head">
-              <h3>Recent changes</h3>
-              <Button size="sm" variant="ghost" className="more" onClick={() => go('history')}>
-                All history
-              </Button>
-            </div>
-            <div className="list">
-              {history.map((c) => (
-                <button key={c.hash} className="list-item" onClick={() => go('history', c.hash)}>
-                  <GitCommitHorizontal size={15} className={c.message.startsWith('Ripple') ? '' : 'faint'} style={c.message.startsWith('Ripple') ? { color: 'var(--accent)' } : undefined} />
-                  <span className="grow">
-                    <div className="primary-text" style={{ fontWeight: 400 }}>{c.message}</div>
-                  </span>
-                  <span className="end faint">{ago(c.date)}</span>
-                </button>
-              ))}
-              {!history.length && <p className="faint">No history yet.</p>}
-            </div>
-          </div>
+            <div className="section-heading activity-heading"><h2>Recent activity</h2><Button variant="ghost" size="sm" onClick={() => go('history')}>View history</Button></div>
+            <div className="activity-list">{history.slice(0, 3).map(c => <button key={c.hash} onClick={() => go('history', c.hash)}><GitCommitHorizontal size={15} /><span>{c.message}</span><time>{ago(c.date)}</time></button>)}{!history.length && <p className="muted">Your saved changes will appear here.</p>}</div>
+          </section>
+          <aside className="desk-notes">
+            <div className="section-heading"><h2>Editor's notes</h2><span className="note-count">{attention.length}</span></div>
+            <p className="section-description">A little care for the details.</p>
+            <div className="editor-notes">{attention.length ? attention.slice(0, 4).map((a, i) => <button key={i} onClick={a.onClick}>{a.icon}<span><strong>{a.title}</strong><small>{a.sub}</small></span><ArrowRight size={14} /></button>) : <div className="notes-clear"><ShieldCheck size={20} /><strong>Everything is in harmony.</strong><p>No conflicts or continuity issues to review.</p></div>}</div>
+            {attention.length > 4 && <details className="more-notes"><summary>Show {attention.length - 4} more notes</summary>{attention.slice(4).map((a, i) => <button key={i} onClick={a.onClick}>{a.title}<ArrowRight size={14} /></button>)}</details>}
+            <div className="next-step"><span className="eyebrow">NEXT IN YOUR PROCESS</span><h3>{STAGES.find(s => s.id === p.book.stage)?.name || 'Review'}</h3><p>Move your story one step closer to its final draft.</p><Button variant="ghost" onClick={() => go(next.view, next.id)}>{next.label}<ArrowRight size={14} /></Button></div>
+            <div className="desk-tools"><button onClick={() => go('reader')}><Activity size={16} /><span>Reader report</span><strong>{p.reader ? `${p.reader.mean.toFixed(1)} / 5` : 'Not run'}</strong></button><button onClick={() => go('threads', 'ledger')}><Link2 size={16} /><span>Setups & payoffs</span><strong>{p.obligations.filter(o => o.payoff_scene).length} / {p.obligations.length}</strong></button><button onClick={() => go('settings', 'style')}><SpellCheck size={16} /><span>Writing style</span><ArrowRight size={14} /></button><button onClick={() => go('settings', 'models')}><Coins size={16} /><span>Model spend</span><strong>{money(p.costs.total_usd)}</strong></button></div>
+          </aside>
         </div>
       </div>
     </div>

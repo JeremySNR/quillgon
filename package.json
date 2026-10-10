@@ -19,7 +19,8 @@
     "desktop": "pnpm -C apps/desktop electron",
     "fixture": "tsx scripts/build-fixture.ts",
     "e2e": "pnpm build && tsx scripts/e2e-ui.ts",
-    "screenshots": "pnpm build && tsx scripts/screenshots.ts"
+    "screenshots": "pnpm build && tsx scripts/screenshots.ts",
+    "test:ui-refresh": "pnpm build && tsx scripts/ui-refresh.ts"
   },
   "devDependencies": {
     "@quillgon/agents": "workspace:*",
