@@ -6,7 +6,7 @@ A local desktop tool that generates full-length novels while you stay in charge 
 
 **The story graph is the source; prose is compiled output.** Intent, plot points, threads, character state and scene cards define what is true. Prose is generated from them and can be edited, but every prose edit is read back into the graph so the two never drift.
 
-![Overview](docs/screenshots/overview-dark.png)
+![Quillgon writing desk](docs/screenshots/ui-refresh/desk-light.png)
 
 ## Quick start
 
@@ -51,10 +51,10 @@ For development, `pnpm dev` runs the API and the Vite dev server with hot reload
 
 | | |
 | --- | --- |
-| ![Scene editor](docs/screenshots/scene-light.png) | ![Ripple review](docs/screenshots/ripple-dark.png) |
-| ![Characters](docs/screenshots/characters-dark.png) | ![Reader report](docs/screenshots/reader-dark.png) |
-| ![Idea](docs/screenshots/idea-dark.png) | ![Setups and payoffs](docs/screenshots/ledger-dark.png) |
-| ![Style checked on every word](docs/screenshots/scene-style-dark.png) | ![Twists from both sides](docs/screenshots/reader-twists-dark.png) |
+| ![Scene editor](docs/screenshots/ui-refresh/editor.png) | ![Scene details](docs/screenshots/ui-refresh/editor-details.png) |
+| ![Manuscript](docs/screenshots/ui-refresh/manuscript.png) | ![Story planning](docs/screenshots/ui-refresh/planning.png) |
+| ![Characters](docs/screenshots/ui-refresh/characters.png) | ![Reader report](docs/screenshots/ui-refresh/reader.png) |
+| ![Setups and payoffs](docs/screenshots/ui-refresh/ledger.png) | ![Settings](docs/screenshots/ui-refresh/settings.png) |
 
 ## CLI
 
