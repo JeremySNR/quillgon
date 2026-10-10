@@ -91,20 +91,22 @@ try {
   await page.evaluate(() => fetch('/api/init', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dir: '~/Novels/Glasshouse', title: 'The Glasshouse', target_words: 12000, offline: true }) }));
   await page.goto(`${base}/#/build`);
   await page.getByPlaceholder(/harbourmaster drowns/).fill('A glasshouse whose orchids are watered every night, though the house has been empty for a year.');
-  await page.getByRole('button', { name: 'Show me ideas' }).click();
-  await until(async () => (await page.locator('article.idea').count()) > 3, 'ideas');
-  await page.locator('article.idea').first().getByRole('button', { name: 'Keep' }).click();
-  await until(async () => (await page.getByRole('button', { name: /Kept · 1/ }).count()) === 1, 'one kept idea');
   const talk = page.getByLabel('Message the thinking partner');
   await talk.fill('It belongs to Ines Varga now. It should feel humid and hushed.');
   await talk.press('Enter');
   await page.locator('.cast-card', { hasText: 'Ines Varga' }).waitFor();
   const changes = await page.locator('.msg.partner .change').allTextContents();
+  // The seed was typed but not saved: talking saves it rather than filing the message as the seed.
+  if ((await api('/idea')).seed !== 'A glasshouse whose orchids are watered every night, though the house has been empty for a year.') throw new Error('typed seed was not saved before talking');
   if (!changes.includes('Tone written') || !changes.includes('Added Ines Varga') || !changes.some((c) => c.startsWith('Suggested:'))) throw new Error(`unexpected changes: ${changes}`);
   step('talked it through: the partner wrote the tone, added Ines to the cast and suggested an idea to sort');
   await page.locator('.msg.partner').last().getByRole('button', { name: 'Undo' }).click();
   await until(async () => (await page.locator('.cast-card', { hasText: 'Ines Varga' }).count()) === 0, 'undo to take Ines off the board');
   step('undid the turn: the board is back as it was');
+  await page.getByRole('button', { name: 'Show me ideas' }).click();
+  await until(async () => (await page.locator('article.idea').count()) > 3, 'ideas');
+  await page.locator('article.idea').first().getByRole('button', { name: 'Keep' }).click();
+  await until(async () => (await page.getByRole('button', { name: /Kept · 1/ }).count()) === 1, 'one kept idea');
   await page.locator('.rung').first().getByRole('button', { name: 'Draft options' }).click();
   await page.locator('.option-card').first().click();
   await page.getByRole('button', { name: 'Use this premise' }).click();

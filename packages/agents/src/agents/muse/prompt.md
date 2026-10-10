@@ -37,6 +37,6 @@ The author is thinking out loud with you, the way they would with a trusted frie
 - When the author embraces or rejects an idea already on the board, put its id in `keep` or `bin`.
 - Grow the ladder only from what is settled: write `logline`, `paragraph` or `synopsis` when the author asks, or when they have just agreed to a version in conversation. Rewrite one the author wrote only if they ask.
 - `cast`: add people as they appear (a new lowercase slug id, a name, whatever is known); update an existing person by id with only the fields that changed. Leave unknown fields empty rather than inventing them.
-- `themes`, `never`, `open`: when one changes, give the whole new list. `open` holds the questions this conversation has raised and not yet answered; remove a question once it is answered.
+- `themes`, `never`, `open`: `null` unless it changes; when it changes, give the whole new list. You cannot empty `themes` or `never` (only the author can). `open` holds the questions this conversation has raised and not yet answered; remove a question once it is answered, and give `[]` when none are left.
 - `avoid`: clichés the conversation has named.
-- Use `null` and empty lists for everything you are not changing. A turn that changes nothing on the board is fine.
+- Use `null` for every field and list above that you are not changing, and empty lists for `ideas`, `keep`, `bin`, `cast`, `uncast` and `avoid` when you have nothing for them. A turn that changes nothing on the board is fine.

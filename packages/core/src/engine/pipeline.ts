@@ -98,6 +98,8 @@ export class Pipeline {
     const out = await this.agents.interview({ premise, answers, known });
     const drafted = out.done && out.intent ? { ...out.intent } : null;
     if (drafted) for (const k of Object.keys(known) as (keyof typeof known)[]) if (!drafted[k]?.length) Object.assign(drafted, { [k]: known[k] });
+    // The notes carry the synopsis, kept ideas and open questions from the idea stage.
+    if (drafted && i.notes && !drafted.notes?.includes(i.notes)) drafted.notes = [i.notes, drafted.notes].filter(Boolean).join('\n\n');
     const state: InterviewState = {
       premise,
       answers,

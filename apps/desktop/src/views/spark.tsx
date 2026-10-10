@@ -85,6 +85,10 @@ export function IdeaStep({ job }: { job: any }) {
     composer.current?.focus();
   };
   const update = (patch: Partial<IdeaBoard>) => post<IdeaBoard>('/idea/update', { patch }).then(setBoard);
+  // A seed or genre typed but not yet used is saved before the partner reads the board.
+  const saveSpark = async () => {
+    if (seed !== board.seed || genre !== board.genre) setBoard(await post<IdeaBoard>('/idea/start', { seed, genre }));
+  };
 
   const act = async (what: string, fn: () => Promise<IdeaBoard>) => {
     setBusy(what);
@@ -356,7 +360,7 @@ export function IdeaStep({ job }: { job: any }) {
           </Empty>
         )}
       </div>
-      <TalkPanel board={board} onBoard={setBoard} focus={focus} setFocus={setFocus} inputRef={composer} />
+      <TalkPanel board={board} onBoard={setBoard} beforeSend={saveSpark} focus={focus} setFocus={setFocus} inputRef={composer} />
     </div>
   );
 }
@@ -370,7 +374,7 @@ const STARTERS = [
   { label: 'Help me find the ending', text: 'Help me find the ending.', needsSeed: true },
 ];
 
-function TalkPanel({ board, onBoard, focus, setFocus, inputRef }: { board: IdeaBoard; onBoard: (b: IdeaBoard) => void; focus: string | null; setFocus: (f: string | null) => void; inputRef: RefObject<HTMLTextAreaElement | null> }) {
+function TalkPanel({ board, onBoard, beforeSend, focus, setFocus, inputRef }: { board: IdeaBoard; onBoard: (b: IdeaBoard) => void; beforeSend: () => Promise<void>; focus: string | null; setFocus: (f: string | null) => void; inputRef: RefObject<HTMLTextAreaElement | null> }) {
   const { job: run } = useApp();
   const [text, setText] = useState('');
   const [pending, setPending] = useState<string | null>(null);
@@ -385,6 +389,7 @@ function TalkPanel({ board, onBoard, focus, setFocus, inputRef }: { board: IdeaB
     setPending(message);
     setText('');
     try {
+      await beforeSend();
       onBoard(await run<IdeaBoard>('/idea/talk', { message, focus }, 'Thinking partner'));
       setFocus(null);
     } catch {
@@ -527,26 +532,47 @@ function FieldHead({ label, onTalk }: { label: string; onTalk: () => void }) {
 /** A settled text field: saved when you click away, and kept in step with the partner's edits. */
 function SettledText({ value, placeholder, onSave }: { value: string; placeholder: string; onSave: (t: string) => void }) {
   const [text, setText] = useState(value);
-  useEffect(() => setText(value), [value]);
-  return <textarea className="textarea" rows={2} value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} onBlur={() => text.trim() !== value && onSave(text.trim())} />;
+  // While focused, a reply writing this field does not replace what is being typed; on blur
+  // the author's text is saved only if they changed it, otherwise the reply's value shows.
+  const editing = useRef<string | null>(null);
+  useEffect(() => {
+    if (editing.current === null) setText(value);
+  }, [value]);
+  return (
+    <textarea
+      className="textarea"
+      rows={2}
+      value={text}
+      placeholder={placeholder}
+      onChange={(e) => setText(e.target.value)}
+      onFocus={() => (editing.current = text)}
+      onBlur={() => {
+        const changed = text.trim() !== editing.current?.trim();
+        editing.current = null;
+        if (changed && text.trim() !== value) onSave(text.trim());
+        else if (!changed) setText(value);
+      }}
+    />
+  );
 }
 
 /** A settled list: edited locally, saved when focus leaves it, so typing never races a save. */
 function SettledList({ items, placeholder, onSave }: { items: string[]; placeholder: string; onSave: (v: string[]) => void }) {
   const [local, setLocal] = useState(items);
-  const editing = useRef(false);
+  const editing = useRef<string[] | null>(null);
   useEffect(() => {
-    if (!editing.current) setLocal(items);
+    if (editing.current === null) setLocal(items);
   }, [items]);
   return (
     <div
-      onFocus={() => (editing.current = true)}
+      onFocus={() => (editing.current ??= local)}
       onBlur={(e) => {
         if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
-        editing.current = false;
         const clean = local.map((x) => x.trim()).filter(Boolean);
-        if (clean.join('\n') !== items.join('\n')) onSave(clean);
-        else setLocal(items);
+        const changed = clean.join('\n') !== (editing.current ?? []).map((x) => x.trim()).filter(Boolean).join('\n');
+        editing.current = null;
+        if (changed && clean.join('\n') !== items.join('\n')) onSave(clean);
+        else if (!changed) setLocal(items);
       }}
     >
       <ListEditor items={local} onChange={setLocal} numbered={false} placeholder={placeholder} />

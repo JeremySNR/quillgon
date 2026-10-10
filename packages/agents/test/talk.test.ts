@@ -84,6 +84,13 @@ describe('talking it through: applying a turn to the board', () => {
     const { changes } = applyTalk(board, reply({ set: { seed: board.seed, genre: null, logline: ` ${board.logline} `, paragraph: null, synopsis: null, tone: null, ending: null }, themes: [] }));
     expect(changes).toEqual([]);
   });
+
+  it("an empty list never wipes the author's themes or never-rules, but can clear open questions", () => {
+    const settled = { ...board, themes: ['inheritance'], never: ['Never explain the watering'], open: ['Who pays the water bill?'] };
+    const { board: b, changes } = applyTalk(settled, reply({ themes: [], never: [], open: [] }));
+    expect(b).toMatchObject({ themes: ['inheritance'], never: ['Never explain the watering'], open: [] });
+    expect(changes.map((c) => c.label)).toEqual(['Still open updated']);
+  });
 });
 
 describe('talking it through: the conversation', () => {
@@ -147,8 +154,9 @@ describe('talking it through: the conversation', () => {
     expect(store.project.intent.notes).toMatch(/Still open:\n- Who pays the water bill\?/);
     const state = await engine.pipeline.interview(store.project.intent.premise);
     expect((agents.calls.find((c) => c.method === 'interview')!.input as any).known).toEqual({ themes: ['inheritance'], tone: 'Hushed', ending_type: 'She keeps it and never learns who.', hard_rules: ['Never explain the watering'] });
-    // The interviewer left them out of its draft; they survive anyway.
+    // The interviewer left them, and the notes, out of its draft; they survive anyway.
     expect(state.intent).toMatchObject({ premise: 'P', tone: 'Hushed', themes: ['inheritance'], hard_rules: ['Never explain the watering'] });
+    expect(state.intent!.notes).toMatch(/Still open:\n- Who pays the water bill\?/);
   });
 
   it('the update route only touches the settled fields', async () => {
