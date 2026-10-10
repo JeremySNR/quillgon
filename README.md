@@ -8,6 +8,8 @@ A local desktop tool that generates full-length novels while you stay in charge 
 
 ![Quillgon writing desk](docs/screenshots/ui-refresh/desk-light.png)
 
+The public website lives in [`apps/site`](apps/site/README.md) and deploys independently from the local writing application.
+
 ## Quick start
 
 ```bash
