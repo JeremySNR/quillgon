@@ -138,7 +138,7 @@ export function IdeaStep({ job }: { job: any }) {
               I already have a premise
             </Button>
           </div>
-          <div className="grid-2" style={{ gridTemplateColumns: '1fr 220px' }}>
+          <div className={cx('grid-2', lit('seed', 'genre'))} style={{ gridTemplateColumns: '1fr 220px' }}>
             <Field label="Seed" hint="A line, an image, a what-if, a person. Unfinished is good. Or just start talking.">
               <textarea className="textarea prose" rows={3} value={seed} onChange={(e) => setSeed(e.target.value)} placeholder="A harbourmaster drowns on a flat-calm night, and his tide ledger records a storm." />
             </Field>
