@@ -8,7 +8,7 @@ Quillgon is an early-stage, local novel-writing workspace for planning, drafting
 
 ![Quillgon writing desk](docs/screenshots/ui-refresh/desk-light.png)
 
-[Website and writing guides](https://quillgon.vercel.app) · [Get started](https://quillgon.vercel.app/get-started/) · [Report a problem or suggest a feature](https://github.com/JeremySNR/quillgon/issues)
+[Website and writing guides](https://quillgon.vercel.app) · [Download source preview](https://github.com/JeremySNR/quillgon/releases/tag/v0.1.0-alpha.1) · [Get started](https://quillgon.vercel.app/get-started/) · [Report a problem or suggest a feature](https://github.com/JeremySNR/quillgon/issues)
 
 The sample novella and offline workflows are tested. Offline generation uses placeholder text; a complete 80,000-word novel with live models has not yet been validated. Quillgon currently runs from source, with no packaged installers. The website source lives in [`apps/site`](apps/site/README.md).
 
