@@ -322,7 +322,7 @@ export class NovelServer {
         const dir = path.join(os.homedir(), 'Novels', 'The-Tidekeepers-Ledger');
         if (!fs.existsSync(path.join(dir, paths.book))) {
           const here = path.dirname(fileURLToPath(import.meta.url));
-          const fixture = path.resolve(here, '../../../fixtures/novella');
+          const fixture = process.env.QUILLGON_FIXTURE_DIR || path.resolve(here, '../../../fixtures/novella');
           fs.mkdirSync(path.dirname(dir), { recursive: true });
           fs.cpSync(fixture, dir, { recursive: true, filter: (src) => !src.includes(`${path.sep}.engine`) });
           const store = GraphStore.open(dir, { noIndex: true });
