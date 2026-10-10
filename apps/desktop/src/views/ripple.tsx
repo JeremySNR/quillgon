@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, CircleSlash, Eye, Lock, LockOpen, PenLine, RotateCcw, Undo2, Waves, X, Wand2, Play, Plus, AlertTriangle, CheckCircle2, Hourglass } from 'lucide-react';
 import { get, post } from '../lib/api';
 import { useApp } from '../lib/app';
@@ -7,6 +7,8 @@ import { ago, cx, factLabel, firstName, plural } from '../lib/util';
 import { Badge, Button, Dialog, Empty, Field, Kbd, ListEditor, Working } from '../components/ui';
 import { CardDiff, ProseDiff, ProseSideBySide } from '../components/diff';
 import { BlastRadius } from '../components/blast-radius';
+import { useConfirm } from '../components/confirm';
+import { ignoreShortcut, openLayers } from '../lib/layers';
 
 const STATUS: Record<string, { label: string; kind?: 'success' | 'warning' | 'danger' | 'info' | 'accent' | 'outline' }> = {
   pending: { label: 'To review', kind: 'outline' },
@@ -27,7 +29,8 @@ function severity(it: RippleItem): string {
 }
 
 export function RippleReview() {
-  const { project: p, go, toast, refresh, jobs } = useApp();
+  const { project: p, go, toast, refresh, jobs, fail } = useApp();
+  const confirm = useConfirm();
   const [data, setData] = useState<RippleData | null | undefined>(undefined);
   const [sel, setSel] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -41,8 +44,8 @@ export function RippleReview() {
     if (!d) setPast(await get('/ripples'));
   }, []);
   useEffect(() => {
-    load();
-  }, [load, p?.ripple?.round]);
+    load().catch(fail('Could not load the ripple'));
+  }, [load, fail, p?.ripple?.round]);
 
   const round = data?.rounds[data.rounds.length - 1];
   const items = round?.items ?? [];
@@ -59,13 +62,14 @@ export function RippleReview() {
         if (d) setData(d);
         else await load();
       } catch (e) {
-        toast({ kind: 'error', message: `${label} failed`, detail: (e as Error).message });
+        // Jobs have already reported their own failure; fail() skips those.
+        fail(`${label} failed`)(e);
       } finally {
         setBusy(null);
         refresh();
       }
     },
-    [load, refresh, toast],
+    [load, refresh, fail],
   );
   const { job: runJob } = useApp();
 
@@ -105,10 +109,15 @@ export function RippleReview() {
     return out;
   }, [items]);
 
-  // keyboard review: j/k move, a/r decide, shift+enter applies
+  // keyboard review: j/k move, a/r decide, shift+enter applies. The listener is attached once
+  // and reads the latest state through a ref.
+  const keyState = { items, sel, item, busy, editing, blockers, accept, acceptProse, reject, rejectProse, apply };
+  const latest = useRef(keyState);
+  latest.current = keyState;
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest('input, textarea, select, [contenteditable]') || e.metaKey || e.ctrlKey || busy || editing) return;
+      const { items, sel, item, busy, editing, blockers, accept, acceptProse, reject, rejectProse, apply } = latest.current;
+      if (ignoreShortcut(e.target) || e.metaKey || e.ctrlKey || e.altKey || busy || editing || openLayers() > 0) return;
       const i = items.findIndex((x) => x.scene === sel);
       if (e.key === 'j' || e.key === 'ArrowDown') (e.preventDefault(), setSel(items[Math.min(items.length - 1, i + 1)]?.scene ?? sel));
       else if (e.key === 'k' || e.key === 'ArrowUp') (e.preventDefault(), setSel(items[Math.max(0, i - 1)]?.scene ?? sel));
@@ -122,7 +131,27 @@ export function RippleReview() {
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  });
+  }, []);
+
+  // Roving focus: when the selection moves by keyboard inside the list, focus follows it.
+  const list = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const root = list.current;
+    if (!sel || !root || !root.contains(document.activeElement)) return;
+    root.querySelector<HTMLElement>(`[data-scene="${CSS.escape(sel)}"]`)?.focus();
+  }, [sel]);
+
+  const revertRipple = async (id?: string) => {
+    const ok = await confirm({
+      title: id ? 'Revert this ripple?' : 'Revert everything?',
+      message: id ? 'Every change this ripple made is undone, including the original edit. A new commit records the revert; nothing is lost.' : 'The original change and everything this ripple applied are undone. A new commit records the revert; nothing is lost.',
+      confirmLabel: 'Revert',
+      danger: true,
+    });
+    if (!ok) return;
+    if (id) await runJob('/ripple/revert', { id }, 'Revert').then(load, () => undefined);
+    else await act('Revert', () => runJob('/ripple/revert', {}, 'Revert'));
+  };
 
   if (!p) return null;
   if (data === undefined) return <div className="page"><div className="page-inner"><div className="skeleton" style={{ height: 400 }} /></div></div>;
@@ -150,7 +179,7 @@ export function RippleReview() {
                       </div>
                     </span>
                     {r.state === 'done' && (
-                      <Button size="sm" variant="ghost" icon={<RotateCcw />} onClick={() => confirm('Revert every change this ripple made, including the original edit?') && runJob('/ripple/revert', { id: r.id }, 'Revert').then(load)}>
+                      <Button size="sm" variant="ghost" icon={<RotateCcw />} onClick={() => void revertRipple(r.id)}>
                         Revert
                       </Button>
                     )}
@@ -246,7 +275,7 @@ export function RippleReview() {
         )}
         <span className="grow" />
         <div className="stack" style={{ gap: 6 }}>
-          <Button variant="ghost" size="sm" icon={<RotateCcw />} onClick={() => confirm('Revert the original change and everything this ripple applied?') && act('Revert', () => runJob('/ripple/revert', {}, 'Revert'))}>
+          <Button variant="ghost" size="sm" icon={<RotateCcw />} onClick={() => void revertRipple()}>
             Revert everything
           </Button>
           <Button variant="ghost" size="sm" icon={<X />} onClick={() => act('Abandon', () => post('/ripple/abandon').then(() => undefined))}>
@@ -256,7 +285,7 @@ export function RippleReview() {
       </section>
 
       {/* ------------------------------------------------ affected */}
-      <section className="affected" aria-label="Affected scenes" role="listbox">
+      <section className="affected" aria-label="Affected scenes" role="listbox" ref={list}>
         <div className="row" style={{ padding: '6px 12px 10px', justifyContent: 'space-between' }}>
           <span className="label">{plural(items.length, 'affected scene')}</span>
           <span className="faint" style={{ fontSize: 'var(--fs-caption)' }}>
@@ -264,7 +293,7 @@ export function RippleReview() {
           </span>
         </div>
         {items.map((it) => (
-          <button key={it.scene} className="affected-item" role="option" aria-selected={it.scene === sel} onClick={() => setSel(it.scene)}>
+          <button key={it.scene} className="affected-item" role="option" aria-selected={it.scene === sel} tabIndex={it.scene === sel ? 0 : -1} data-scene={it.scene} onClick={() => setSel(it.scene)}>
             <span className="sev" style={{ background: severity(it) }} />
             <span style={{ minWidth: 0 }}>
               <div className="t">

@@ -1,9 +1,11 @@
-import { useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { Children, cloneElement, isValidElement, useId, useRef, type ButtonHTMLAttributes, type ReactElement, type ReactNode, type Ref } from 'react';
 import { Check, CircleDashed, Lock, Plus, X } from 'lucide-react';
 import { cx, hue } from '../lib/util';
 import type { Job, SyncState } from '../lib/types';
+import { useEscape, useFocusTrap } from '../lib/layers';
 
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  ref?: Ref<HTMLButtonElement>;
   variant?: 'primary' | 'ghost' | 'danger' | 'success' | 'default';
   size?: 'sm' | 'lg';
   icon?: ReactNode;
@@ -147,57 +149,76 @@ const STAGES: Record<string, string> = {
 export const stageName = (stage: string, name?: string) => STAGES[stage] ?? STAGES[name ?? ''] ?? stage;
 
 export function Dialog({ title, onClose, children, footer, wide }: { title: ReactNode; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
-  useEscape(onClose);
   return (
-    <>
-      <div className="scrim" onClick={onClose} />
-      <div className={cx('dialog', wide && 'wide')} role="dialog" aria-modal="true">
-        <div className="dialog-head">
-          <h2>{title}</h2>
-          <span className="grow" />
-          <Button variant="ghost" iconOnly icon={<X />} tip="Close" kbd="Esc" onClick={onClose} />
-        </div>
-        <div className="dialog-body">{children}</div>
-        {footer && <div className="dialog-foot">{footer}</div>}
-      </div>
-    </>
+    <Layer kind="dialog" title={title} onClose={onClose} footer={footer} className={cx('dialog', wide && 'wide')}>
+      {children}
+    </Layer>
   );
 }
 
 export function Drawer({ title, onClose, children, footer }: { title: ReactNode; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
+  return (
+    <Layer kind="drawer" title={title} onClose={onClose} footer={footer} className="drawer">
+      {children}
+    </Layer>
+  );
+}
+
+/** A modal layer: closes on Escape only when topmost, traps focus, and restores it on close. */
+function Layer({ kind, title, onClose, children, footer, className }: { kind: 'dialog' | 'drawer'; title: ReactNode; onClose: () => void; children: ReactNode; footer?: ReactNode; className: string }) {
   useEscape(onClose);
+  const ref = useRef<HTMLElement>(null);
+  useFocusTrap(ref);
+  const titleId = useId();
+  const Tag = kind === 'drawer' ? 'aside' : 'div';
   return (
     <>
       <div className="scrim" onClick={onClose} />
-      <aside className="drawer" role="dialog" aria-modal="true">
+      <Tag ref={ref as React.RefObject<HTMLDivElement>} className={className} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
         <div className="dialog-head">
-          <h2>{title}</h2>
+          <h2 id={titleId}>{title}</h2>
           <span className="grow" />
           <Button variant="ghost" iconOnly icon={<X />} tip="Close" kbd="Esc" onClick={onClose} />
         </div>
         <div className="dialog-body">{children}</div>
         {footer && <div className="dialog-foot">{footer}</div>}
-      </aside>
+      </Tag>
     </>
   );
 }
 
-export function useEscape(fn: () => void) {
-  const ref = useRef(fn);
-  ref.current = fn;
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => e.key === 'Escape' && ref.current();
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, []);
-}
+export { useEscape };
 
+const NATIVE_CONTROLS = new Set(['input', 'select', 'textarea']);
+
+/**
+ * A labelled form field. A single native control child is linked to the label with htmlFor;
+ * anything else (list editors, tag pickers, segmented buttons) becomes a group named by the label.
+ */
 export function Field({ label, hint, children }: { label: ReactNode; hint?: ReactNode; children: ReactNode }) {
+  const id = useId();
+  const labelId = `${id}-label`;
+  const hintId = hint ? `${id}-hint` : undefined;
+  const only = Children.count(children) === 1 && isValidElement(children) ? (children as ReactElement<Record<string, unknown>>) : null;
+  const native = only && typeof only.type === 'string' && NATIVE_CONTROLS.has(only.type) ? only : null;
+  if (native) {
+    const controlId = (native.props.id as string | undefined) ?? id;
+    const describedBy = [native.props['aria-describedby'] as string | undefined, hintId].filter(Boolean).join(' ') || undefined;
+    return (
+      <div className="field">
+        <label id={labelId} htmlFor={controlId}>
+          {label}
+        </label>
+        {cloneElement(native, { id: controlId, 'aria-describedby': describedBy })}
+        {hint && <span className="hint" id={hintId}>{hint}</span>}
+      </div>
+    );
+  }
   return (
-    <div className="field">
-      <label>{label}</label>
+    <div className="field" role="group" aria-labelledby={labelId} aria-describedby={hintId}>
+      <label id={labelId}>{label}</label>
       {children}
-      {hint && <span className="hint">{hint}</span>}
+      {hint && <span className="hint" id={hintId}>{hint}</span>}
     </div>
   );
 }

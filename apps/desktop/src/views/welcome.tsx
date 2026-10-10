@@ -6,7 +6,7 @@ import { ago } from '../lib/util';
 import { Button, Field } from '../components/ui';
 
 export function Welcome() {
-  const { refresh, toast, go } = useApp();
+  const { refresh, toast, go, fail } = useApp();
   const [recent, setRecent] = useState<{ dir: string; title: string; opened: string }[]>([]);
   const [title, setTitle] = useState('');
   const [dir, setDir] = useState('');
@@ -16,7 +16,7 @@ export function Welcome() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    get('/health').then((h) => setRecent(h.recent ?? []));
+    get('/health').then((h) => setRecent(h.recent ?? []), fail('Could not reach the Quillgon server'));
   }, []);
 
   const open = async (d: string) => {
@@ -50,12 +50,14 @@ export function Welcome() {
       await post('/open-sample');
       go('dashboard');
       await refresh();
+    } catch (e) {
+      toast({ kind: 'error', message: 'Could not open the sample', detail: (e as Error).message });
     } finally {
       setBusy(false);
     }
   };
   const choose = async () => {
-    const d = await window.quillgon?.chooseFolder?.();
+    const d = await window.quillgon?.chooseFolder?.().catch(fail('Could not choose a folder'));
     if (d) open(d);
   };
 

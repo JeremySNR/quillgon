@@ -6,6 +6,7 @@ import type { Commit } from '../lib/types';
 import { ago, cx } from '../lib/util';
 import { Button, Empty } from '../components/ui';
 import { ProseDiff } from '../components/diff';
+import { useConfirm } from '../components/confirm';
 
 interface Compare {
   a: string;
@@ -17,7 +18,8 @@ interface Compare {
 const body = (md: string | null) => (md ?? '').replace(/^---[\s\S]*?---\s*/, '');
 
 export function HistoryView({ id }: { id?: string }) {
-  const { project: p, job, toast, go } = useApp();
+  const { project: p, job, toast, go, fail } = useApp();
+  const confirm = useConfirm();
   const [log, setLog] = useState<Commit[]>([]);
   const [sel, setSel] = useState<string | null>(null);
   const [patch, setPatch] = useState<{ files: string[]; patch: string } | null>(null);
@@ -28,21 +30,26 @@ export function HistoryView({ id }: { id?: string }) {
     get<Commit[]>('/history?limit=200').then((l) => {
       setLog(l);
       if (!compareBranch) setSel(id && l.some((c) => c.hash === id) ? id : (l[0]?.hash ?? null));
-    });
+    }, fail('Could not load the history'));
   }, [p?.totals.words, p?.ripple?.round, id]);
   useEffect(() => {
-    if (sel) get(`/history/${sel}`).then(setPatch);
+    if (sel) get(`/history/${sel}`).then(setPatch, fail('Could not load that change'));
   }, [sel]);
   useEffect(() => {
-    if (compareBranch) get<Compare>(`/branches/compare?a=main&b=${encodeURIComponent(compareBranch)}`).then(setCmp);
+    if (compareBranch) get<Compare>(`/branches/compare?a=main&b=${encodeURIComponent(compareBranch)}`).then(setCmp, fail('Could not compare the what-if'));
     else setCmp(null);
   }, [compareBranch]);
 
   if (!p) return null;
   const revert = async (hash: string) => {
-    if (!confirm('Revert this change? A new commit undoes it; nothing is lost.')) return;
-    await job('/history/revert', { hash }, 'Revert');
-    toast({ kind: 'success', message: 'Change reverted' });
+    const ok = await confirm({ title: 'Revert this change?', message: 'A new commit undoes it; nothing is lost.', confirmLabel: 'Revert', danger: true });
+    if (!ok) return;
+    try {
+      await job('/history/revert', { hash }, 'Revert');
+      toast({ kind: 'success', message: 'Change reverted' });
+    } catch {
+      // job() has already reported it
+    }
   };
 
   return (

@@ -32,6 +32,7 @@
     "@quillgon/core": "workspace:*",
     "@quillgon/server": "workspace:*",
     "@types/node": "^22.10.0",
+    "happy-dom": "^20.14.6",
     "playwright-core": "^1.64.0",
     "tsx": "^4.19.0",
     "typescript": "^5.9.0",
