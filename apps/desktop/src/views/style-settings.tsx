@@ -5,39 +5,60 @@ import { useApp } from '../lib/app';
 import type { Fingerprint, RuleSuggestion, StyleSheet } from '../lib/types';
 import { cx, plural } from '../lib/util';
 import { Badge, Button, Field, ListEditor, Segmented } from '../components/ui';
+import { useDraft } from '../hooks/use-draft';
+import { useUnsavedChanges } from '../lib/unsaved';
 
 /**
  * The style sheet as dials. Enforced rules are checked by code on every word after every
  * write and repaired before the draft reaches you; guided ones are measured and nudged.
  */
 export function StyleSettings() {
-  const { project: p, toast, refresh, markSaved } = useApp();
-  const [sheet, setSheet] = useState<StyleSheet>(p!.style.sheet);
-  const [samples, setSamples] = useState(p!.style.samples);
-  const [banned, setBanned] = useState(p!.style.banned);
+  const { project: p, toast, refresh, markSaved, fail } = useApp();
+  // Drafts follow the server copy only while untouched, so a refresh never wipes edits.
+  const sheetDraft = useDraft<StyleSheet>(p!.style.sheet);
+  const samplesDraft = useDraft(p!.style.samples);
+  const bannedDraft = useDraft(p!.style.banned);
+  const { value: sheet, set: setSheet, dirty } = sheetDraft;
+  const { value: samples, set: setSamples } = samplesDraft;
+  const { value: banned, set: setBanned } = bannedDraft;
+  useUnsavedChanges(dirty, 'style dials');
+  useUnsavedChanges(samplesDraft.dirty || bannedDraft.dirty, 'voice samples and banned patterns');
   const [fit, setFit] = useState<{ fingerprint: Fingerprint; suggested: StyleSheet } | null>(null);
   const [learned, setLearned] = useState<{ edits: number; suggestions: RuleSuggestion[] } | null>(null);
-  useEffect(() => setSheet(p!.style.sheet), [p!.style.sheet]);
   useEffect(() => {
     get('/style/suggestions').then(setLearned).catch(() => undefined);
   }, [p?.style.sheet]);
 
-  const dirty = JSON.stringify(sheet) !== JSON.stringify(p!.style.sheet);
-  const set = <K extends keyof StyleSheet>(k: K, v: StyleSheet[K]) => setSheet({ ...sheet, [k]: v });
+  const set = <K extends keyof StyleSheet>(k: K, v: StyleSheet[K]) => setSheet((cur) => ({ ...cur, [k]: v }));
   const saveSheet = async (next = sheet, msg = 'Style dials saved') => {
-    await put('/style/sheet', { sheet: next });
+    try {
+      // Keep the server's normalised copy so the draft is clean once the refresh lands.
+      setSheet(await put<StyleSheet>('/style/sheet', { sheet: next }));
+    } catch (e) {
+      toast({ kind: 'error', message: 'Style dials not saved', detail: (e as Error).message });
+      return;
+    }
     markSaved();
     toast({ kind: 'success', message: msg, detail: 'Every scene written from now on is checked against them.' });
     refresh();
   };
-  const fitSamples = async () => setFit(await post('/style/fingerprint', { text: samples }));
+  const fitSamples = () => post('/style/fingerprint', { text: samples }).then(setFit, fail('Could not measure the samples'));
   const checkAll = async () => {
-    const r = await post<Record<string, { enforced: number; guided: number }>>('/style/check-all');
-    const scenes = Object.values(r);
-    const bad = scenes.filter((s) => s.enforced).length;
-    toast({ kind: bad ? 'warning' : 'success', message: bad ? `${plural(bad, 'scene')} break a rule` : `All ${plural(scenes.length, 'scene')} hold to the sheet`, detail: bad ? 'They are flagged on the dashboard and underlined in the editor.' : undefined });
-    refresh();
+    try {
+      const r = await post<Record<string, { enforced: number; guided: number }>>('/style/check-all');
+      const scenes = Object.values(r);
+      const bad = scenes.filter((s) => s.enforced).length;
+      toast({ kind: bad ? 'warning' : 'success', message: bad ? `${plural(bad, 'scene')} break a rule` : `All ${plural(scenes.length, 'scene')} hold to the sheet`, detail: bad ? 'They are flagged on the dashboard and underlined in the editor.' : undefined });
+      refresh();
+    } catch (e) {
+      fail('Could not check the book')(e);
+    }
   };
+  const decide = (action: 'dismiss' | 'accept', id: string) =>
+    post(`/style/suggestions/${action}`, { id }).then((r) => {
+      setLearned((cur) => (cur ? { ...cur, ...r } : cur));
+      if (action === 'accept') refresh();
+    }, fail(action === 'accept' ? 'Could not add the rule' : 'Could not dismiss the suggestion'));
 
   return (
     <div className="stack lg">
@@ -122,7 +143,7 @@ export function StyleSettings() {
             Save dials
           </Button>
           {dirty && (
-            <Button variant="ghost" onClick={() => setSheet(p!.style.sheet)}>
+            <Button variant="ghost" onClick={sheetDraft.reset}>
               Discard
             </Button>
           )}
@@ -146,8 +167,8 @@ export function StyleSettings() {
                     <div className="primary-text">{s.title}</div>
                     <div className="secondary-text">{s.evidence}</div>
                   </span>
-                  <Button size="sm" variant="ghost" iconOnly icon={<X />} tip="Not a rule" onClick={async () => setLearned({ ...learned, ...(await post('/style/suggestions/dismiss', { id: s.id })) })} />
-                  <Button size="sm" variant="success" icon={<Plus />} onClick={async () => (setLearned({ ...learned, ...(await post('/style/suggestions/accept', { id: s.id })) }), refresh())}>
+                  <Button size="sm" variant="ghost" iconOnly icon={<X />} tip="Not a rule" onClick={() => decide('dismiss', s.id)} />
+                  <Button size="sm" variant="success" icon={<Plus />} onClick={() => decide('accept', s.id)}>
                     Add rule
                   </Button>
                 </div>
@@ -182,7 +203,12 @@ export function StyleSettings() {
           variant="primary"
           icon={<Check />}
           onClick={async () => {
-            await put('/style', { samples, banned });
+            try {
+              await put('/style', { samples, banned });
+            } catch (e) {
+              toast({ kind: 'error', message: 'Samples and patterns not saved', detail: (e as Error).message });
+              return;
+            }
             markSaved();
             toast({ kind: 'success', message: 'Samples and patterns saved' });
             refresh();

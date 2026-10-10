@@ -19,9 +19,9 @@ interface PipelineState {
 }
 
 export function Build({ step }: { step?: string }) {
-  const { project: p, go, jobs } = useApp();
+  const { project: p, go, jobs, fail } = useApp();
   const [state, setState] = useState<PipelineState | null>(null);
-  const load = () => get<PipelineState>('/pipeline').then(setState);
+  const load = () => get<PipelineState>('/pipeline').then(setState, fail('Could not load the planning state'));
   useEffect(() => {
     load();
   }, [p?.book.stage, p?.plotPoints.length, p?.structure]);
@@ -80,7 +80,12 @@ function IntentStep({ state, reload, job }: { state: PipelineState | null; reloa
     }
   };
   const approve = async () => {
-    await post('/pipeline/approve-intent', { intent: draft });
+    try {
+      await post('/pipeline/approve-intent', { intent: draft });
+    } catch (e) {
+      toast({ kind: 'error', message: 'Intent not approved', detail: (e as Error).message });
+      return;
+    }
     toast({ kind: 'success', message: 'Intent approved', detail: 'Every agent reads it, and its hard rules, on every call.' });
     await refresh();
     go('build', 'plot-points');

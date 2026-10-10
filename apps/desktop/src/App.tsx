@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { AppProvider, useApp } from './lib/app';
+import { DialogsProvider } from './components/confirm';
 import { CommandPalette, Sidebar, StatusBar, Toasts, TopBar, useRail, useShortcuts } from './components/shell';
 import { Welcome } from './views/welcome';
 import { Dashboard } from './views/dashboard';
@@ -77,8 +78,10 @@ function Shell() {
 
 export function App() {
   return (
-    <AppProvider>
-      <Shell />
-    </AppProvider>
+    <DialogsProvider>
+      <AppProvider>
+        <Shell />
+      </AppProvider>
+    </DialogsProvider>
   );
 }
