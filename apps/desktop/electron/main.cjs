@@ -207,14 +207,6 @@ app.on('web-contents-created', (_e, contents) => {
     if (!sameOrigin(url)) e.preventDefault();
   });
   contents.on('will-attach-webview', (e) => e.preventDefault());
-  // The UI blocks unload while a save is pending or failed; Electron would otherwise cancel
-  // the close silently. Ask, as a browser would.
-  contents.on('will-prevent-unload', (e) => {
-    const owner = BrowserWindow.fromWebContents(contents);
-    const options = { type: 'warning', buttons: ['Leave without saving', 'Stay'], defaultId: 1, cancelId: 1, title: 'Quillgon', message: 'Some changes are not saved yet.', detail: 'If you leave now, they will be lost.' };
-    const choice = owner ? dialog.showMessageBoxSync(owner, options) : dialog.showMessageBoxSync(options);
-    if (choice === 0) e.preventDefault(); // preventDefault here lets the unload go ahead
-  });
 });
 
 // IPC is only answered for the app's own pages.
