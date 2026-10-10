@@ -1,23 +1,32 @@
 # Quillgon
 
-*Quill, plus a certain Jedi who trusted the living Force over the plan: the plan here is the story graph, and it's yours to change.*
+**A whole novel. Still your story.**
 
-A local desktop tool that generates full-length novels while you stay in charge of the story. You set the intent, pin plot points, choose between alternatives and edit anything. Every change ripples through the rest of the book, and nothing changes until you've reviewed it.
+Quillgon is an early-stage, local novel-writing workspace for planning, drafting, and revising with AI. You set the intent, pin plot points, choose between alternatives, and edit anything. It tracks how changes affect scenes, character knowledge, and unresolved threads, then lets you review proposed revisions.
 
 **The story graph is the source; prose is compiled output.** Intent, plot points, threads, character state and scene cards define what is true. Prose is generated from them and can be edited, but every prose edit is read back into the graph so the two never drift.
 
 ![Quillgon writing desk](docs/screenshots/ui-refresh/desk-light.png)
 
-Visit the [Quillgon website](https://quillgon.vercel.app) for an introduction, writing guides, and setup instructions. Its source lives in [`apps/site`](apps/site/README.md) and deploys independently from the local writing application.
+[Website and writing guides](https://quillgon.vercel.app) · [Get started](https://quillgon.vercel.app/get-started/) · [Report a problem or suggest a feature](https://github.com/JeremySNR/quillgon/issues)
+
+The sample novella and offline workflows are tested. Offline generation uses placeholder text; a complete 80,000-word novel with live models has not yet been validated. Quillgon currently runs from source, with no packaged installers. The website source lives in [`apps/site`](apps/site/README.md).
+
+Quillgon is available under the [MIT license](LICENSE). Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Quick start
 
+You need **Node.js 22 or newer**, **pnpm 10**, and **Git**. Clone the repository, then run:
+
 ```bash
+git clone https://github.com/JeremySNR/quillgon.git
+cd quillgon
 pnpm install
 pnpm build          # build the UI
 pnpm serve          # http://127.0.0.1:4317, then "Open the sample novella"
-pnpm desktop        # or run it as an Electron app
 ```
+
+For the Electron shell, stop the server and run `pnpm desktop`. It also requires Node.js on your `PATH`. The app stores books in local Markdown and YAML files; connected AI providers receive relevant story context when you use generation or analysis.
 
 The app works with no API key: choose **Offline** models when you create a book (or set `QUILLGON_OFFLINE=1`). Offline output is placeholder text, but every screen and workflow works.
 

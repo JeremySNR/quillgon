@@ -41,7 +41,7 @@ The app-level `vercel.json` supplies the build settings and static response head
 
 The primary audience is novelists comfortable trying an early project from source, especially those who want AI help while keeping control over story logic and revisions. The central message is **“A whole novel. Still your story.”** The supporting distinction is connected story state, character knowledge, setups and payoffs, and reviewed ripple changes.
 
-Avoid implying a finished consumer service, available binary installers, proven 80k-word generation, guaranteed continuity, or fully on-device AI. The repository currently has no license file, so do not call it open source without deciding and adding a license first. Do not add fabricated reviews, usage counts, or software ratings to structured data.
+Avoid implying a finished consumer service, available binary installers, proven 80k-word generation, guaranteed continuity, or fully on-device AI. The repository uses the MIT license. Do not add fabricated reviews, usage counts, or software ratings to structured data.
 
 Search intent maps to real pages:
 
