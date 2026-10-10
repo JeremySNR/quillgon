@@ -17,6 +17,7 @@
     "serve": "tsx packages/cli/src/main.ts serve",
     "build": "pnpm -C apps/desktop build",
     "desktop": "pnpm -C apps/desktop electron",
+    "dist": "pnpm -C apps/desktop dist",
     "fixture": "tsx scripts/build-fixture.ts",
     "e2e": "pnpm build && tsx scripts/e2e-ui.ts",
     "screenshots": "pnpm build && tsx scripts/screenshots.ts",
