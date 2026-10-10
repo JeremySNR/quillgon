@@ -37,6 +37,12 @@ beforeAll(async () => {
 afterAll(() => server.close());
 
 describe('server API', () => {
+  it('lists covers offline and blocks generation before starting a paid job', async () => {
+    expect(await api('GET', '/api/covers')).toMatchObject({ ready: false, covers: [] });
+    await expect(api('POST', '/api/covers/generate', {})).rejects.toMatchObject({ status: 409 });
+    await expect(api('POST', '/api/covers/generate', { style: 'invalid' })).rejects.toMatchObject({ status: 422 });
+    await expect(api('GET', '/api/covers/not-a-cover/image')).rejects.toMatchObject({ status: 404 });
+  });
   it('serves the project snapshot', async () => {
     const p = await api('GET', '/api/project');
     expect(p.book.title).toBe("The Tidekeeper's Ledger");

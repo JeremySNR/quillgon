@@ -94,8 +94,28 @@ A style sheet of dials checks **every word** against your rules as you type. Det
 </td>
 <td width="33%" valign="top">
 
+### 🎨 Covers from your story
+Generate a **front cover from the book itself**: its genre, characters, places and opening scenes. Choose an art medium, keep every version, and check how it reads as a thumbnail.
+
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
+
 ### 🔒 Local and open
 Your book is a **git repo of Markdown and YAML** on your own machine. Edit it in any editor and the app reloads. Works with OpenAI, your Codex subscription, Anthropic, or fully offline.
+
+</td>
+<td width="33%" valign="top">
+
+### 🌿 What-if branches
+Try a different ending without losing the one you have. Create, compare and **merge story branches** from the top bar, backed by real git.
+
+</td>
+<td width="33%" valign="top">
+
+### ⌨️ Built for flow
+A command palette for every scene, character and thread, focus mode, and **keyboard-driven review** of every proposed change.
 
 </td>
 </tr>
@@ -111,6 +131,7 @@ Your book is a **git repo of Markdown and YAML** on your own machine. Edit it in
 | Checks twists for guessability before you write them | ❌ | ✅ |
 | Hand edits flow back into the plan | ❌ | ✅ |
 | Your manuscript lives in plain files you own, under version control | ❌ | ✅ |
+| Generates a cover from the story itself | ❌ | ✅ |
 | Judges compare both orderings to cancel position bias | ❌ | ✅ |
 
 ## 📸 Take the tour
@@ -196,7 +217,8 @@ flowchart LR
 5. **Characters:** a scene-by-scene grid of what each person knows. Click a square to change it; the book is checked for knock-on effects.
 6. **Threads → Setups and payoffs:** the obligations ledger. Every clue, promise, question and Chekhov's gun, drawn across the book from where it is planted to where it pays off. The writer is told what to plant, what to pay off and what to keep open; extraction checks the prose actually did it; a setup that never pays off is flagged.
 7. **Reader report:** an engagement curve, confusion, runs of boredom, and every twist judged from both sides: was it guessed early, and did it feel fair looking back? Read the **outline** before any prose exists to catch a guessable twist when it's cheap to fix. The **plan check** runs the structural critic on the whole book.
-8. **Settings → Style:** the style sheet (`style/style.yaml`) as dials. **Enforced** rules (spelling, quotes, dialogue tags, em dashes, semicolons, never-words, preferred words, sentence length) are checked by code on every word after every draft; deterministic ones are fixed outright, the rest go to a line editor that proposes span-level edits, and an edit is kept only if code confirms it fixed something without breaking anything, or a judge prefers it in **both** orders. **Guided** rules (rhythm, dialogue share, adverbs, filter words) are measured and nudged. **Set the dials from these** measures your voice samples; **Learned from your edits** turns changes you keep making by hand into rules you can accept.
+8. **Book covers:** generate a front cover from your story (title, genre, intent, characters, locations, opening scene cards; no finished draft needed), or pick an art style and add creative direction. Keep every version, check thumbnail readability, and download a 1600 × 2560 PNG sized for ebook stores. Uses OpenAI's GPT Image 2.5 Sunburst with separate API billing; see the [cover workflow, research and setup](docs/book-covers.md).
+9. **Settings → Style:** the style sheet (`style/style.yaml`) as dials. **Enforced** rules (spelling, quotes, dialogue tags, em dashes, semicolons, never-words, preferred words, sentence length) are checked by code on every word after every draft; deterministic ones are fixed outright, the rest go to a line editor that proposes span-level edits, and an edit is kept only if code confirms it fixed something without breaking anything, or a judge prefers it in **both** orders. **Guided** rules (rhythm, dialogue share, adverbs, filter words) are measured and nudged. **Set the dials from these** measures your voice samples; **Learned from your edits** turns changes you keep making by hand into rules you can accept.
 
 ### ⌨️ Keyboard first
 
@@ -205,7 +227,7 @@ flowchart LR
 | `⌘K` / `Ctrl K` | Command palette: every scene, character, thread and action |
 | `⌘\` | Collapse the sidebar |
 | `⌘.` | Focus mode |
-| `⌘1`–`⌘7` | Switch views |
+| `⌘1`–`⌘8` | Switch views |
 | `j` / `k`, `a` / `r`, `⇧↵` | Move, accept/reject, apply a ripple round |
 
 The **what-if** menu in the top bar creates, compares and merges git branches, so you can try a different ending without losing the one you have.

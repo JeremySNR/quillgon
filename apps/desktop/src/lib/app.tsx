@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { get, post, runJob, subscribe } from './api';
 import type { Job, Snapshot } from './types';
 
-export type View = 'dashboard' | 'build' | 'outline' | 'scene' | 'ripple' | 'threads' | 'characters' | 'reader' | 'history' | 'settings';
+export type View = 'dashboard' | 'build' | 'outline' | 'scene' | 'ripple' | 'threads' | 'characters' | 'reader' | 'covers' | 'history' | 'settings';
 export interface Route {
   view: View;
   id?: string;

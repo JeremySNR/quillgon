@@ -11,6 +11,7 @@ import { Characters, Threads } from './views/entities';
 import { ReaderReport } from './views/reader';
 import { HistoryView } from './views/history';
 import { SettingsView } from './views/settings';
+import { Covers } from './views/covers';
 import { cx, isMac, loadPref } from './lib/util';
 
 function Shell() {
@@ -55,6 +56,8 @@ function Shell() {
         return <HistoryView id={route.id} />;
       case 'settings':
         return <SettingsView tab={route.id} />;
+      case 'covers':
+        return <Covers key={project.dir} />;
       default:
         return <Dashboard />;
     }
