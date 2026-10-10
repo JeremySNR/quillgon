@@ -188,10 +188,11 @@ describe('review fixes', () => {
     store.saveCharacterState(outsider, { ...store.project.characters.get(outsider)!.state, s07: snap });
     await store.commit('State for an outsider in s07');
     const orderBefore = sceneOrder(store.project);
-    store.deleteScene('s07');
+    const states = store.deleteScene('s07');
+    expect(states).toContain(outsider);
     await store.commit('Delete s07');
     await new Promise((r) => setTimeout(r, 1100));
-    const ripple = await engine.startRipple({ kind: 'delete-scene', scene: 's07', card, orderBefore });
+    const ripple = await engine.startRipple({ kind: 'delete-scene', scene: 's07', card, orderBefore, states });
     await ripple.revert();
     expect(store.project.characters.get(outsider)!.state.s07).toBeTruthy();
     expect(fs.existsSync(path.join(dir, paths.card('s07')))).toBe(true);
@@ -210,3 +211,22 @@ async function appliedRippleFor() {
   await ripple.apply();
   return { ...env, ripple };
 }
+
+describe('scene deletion ripples', () => {
+  it("leave an unrelated character's uncommitted state edit out of the origin commit", async () => {
+    const { store, engine } = await fixtureEngine();
+    const card = structuredClone(store.scene('s12').card);
+    const cast = new Set([card.pov, ...card.characters]);
+    // Someone else's state edited by hand (knowledge grid), not yet committed.
+    const other = [...store.project.characters.values()].find((c) => !cast.has(c.id) && !c.state.s12)!;
+    const [firstScene, snap] = Object.entries(other.state)[0];
+    store.saveCharacterState(other.id, { ...other.state, [firstScene]: { ...snap, wants: 'Something new.' } });
+    const orderBefore = sceneOrder(store.project);
+    const states = store.deleteScene('s12');
+    expect(states).not.toContain(other.id);
+    const ripple = await engine.startRipple({ kind: 'delete-scene', scene: 's12', card, orderBefore, states });
+    const files = (await store.repo.show(ripple.data.originCommit!)).files;
+    expect(files).toContain(paths.card('s12'));
+    expect(files).not.toContain(paths.state(other.id));
+  });
+});

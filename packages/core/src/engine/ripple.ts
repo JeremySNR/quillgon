@@ -111,7 +111,7 @@ export class Ripple {
     const existing = Ripple.current(store, agents);
     if (existing) existing.abandon();
     const impact = analyseImpact(store.project, change, store.index);
-    const files = changeFiles(change, store.uncommitted());
+    const files = changeFiles(change);
     await store.checkpoint('Work in progress before a ripple', { exclude: files });
     const originCommit = await store.commit(`Edit: ${impact.description}`, { files });
     const r = new Ripple(store, agents, {
@@ -458,7 +458,9 @@ export class Ripple {
       const dir = c.kind === 'delete-scene' ? `scenes/${c.scene}` : `characters/${c.character}`;
       const commit = await this.lastCommitBefore(dir);
       if (commit) {
-        const files = (await this.store.repo.show(commit)).files.filter((f) => f.startsWith(`${dir}/`) || (c.kind === 'delete-scene' && /^characters\/[^/]+\/state\.yaml$/.test(f)));
+        // Only the deletion's own files: that commit may also hold unrelated work.
+        const states = c.kind === 'delete-scene' ? new Set((c.states ?? [c.card.pov, ...c.card.characters]).map(paths.state)) : new Set<string>();
+        const files = (await this.store.repo.show(commit)).files.filter((f) => f.startsWith(`${dir}/`) || states.has(f));
         await this.store.repo.restore(`${commit}~1`, files);
       }
       this.store.reload();

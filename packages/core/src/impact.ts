@@ -21,13 +21,21 @@ export type Change =
   | { kind: 'plot'; before: PlotPoint | null; after: PlotPoint | null; description?: string }
   | { kind: 'obligation'; before: Obligation | null; after: Obligation | null; description?: string }
   | { kind: 'reorder'; before: string[]; after: string[]; description?: string }
-  | { kind: 'delete-scene'; scene: string; card: SceneCard; orderBefore: string[]; description?: string };
+  | {
+      kind: 'delete-scene';
+      scene: string;
+      card: SceneCard;
+      orderBefore: string[];
+      /** Characters whose state had an entry for the scene (the deletion rewrote their state files). */
+      states?: string[];
+      description?: string;
+    };
 
 /**
  * The files an edit of this kind writes. A ripple commits these as its origin commit,
  * apart from any other uncommitted work, so reverting the ripple reverts exactly the edit.
  */
-export function changeFiles(change: Change, uncommitted: string[] = []): string[] {
+export function changeFiles(change: Change): string[] {
   switch (change.kind) {
     case 'card':
       return [paths.card(change.scene)];
@@ -50,10 +58,9 @@ export function changeFiles(change: Change, uncommitted: string[] = []): string[
       return [paths.structure];
     case 'delete-scene': {
       // Deleting a scene also drops it from the structure and from the state file of every
-      // character with an entry for it, cast or not: take those that are still uncommitted.
-      const cast = [change.card.pov, ...change.card.characters].map(paths.state);
-      const states = uncommitted.filter((f) => /^characters\/[^/]+\/state\.yaml$/.test(f));
-      return [...new Set([`scenes/${change.scene}`, paths.structure, ...cast, ...states])];
+      // character with an entry for it, cast or not (recorded when the scene was deleted).
+      const who = change.states ?? [change.card.pov, ...change.card.characters];
+      return [...new Set([`scenes/${change.scene}`, paths.structure, ...who.map(paths.state)])];
     }
   }
 }

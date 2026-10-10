@@ -400,7 +400,9 @@ export class GraphStore {
     }
   }
 
-  deleteScene(id: string) {
+  /** Delete a scene. Returns the characters whose state had an entry for it. */
+  deleteScene(id: string): string[] {
+    const states: string[] = [];
     this.remove(`scenes/${id}`);
     this.project.scenes.delete(id);
     const st = structuredClone(this.project.structure);
@@ -410,9 +412,11 @@ export class GraphStore {
       if (ch.state[id]) {
         const { [id]: _gone, ...rest } = ch.state;
         this.saveCharacterState(ch.id, rest);
+        states.push(ch.id);
       }
     }
     this.after(`scene:${id}`);
+    return states;
   }
 
   // --------------------------------------------------------------- reports

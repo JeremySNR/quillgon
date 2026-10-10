@@ -438,8 +438,8 @@ export class NovelServer {
     r('DELETE', '/api/scenes/:id', async ({ engine, params, query }) => {
       const orderBefore = sceneOrder(engine.store.project);
       const card = structuredClone(engine.store.scene(params.id).card);
-      engine.store.deleteScene(params.id);
-      const change: Change = { kind: 'delete-scene', scene: params.id, card, orderBefore };
+      const states = engine.store.deleteScene(params.id);
+      const change: Change = { kind: 'delete-scene', scene: params.id, card, orderBefore, states };
       if (query.get('ripple') === '1') return { ripple: (await engine.startRipple(change)).data };
       await engine.store.commit(`Delete scene ${params.id}`);
       return { impact: analyseImpact(engine.store.project, change, engine.store.index) };
