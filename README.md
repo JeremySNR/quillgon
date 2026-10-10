@@ -8,7 +8,7 @@ A local desktop tool that generates full-length novels while you stay in charge 
 
 ![Quillgon writing desk](docs/screenshots/ui-refresh/desk-light.png)
 
-The public website lives in [`apps/site`](apps/site/README.md) and deploys independently from the local writing application.
+Visit the [Quillgon website](https://quillgon.vercel.app) for an introduction, writing guides, and setup instructions. Its source lives in [`apps/site`](apps/site/README.md) and deploys independently from the local writing application.
 
 ## Quick start
 

@@ -30,7 +30,7 @@ function footer() {
 function document(page) {
   const canonical = new URL(page.path, origin).href;
   const schema = [{ '@context': 'https://schema.org', '@type': 'WebSite', '@id': `${origin}/#website`, name: site.name, url: `${origin}/` }];
-  if (page.path === '/') schema.push({ '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: site.name, url: `${origin}/`, description: site.description, applicationCategory: 'ProductivityApplication', operatingSystem: 'Windows, macOS, Linux', codeRepository: site.repo, screenshot: `${origin}/assets/screenshots/desk-light.png` });
+  if (page.path === '/') schema.push({ '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: site.name, url: `${origin}/`, description: site.description, applicationCategory: 'BusinessApplication', operatingSystem: 'Windows, macOS, Linux', sameAs: site.repo, screenshot: `${origin}/assets/screenshots/desk-light.png` });
   if (page.path.startsWith('/guides/')) schema.push({ '@context': 'https://schema.org', '@type': 'Article', headline: page.heading, description: page.description, mainEntityOfPage: canonical, publisher: { '@type': 'Organization', name: site.name, url: `${origin}/` } });
   if (page.path !== '/' && !page.noindex) schema.push({ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Quillgon', item: `${origin}/` }, { '@type': 'ListItem', position: 2, name: page.heading, item: canonical }] });
   const preview = process.env.VERCEL_ENV === 'preview';

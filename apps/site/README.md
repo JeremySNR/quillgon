@@ -2,6 +2,8 @@
 
 The public website belongs in this monorepo so product changes, screenshot updates, and public copy can ship together. Deploy it as a separate Vercel project with **Root Directory `apps/site`**. It has no connection to the manuscript API and no runtime dependencies.
 
+Live website: **https://quillgon.vercel.app**. The project is connected to GitHub, with production tracking the repository's default branch.
+
 ## Local development
 
 From the repository root:
@@ -56,3 +58,5 @@ Search intent maps to real pages:
 All pages are complete static HTML with unique titles, descriptions, canonical URLs, semantic headings, internal links, and relevant JSON-LD. Images have alternate text and intrinsic dimensions; below-the-fold screenshots load lazily. Core content, navigation, and FAQs work without JavaScript.
 
 After the public URL is stable, verify it in Google Search Console and submit `/sitemap.xml`. Connect a permanent domain before investing in backlinks. Add new guides only when they answer a real writing problem with enough substance to stand alone. Search rankings and indexing are not guaranteed by this implementation.
+
+References: [Vercel monorepos](https://vercel.com/docs/monorepos), [Google Search developer guidance](https://developers.google.com/search/docs/fundamentals/get-started-developers), and [software application structured data](https://developers.google.com/search/docs/appearance/structured-data/software-app). The software schema describes the application; it does not invent an offer or a review to qualify for a rich result.
