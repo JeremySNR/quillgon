@@ -121,12 +121,12 @@ export function applyTalk(board: IdeaBoard, out: TalkOutput): { board: IdeaBoard
     b = { ...b, [f]: next };
   }
 
-  // A reply that means "no change" often sends [] rather than null. Themes and never-rules
-  // are the author's, so a reply can add to or reword them but never empty them (the author
-  // can, on the board). Open questions may be emptied once all are answered.
+  // A reply that means "no change" often sends [] or [""] rather than null. Themes and
+  // never-rules are the author's, so a reply can add to or reword them but never empty
+  // them (the author can, on the board). Open questions may be emptied once all are answered.
   const lists: [List, string[] | null][] = [
-    ['themes', out.themes?.length ? out.themes : null],
-    ['never', out.never?.length ? out.never : null],
+    ['themes', out.themes?.some((x) => x.trim()) ? out.themes : null],
+    ['never', out.never?.some((x) => x.trim()) ? out.never : null],
     ['open', out.open],
     ['cliches', out.avoid.length ? uniq([...b.cliches, ...out.avoid.map((x) => x.trim()).filter(Boolean)]) : null],
   ];

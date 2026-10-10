@@ -90,6 +90,10 @@ describe('talking it through: applying a turn to the board', () => {
     const { board: b, changes } = applyTalk(settled, reply({ themes: [], never: [], open: [] }));
     expect(b).toMatchObject({ themes: ['inheritance'], never: ['Never explain the watering'], open: [] });
     expect(changes.map((c) => c.label)).toEqual(['Still open updated']);
+    // Whitespace-only entries are the same "no change" signal after trim.
+    const blank = applyTalk(settled, reply({ themes: [''], never: ['  '], open: [''] }));
+    expect(blank.board).toMatchObject({ themes: ['inheritance'], never: ['Never explain the watering'], open: [] });
+    expect(blank.changes.map((c) => c.label)).toEqual(['Still open updated']);
   });
 });
 
