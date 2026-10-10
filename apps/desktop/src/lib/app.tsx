@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { get, post, runJob, subscribe } from './api';
 import type { Job, Snapshot } from './types';
-import { allowUnload, describeUnsaved, installUnloadGuard, unsavedChanges } from './unsaved';
+import { allowUnload, describeUnsaved, flushUnsaved, installUnloadGuard, unsavedChanges } from './unsaved';
 import { useConfirm } from '../components/confirm';
 
 export type View = 'dashboard' | 'build' | 'outline' | 'scene' | 'ripple' | 'threads' | 'characters' | 'reader' | 'covers' | 'history' | 'settings';
@@ -208,17 +208,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('unhandledrejection', h);
   }, [fail]);
 
-  // Closing or reloading the window with unsaved edits. Electron closes without a prompt, so ask in-app there.
+  // Closing or reloading the window with unsaved edits. Electron closes without a prompt, so
+  // handle it in-app there: save what can be saved (pending prose), close if that was all,
+  // otherwise ask. Closing quits the app and stops the server, so saves must land first.
   useEffect(
     () =>
       installUnloadGuard(
         window.quillgon
-          ? (what) =>
-              void confirmLeave(what, 'close').then((ok) => {
-                if (!ok) return;
+          ? () =>
+              void (async () => {
+                await flushUnsaved();
+                const left = unsavedChanges('unload');
+                if (left.length && !(await confirmLeave(left, 'close'))) return;
                 allowUnload();
                 window.close();
-              })
+              })()
           : undefined,
       ),
     [confirmLeave],

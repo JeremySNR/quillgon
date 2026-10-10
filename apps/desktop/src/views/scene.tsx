@@ -90,7 +90,9 @@ export function SceneEditor({ id }: { id: string }) {
   const { detail, setDetail, card, setCard, cardDirty, load, accept, discardCard, loadError } = useSceneDetail(id, { refreshKey: p?.scenes, prose });
   setDetailRef.current = setDetail;
   useUnsavedChanges(cardDirty, 'scene card edits');
-  useUnsavedChanges(!!prose.error, 'scene prose', { inApp: false });
+  // Typing not yet confirmed by the server (waiting, in flight or failed) blocks closing the
+  // window; in-app navigation saves it on unmount instead of asking.
+  useUnsavedChanges(prose.hasUnsaved, 'scene prose', { inApp: false, flush: prose.flush });
 
   const styleReport = useStyleCheck(prose.text, p?.style.sheet);
   const marks = useMemo<StyleMark[]>(() => (styleReport?.violations ?? []).filter((v) => v.end > v.start).map((v) => ({ from: v.start, to: v.end, kind: v.kind, message: v.message })), [styleReport]);

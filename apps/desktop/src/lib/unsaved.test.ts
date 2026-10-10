@@ -1,6 +1,6 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { describeUnsaved, installUnloadGuard, unsavedChanges, useUnsavedChanges } from './unsaved';
+import { describeUnsaved, flushUnsaved, installUnloadGuard, unsavedChanges, useUnsavedChanges } from './unsaved';
 
 describe('unsaved changes', () => {
   let uninstall: (() => void) | null = null;
@@ -32,6 +32,28 @@ describe('unsaved changes', () => {
     const dirty = new Event('beforeunload', { cancelable: true });
     window.dispatchEvent(dirty);
     expect(dirty.defaultPrevented).toBe(true);
+    unmount();
+  });
+
+  it('saves what it can before asking: pending prose is flushed, then no longer unsaved', async () => {
+    let pending = true;
+    const flushes: number[] = [];
+    const { unmount } = renderHook(() =>
+      useUnsavedChanges(() => pending, 'scene prose', {
+        inApp: false,
+        flush: async () => {
+          flushes.push(1);
+          pending = false;
+          return true;
+        },
+      }),
+    );
+    expect(unsavedChanges('unload')).toEqual(['scene prose']);
+    await flushUnsaved();
+    expect(flushes).toHaveLength(1);
+    expect(unsavedChanges('unload')).toEqual([]);
+    await flushUnsaved(); // nothing dirty: nothing flushed
+    expect(flushes).toHaveLength(1);
     unmount();
   });
 

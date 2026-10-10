@@ -9,6 +9,8 @@ interface Entry {
   dirty: () => boolean;
   /** false: only guard window unload (the view saves on unmount by itself). */
   inApp: boolean;
+  /** Try to save now; resolves true once nothing is left unsaved. */
+  flush?: () => Promise<boolean>;
 }
 
 const entries = new Set<Entry>();
@@ -20,11 +22,23 @@ export function unsavedChanges(scope: 'navigate' | 'unload' = 'navigate'): strin
   return out;
 }
 
-export function useUnsavedChanges(dirty: boolean | (() => boolean), what: string, { inApp = true }: { inApp?: boolean } = {}) {
+/** Save whatever can be saved right now (e.g. pending autosaves) before asking about the rest. */
+export async function flushUnsaved(): Promise<void> {
+  await Promise.all([...entries].filter((e) => e.flush && e.dirty()).map((e) => e.flush!().catch(() => false)));
+}
+
+export function useUnsavedChanges(dirty: boolean | (() => boolean), what: string, { inApp = true, flush }: { inApp?: boolean; flush?: () => Promise<boolean> } = {}) {
   const ref = useRef(dirty);
   ref.current = dirty;
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
   useEffect(() => {
-    const entry: Entry = { what, inApp, dirty: () => (typeof ref.current === 'function' ? ref.current() : ref.current) };
+    const entry: Entry = {
+      what,
+      inApp,
+      dirty: () => (typeof ref.current === 'function' ? ref.current() : ref.current),
+      flush: () => (flushRef.current ? flushRef.current() : Promise.resolve(false)),
+    };
     entries.add(entry);
     return () => void entries.delete(entry);
   }, [what, inApp]);
