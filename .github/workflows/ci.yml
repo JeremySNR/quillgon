@@ -43,6 +43,7 @@ jobs:
       - run: pnpm exec playwright-core install --with-deps chromium
       - run: pnpm e2e
       - run: pnpm tsx scripts/ui-refresh.ts
+      - run: pnpm tsx scripts/e2e-covers.ts
       - name: Keep screenshots of a failed run
         if: failure()
         uses: actions/upload-artifact@v4

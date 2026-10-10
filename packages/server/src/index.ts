@@ -34,6 +34,7 @@ import {
 import { builtinPrompt, createSuite, loadPrompt } from '@quillgon/agents';
 import { projectSnapshot, sceneDetail } from './snapshot.js';
 import { exportManuscript } from './export.js';
+import { coverAvailability, coverImage, CoverOptions, generateCover, listCovers } from './covers.js';
 
 type Handler = (ctx: Ctx) => Promise<unknown> | unknown;
 interface Ctx {
@@ -182,23 +183,27 @@ export class NovelServer {
   }
 
   /** Run a long operation in the background; progress and completion go out over SSE. */
-  job(name: string, fn: (progress: (stage: string, detail?: string) => void) => Promise<unknown>): { job: string } {
+  job(name: string, fn: (progress: (stage: string, detail?: string) => void) => Promise<unknown>, opts: { queue?: boolean } = {}): { job: string } {
     const id = `${name}-${randomUUID().slice(0, 8)}`;
-    const queued = this.active > 0;
+    // Store jobs share one store, index and repo, so they queue; independent ones (queue: false) don't.
+    const inQueue = opts.queue !== false;
+    const queued = inQueue && this.active > 0;
     const job: Job = { id, name, state: 'running', stage: queued ? 'queued' : 'starting', detail: queued ? 'Waiting for the current job to finish' : '', started: Date.now() };
     this.jobs.set(id, job);
-    this.active++;
+    if (inQueue) this.active++;
     this.broadcast('job', job);
     const progress = (stage: string, detail = '') => {
       job.stage = stage;
       job.detail = detail;
       this.broadcast('job', job);
     };
-    const run = this.queue.then(() => {
-      if (queued) progress('starting');
-      return fn(progress);
-    });
-    this.queue = run.catch(() => undefined);
+    const run = inQueue
+      ? this.queue.then(() => {
+          if (queued) progress('starting');
+          return fn(progress);
+        })
+      : Promise.resolve().then(() => fn(progress));
+    if (inQueue) this.queue = run.catch(() => undefined);
     run
       .then((result) => {
         job.state = 'done';
@@ -209,7 +214,7 @@ export class NovelServer {
         job.error = e.message;
       })
       .finally(() => {
-        this.active--;
+        if (inQueue) this.active--;
         this.broadcast('job', job);
         if (!this.active && this.pendingReload) {
           const file = this.pendingReload;
@@ -217,7 +222,7 @@ export class NovelServer {
           this.externalReload(file);
         }
         // Keep finished jobs a while for late pollers.
-        setTimeout(() => this.jobs.delete(id), 10 * 60_000);
+        setTimeout(() => this.jobs.delete(id), 10 * 60_000).unref();
       });
     return { job: id };
   }
@@ -262,8 +267,10 @@ export class NovelServer {
 
     if (!allowed) return send(res, 403, { error: 'origin not allowed' });
     const given = req.headers[TOKEN_HEADER];
-    // EventSource cannot set headers, so the event stream also accepts ?token=.
-    const token = typeof given === 'string' ? given : url.pathname === '/api/events' ? url.searchParams.get('token') : null;
+    // EventSource, <img> and download links cannot set headers, so the event stream and
+    // cover images (read-only GETs) also accept ?token=.
+    const queryToken = req.method === 'GET' && (url.pathname === '/api/events' || /^\/api\/covers\/[^/]+\/image$/.test(url.pathname));
+    const token = typeof given === 'string' ? given : queryToken ? url.searchParams.get('token') : null;
     if (!this.tokenMatches(token)) return send(res, 401, { error: 'missing or invalid API token' });
 
     if (url.pathname === '/api/events') {
@@ -290,6 +297,10 @@ export class NovelServer {
         if (!r.open && !this.engine) throw new HttpError(409, 'no project is open');
         const params = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
         const out = await r.handler({ params, query: url.searchParams, body, engine: this.engine!, server: this });
+        if (Buffer.isBuffer(out)) {
+          res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'no-store', ...(url.searchParams.has('download') ? { 'content-disposition': 'attachment; filename="book-cover.png"' } : {}) });
+          return void res.end(out);
+        }
         return send(res, 200, out === undefined ? { ok: true } : out);
       } catch (e) {
         if (e instanceof SchemaError) return send(res, 422, { error: e.message, issues: e.issues });
@@ -372,6 +383,22 @@ export class NovelServer {
 
     r('GET', '/api/project', ({ engine }) => projectSnapshot(engine));
     r('POST', '/api/reload', ({ engine, server }) => (server.assertIdle('reload'), engine.store.reload(), { ok: true }));
+    r('GET', '/api/covers', ({ engine }) => ({ ...coverAvailability(engine.store.project), covers: listCovers(engine.store.dir) }));
+    r('GET', '/api/covers/:id/image', ({ engine, params }) => {
+      try { return coverImage(engine.store.dir, params.id); }
+      catch { throw new HttpError(404, 'Cover not found'); }
+    });
+    r('POST', '/api/covers/generate', ({ engine, body, server }) => {
+      const parsed = CoverOptions.safeParse(body);
+      if (!parsed.success) throw new HttpError(422, 'Invalid cover options', parsed.error.issues);
+      const available = coverAvailability(engine.store.project);
+      if (!available.ready) throw new HttpError(409, available.reason!);
+      if ([...server.jobs.values()].some(j => j.name === 'cover' && j.state === 'running')) throw new HttpError(409, 'A cover is already being generated.');
+      // Capture this project's data before starting: opening another book cannot redirect the result.
+      const project = structuredClone(engine.store.project);
+      // Reads a snapshot and writes only covers/: it need not wait for (or hold up) store jobs.
+      return server.job('cover', progress => generateCover(project, parsed.data, progress), { queue: false });
+    });
 
     // --- scenes
     r('GET', '/api/scenes/:id', ({ engine, params }) => sceneDetail(engine.store, params.id));
@@ -647,6 +674,10 @@ export class NovelServer {
     r('POST', '/api/idea/own', ({ engine, body }) => idea(engine).addOwn(String(body.text), body.kind));
     r('POST', '/api/idea/expand', ({ engine, body, server }) => server.job('expand', () => idea(engine).expand(body.step)));
     r('POST', '/api/idea/choose', ({ engine, body }) => idea(engine).choose(body.step, String(body.text)));
+    r('POST', '/api/idea/update', ({ engine, body }) => idea(engine).update(body.patch ?? {}));
+    r('POST', '/api/idea/talk', ({ engine, body, server }) => server.job('talk', () => idea(engine).talk(String(body.message ?? ''), body.focus ? String(body.focus) : null)));
+    r('POST', '/api/idea/talk/undo', ({ engine, body }) => idea(engine).undoTalk(Number(body.turn)));
+    r('POST', '/api/idea/talk/clear', ({ engine }) => idea(engine).clearTalk());
     r('POST', '/api/idea/finish', async ({ engine }) => idea(engine).finish());
     r('POST', '/api/idea/skip', async ({ engine }) => {
       if (engine.store.book.stage === 'idea') engine.store.updateBook({ stage: 'intent' });

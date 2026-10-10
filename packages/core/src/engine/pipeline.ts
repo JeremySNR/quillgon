@@ -87,12 +87,25 @@ export class Pipeline {
   // ---------------------------------------------------------------- 1. intent
 
   async interview(premise: string, answers: { question: string; answer: string }[] = []): Promise<InterviewState> {
-    const out = await this.agents.interview({ premise, answers });
+    // What the author already settled (talking the idea through, or an earlier intent) is
+    // not asked again, and survives into the drafted intent if the interviewer leaves it out.
+    const i = this.p.intent;
+    const known = {
+      ...(i.themes.length ? { themes: i.themes } : {}),
+      ...(i.tone ? { tone: i.tone } : {}),
+      ...(i.ending_type ? { ending_type: i.ending_type } : {}),
+      ...(i.hard_rules.length ? { hard_rules: i.hard_rules } : {}),
+    };
+    const out = await this.agents.interview({ premise, answers, known });
+    const drafted = out.done && out.intent ? { ...out.intent } : null;
+    if (drafted) for (const k of Object.keys(known) as (keyof typeof known)[]) if (!drafted[k]?.length) Object.assign(drafted, { [k]: known[k] });
+    // The notes carry the synopsis, kept ideas and open questions from the idea stage.
+    if (drafted && i.notes && !drafted.notes?.includes(i.notes)) drafted.notes = [i.notes, drafted.notes].filter(Boolean).join('\n\n');
     const state: InterviewState = {
       premise,
       answers,
       questions: out.done ? [] : out.questions,
-      intent: out.done ? (out.intent ?? null) : null,
+      intent: drafted,
       needs_decision: out.needs_decision,
     };
     this.proposals.set('interview', state);

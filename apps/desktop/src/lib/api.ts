@@ -9,6 +9,8 @@ declare global {
 const BASE = window.quillgon?.apiBase ?? '';
 /** The server injects a per-launch API token into index.html (the dev server does the same). */
 const TOKEN = document.querySelector<HTMLMetaElement>('meta[name="quillgon-token"]')?.content ?? '';
+/** Images and downloads cannot send headers, so cover URLs carry the token as a query parameter. */
+export const coverImageUrl = (id: string, download = false) => `${BASE}/api/covers/${encodeURIComponent(id)}/image?token=${encodeURIComponent(TOKEN)}${download ? '&download=1' : ''}`;
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public data?: any) {

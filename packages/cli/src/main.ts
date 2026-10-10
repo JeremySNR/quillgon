@@ -231,6 +231,37 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
     },
   },
 
+  talk: {
+    help: 'talk ["message"] [--about logline|ending|cast:<id>]   Talk the idea through; what you settle is written onto the idea board',
+    async run() {
+      const e = openEngine();
+      const I = e.ideation;
+      const about = typeof flags.about === 'string' ? flags.about : null;
+      const show = (b: typeof I.board) => {
+        const t = b.talk[b.talk.length - 1];
+        say(`\n${cyan('partner')} ${t.text}`);
+        for (const ch of t.changes) say(dim(`  · ${ch.label}`));
+      };
+      if (args.length) return void show(await I.talk(args.join(' '), about));
+      say(dim('Talk it through. Everything you settle goes onto the idea board. "undo" takes back the last reply\'s changes; a blank line stops.'));
+      for (;;) {
+        const m = await ask(`\n${bold('you')}`);
+        if (!m) break;
+        if (m === 'undo') {
+          const turn = I.board.talk.findLastIndex((t) => t.role === 'partner' && !t.undone && t.changes.length);
+          if (turn < 0) say(dim('Nothing to undo.'));
+          else say(dim(`Undone: ${I.board.talk[turn].changes.map((c) => c.label).join('; ')}`)), I.undoTalk(turn);
+          continue;
+        }
+        show(await I.talk(m, about));
+      }
+      const b = I.board;
+      for (const [label, v] of [['One sentence', b.logline], ['Tone', b.tone], ['Ending', b.ending], ['Cast', b.cast.map((c) => c.name).join(', ')]] as const) if (v) say(`${bold(label)}  ${v}`);
+      for (const q of b.open) say(yellow(`? ${q}`));
+      say(dim(`\nNext: ${cyan('quillgon spark')} to grow it, or open the Idea step in the app.`));
+    },
+  },
+
   ledger: {
     help: 'ledger   Setups and payoffs: every clue, promise and question, and what is unpaid',
     run() {

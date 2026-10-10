@@ -13,7 +13,10 @@ export default tseslint.config(
     rules: {
       // The codebase uses `any` deliberately at JSON boundaries (API bodies, YAML).
       '@typescript-eslint/no-explicit-any': 'off',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none', destructuredArrayIgnorePattern: '^_' }],
+      // ignoreRestSiblings: `const { a, ...rest } = x` is how keys are omitted.
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none', destructuredArrayIgnorePattern: '^_', ignoreRestSiblings: true }],
+      // A `let` that a closure reads before it is assigned cannot be a const.
+      'prefer-const': ['error', { ignoreReadBeforeAssign: true }],
       // `cond && fn()` and `(a(), b())` sequences are used as terse statements throughout.
       '@typescript-eslint/no-unused-expressions': 'off',
       'no-empty': ['error', { allowEmptyCatch: true }],

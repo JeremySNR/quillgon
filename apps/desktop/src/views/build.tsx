@@ -3,7 +3,7 @@ import { ArrowRight, Check, MessageCircleQuestion, Pin, Plus, RefreshCw, Sparkle
 import { get, post } from '../lib/api';
 import { useApp } from '../lib/app';
 import type { CardsOutput, CritiqueOutput, Intent, InterviewState, StructureOutput } from '../lib/types';
-import { plural } from '../lib/util';
+import { cx, plural } from '../lib/util';
 import { Badge, Button, Empty, Field, ListEditor, Working, Avatar } from '../components/ui';
 import { Stepper, STAGES } from './dashboard';
 import { IdeaStep } from './spark';
@@ -32,7 +32,7 @@ export function Build({ step }: { step?: string }) {
   const job = jobs[jobs.length - 1];
   return (
     <div className="page">
-      <div className="page-inner">
+      <div className={cx('page-inner', current === 'idea' && 'wide')}>
         <div className="page-head">
           <div>
             <span className="eyebrow">FROM AN IDEA TO A MANUSCRIPT</span><h1>Story planning</h1>
