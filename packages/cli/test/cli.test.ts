@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -73,5 +73,26 @@ describe('quillgon CLI', () => {
     expect(yes.code, yes.out).toBe(0);
     const log = spawnSync('git', ['log', '--format=%s'], { cwd: dir, encoding: 'utf8' }).stdout;
     expect(log).toMatch(/^Ripple round 1:/m);
+  });
+});
+
+describe('quillgon serve', () => {
+  it('--port 0 picks a free port (the desktop shell relies on it)', async () => {
+    const child = spawn(process.execPath, ['--import', 'tsx', main, 'serve', '--port', '0'], { env: { ...process.env, FORCE_COLOR: '0', QUILLGON_OFFLINE: '1' } });
+    try {
+      const port = await new Promise<number>((resolve, reject) => {
+        let out = '';
+        child.stdout.on('data', (d) => {
+          out += d;
+          const m = out.match(/127\.0\.0\.1:(\d+)/);
+          if (m) resolve(Number(m[1]));
+        });
+        child.on('exit', (code) => reject(new Error(`exited ${code}: ${out}`)));
+      });
+      expect(port).toBeGreaterThan(0);
+      expect(port).not.toBe(4317);
+    } finally {
+      child.kill();
+    }
   });
 });

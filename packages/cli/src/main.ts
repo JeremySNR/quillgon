@@ -593,7 +593,7 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
       const server = new NovelServer({ staticDir });
       const dir = (flags.dir as string) ?? args[0];
       if (dir) server.open(dir);
-      const port = await server.listen(Number(flags.port) || 4317);
+      const port = await server.listen(flags.port === undefined ? 4317 : Number(flags.port));
       say(`${green('●')} Quillgon on ${bold(`http://127.0.0.1:${port}`)}${dir ? dim(`  (${path.resolve(dir)})`) : ''}`);
     },
   },
