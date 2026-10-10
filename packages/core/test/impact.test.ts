@@ -124,13 +124,13 @@ describe('phase 2: impact analyser (15 named changes)', () => {
   });
 
   it('12. s09 is moved before s05: Mara cites the inks before she has seen them', () => {
-    const { hop } = run((p) => reorder(p, (o) => ['s01', 's02', 's03', 's04', 's09', 's05', 's06', 's07', 's08', 's10', 's11', 's12']));
+    const { hop } = run((p) => reorder(p, () => ['s01', 's02', 's03', 's04', 's09', 's05', 's06', 's07', 's08', 's10', 's11', 's12']));
     expect(hop(1)).toEqual(['s09']);
     expect(hop(2)).toEqual(['s05', 's06', 's07', 's08']);
   });
 
   it('13. s10 and s11 swap: Mara accuses Eliza of knowing about a forgery she has not heard of', () => {
-    const { result, hop } = run((p) => reorder(p, (o) => ['s01', 's02', 's03', 's04', 's05', 's06', 's07', 's08', 's09', 's11', 's10', 's12']));
+    const { result, hop } = run((p) => reorder(p, () => ['s01', 's02', 's03', 's04', 's05', 's06', 's07', 's08', 's09', 's11', 's10', 's12']));
     expect(hop(1)).toEqual(['s11']);
     expect(hop(2)).toEqual(['s10']);
     expect(result.impacts.find((i) => i.scene === 's10')!.conflict).toBeTruthy();

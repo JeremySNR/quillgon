@@ -4,7 +4,7 @@ import Database from 'better-sqlite3';
 import type { Project } from './project.js';
 import { sceneOrder, scenePlaces, paths } from './project.js';
 import { collectFacts, collectRefs, key, type FactRow, type Ref } from './refs.js';
-import { cosine, LocalEmbedder, sceneText, type Embedder } from './embed.js';
+import { cosine, LocalEmbedder, sceneText } from './embed.js';
 import { cardHash, proseHash } from './sync.js';
 
 /**

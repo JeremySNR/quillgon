@@ -25,18 +25,24 @@
     "site:build": "node apps/site/build.mjs",
     "site:check": "node apps/site/check.mjs",
     "site:dev": "node apps/site/serve.mjs",
-    "scale-check": "tsx scripts/scale-check.ts"
+    "scale-check": "tsx scripts/scale-check.ts",
+    "lint": "eslint ."
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@quillgon/agents": "workspace:*",
     "@quillgon/cli": "workspace:*",
     "@quillgon/core": "workspace:*",
     "@quillgon/server": "workspace:*",
     "@types/node": "^22.10.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^16.5.0",
     "happy-dom": "^20.14.6",
     "playwright-core": "^1.64.0",
     "tsx": "^4.19.0",
     "typescript": "^5.9.0",
+    "typescript-eslint": "^8.71.1",
     "vitest": "^4.0.0"
   }
 }

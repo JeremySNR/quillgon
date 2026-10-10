@@ -1,5 +1,5 @@
 import type { Project } from './project.js';
-import { sceneOrder, stateAt, stateBefore } from './project.js';
+import { sceneOrder, stateBefore } from './project.js';
 import type { ProjectIndex } from './index-db.js';
 import type { WriterInput } from './agents/contracts.js';
 import { obligationsForScene } from './obligations.js';

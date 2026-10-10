@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Command } from 'cmdk';
 import {
   AlertTriangle,
-  BookOpen,
   Check,
   CheckCircle2,
   ChevronDown,

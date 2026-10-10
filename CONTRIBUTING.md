@@ -39,6 +39,7 @@ To run the bundled server without packaging, stage it and point the shell at it:
 ## Before a pull request
 
 ```sh
+pnpm lint
 pnpm test
 pnpm typecheck
 pnpm site:build

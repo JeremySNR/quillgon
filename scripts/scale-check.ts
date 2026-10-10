@@ -30,7 +30,6 @@ const tokens = (x: unknown) => Math.round((typeof x === 'string' ? x : JSON.stri
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ql-scale-'));
 fs.cpSync(path.resolve(here, '..', 'fixtures', 'novella'), dir, { recursive: true, filter: (s) => !s.includes(`${path.sep}.engine`) });
 const store = GraphStore.open(dir, { memoryIndex: true });
-const base = sceneOrder(store.project);
 const st = structuredClone(store.project.structure);
 let n = 100;
 for (let k = 1; k < copies; k++) {
