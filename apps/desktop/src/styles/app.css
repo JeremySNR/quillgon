@@ -667,6 +667,45 @@ del, .del { background: var(--danger-bg); color: inherit; opacity: .8; text-deco
 .arc dt { color: var(--text-3); }
 .arc dd { margin: 0; color: var(--text-2); }
 
+/* ------------------------------------------------------------------ thinking partner */
+.idea-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); gap: var(--s-5); align-items: start; }
+.talk { position: sticky; top: var(--s-4); display: flex; flex-direction: column; max-height: calc(100vh - var(--topbar-h) - var(--statusbar-h) - var(--s-7)); padding: 0; overflow: hidden; }
+.talk-head { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); border-bottom: 1px solid var(--border); color: var(--text-2); }
+.talk-head h3 { color: var(--text); }
+.talk-log { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: var(--s-4); display: flex; flex-direction: column; gap: var(--s-3); }
+.talk-intro { color: var(--text-2); line-height: 1.55; display: flex; flex-direction: column; gap: var(--s-2); }
+.talk-intro p { margin: 0; }
+.starters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: var(--s-2); }
+.starter { font: inherit; font-size: var(--fs-label); padding: 4px 10px; border-radius: var(--r-pill); border: 1px solid var(--border); background: var(--surface); color: var(--text-2); cursor: pointer; transition: border-color var(--t-press), color var(--t-press); }
+.starter:hover { border-color: var(--accent); color: var(--text); }
+.msg { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; max-width: 92%; animation: rise var(--t-panel) var(--ease-out) both; }
+.msg.mine { align-self: flex-end; align-items: flex-end; }
+.msg .bubble { padding: var(--s-2) var(--s-3); border-radius: var(--r-l); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg.mine .bubble { background: var(--accent-subtle); color: var(--text); border-bottom-right-radius: var(--r-xs); }
+.msg.partner .bubble { background: var(--surface-2); color: var(--text); font-family: var(--font-prose); font-size: 15px; border-bottom-left-radius: var(--r-xs); }
+.msg.pending .bubble { opacity: .7; }
+.msg-focus { display: block; font-size: var(--fs-caption); color: var(--text-3); margin-bottom: 2px; }
+.changes { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.change { font-size: var(--fs-caption); color: var(--success); background: var(--success-bg); padding: 2px 8px; border-radius: var(--r-pill); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.changes.undone .change { color: var(--text-3); background: var(--surface-2); text-decoration: line-through; }
+.typing { display: inline-flex; gap: 4px; padding: var(--s-3); background: var(--surface-2); border-radius: var(--r-l); border-bottom-left-radius: var(--r-xs); }
+.typing span { width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); animation: typing 1.2s infinite ease-in-out; }
+.typing span:nth-child(2) { animation-delay: .15s; }
+.typing span:nth-child(3) { animation-delay: .3s; }
+@keyframes typing { 0%, 60%, 100% { opacity: .3; transform: none; } 30% { opacity: 1; transform: translateY(-2px); } }
+.composer { border-top: 1px solid var(--border); padding: var(--s-3) var(--s-4) var(--s-4); display: flex; flex-direction: column; gap: var(--s-2); }
+.composer .textarea { resize: none; }
+.focus-chip { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; max-width: 100%; font-size: var(--fs-label); color: var(--accent); background: var(--accent-subtle); padding: 2px 4px 2px 10px; border-radius: var(--r-pill); }
+.focus-chip button { border: 0; background: none; color: inherit; cursor: pointer; display: grid; place-items: center; padding: 2px; border-radius: 50%; }
+.focus-chip button:hover { background: color-mix(in oklch, var(--accent) 15%, transparent); }
+/* The parts of the board the partner's latest reply wrote. */
+.just-changed { animation: changed 1.8s var(--ease-out); border-radius: var(--r-m); }
+@keyframes changed { from { background-color: color-mix(in oklch, var(--accent) 22%, transparent); } }
+@media (max-width: 1100px) {
+  .idea-layout { grid-template-columns: minmax(0, 1fr); }
+  .talk { position: static; order: -1; max-height: 60vh; }
+}
+
 /* ------------------------------------------------------------------ ledger */
 .dot-warn { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); display: inline-block; }
 .ledger { padding: var(--s-4) var(--s-4) var(--s-3); }
@@ -770,6 +809,7 @@ del, .del { background: var(--danger-bg); color: inherit; opacity: .8; text-deco
   .dialog, .cmdk { animation-name: fade !important; }
   .drawer { animation-name: fade !important; }
   .btn:active { transform: none; }
+  .just-changed, .typing span, .msg { animation: none; }
 }
 
 @media (max-width: 1100px) {

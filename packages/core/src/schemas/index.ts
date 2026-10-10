@@ -356,6 +356,30 @@ export const IdeaItem = z.object({
 });
 export type IdeaItem = z.infer<typeof IdeaItem>;
 
+export const CastSketch = z.object({ id: Id, name: z.string(), role: z.string(), want: z.string(), need: z.string(), wound: z.string(), lie: z.string(), arc: z.string() });
+export type CastSketch = z.infer<typeof CastSketch>;
+
+/** One edit a conversation turn made to the board, kept so the turn can be undone. */
+export const TalkChange = z.object({
+  /** A board field ("logline", "themes"…) or an item ("idea:<id>", "cast:<id>"). */
+  path: z.string(),
+  label: z.string(),
+  before: z.unknown().default(null),
+  after: z.unknown().default(null),
+});
+export type TalkChange = z.infer<typeof TalkChange>;
+
+export const TalkTurn = z.object({
+  role: z.enum(['author', 'partner']),
+  text: z.string(),
+  /** The part of the board the author pointed at, if any ("logline", "cast:mara"). */
+  focus: z.string().nullable().default(null),
+  changes: z.array(TalkChange).default([]),
+  /** The author took this turn's changes back. */
+  undone: z.boolean().default(false),
+});
+export type TalkTurn = z.infer<typeof TalkTurn>;
+
 export const IdeaBoard = z.object({
   seed: z.string().default(''),
   genre: z.string().default(''),
@@ -367,9 +391,17 @@ export const IdeaBoard = z.object({
   paragraph_options: z.array(z.string()).default([]),
   synopsis: z.string().default(''),
   synopsis_options: z.array(z.string()).default([]),
-  cast: z
-    .array(z.object({ id: Id, name: z.string(), role: z.string(), want: z.string(), need: z.string(), wound: z.string(), lie: z.string(), arc: z.string() }))
-    .default([]),
+  cast: z.array(CastSketch).default([]),
+  /** Settled while talking it through; carried into the intent with the premise. */
+  tone: z.string().default(''),
+  ending: z.string().default(''),
+  themes: z.array(z.string()).default([]),
+  /** Things the book must never do: they become hard rules. */
+  never: z.array(z.string()).default([]),
+  /** Questions the conversation has raised and not yet settled. */
+  open: z.array(z.string()).default([]),
+  /** The thinking-partner conversation, oldest first. */
+  talk: z.array(TalkTurn).default([]),
   done: z.boolean().default(false),
 });
 export type IdeaBoard = z.infer<typeof IdeaBoard>;

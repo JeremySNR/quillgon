@@ -148,6 +148,24 @@ describe('server API', () => {
     expect((await api('GET', '/api/idea')).logline).toBe(l.logline_options[0]);
   });
 
+  it('talks an idea through, writing to the board, and undoes a turn', async () => {
+    const before = await api('GET', '/api/idea');
+    let b = await job('/api/idea/talk', { message: 'It should feel like a held breath.' });
+    expect(b.tone).toBe('It should feel like a held breath.');
+    expect(b.talk.slice(-2).map((t: any) => t.role)).toEqual(['author', 'partner']);
+    const turn = b.talk.length - 1;
+    expect(b.talk[turn].changes.map((c: any) => c.label)).toContain('Tone written');
+    b = await api('POST', '/api/idea/talk/undo', { turn });
+    expect(b.tone).toBe(before.tone);
+    expect(b.talk[turn].undone).toBe(true);
+    await expect(api('POST', '/api/idea/talk/undo', { turn })).rejects.toMatchObject({ status: 400 });
+    b = await api('POST', '/api/idea/update', { patch: { never: ['No storms that arrive on cue'] } });
+    expect(b.never).toEqual(['No storms that arrive on cue']);
+    b = await api('POST', '/api/idea/talk/clear');
+    expect(b.talk).toEqual([]);
+    await expect(job('/api/idea/talk', { message: '   ' })).rejects.toThrow(/say something/);
+  });
+
   it('exposes editable prompts', async () => {
     const prompts = await api('GET', '/api/prompts');
     expect(prompts.map((p: any) => p.name)).toContain('writer');
