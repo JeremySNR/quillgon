@@ -26,6 +26,9 @@ export class CodexBackend implements Backend {
     try {
       const env = codexEnv();
       const codex = new Codex({
+        // An installed desktop app does not ship the Codex binary: point at the user's own
+        // (`which codex`) with QUILLGON_CODEX_PATH.
+        ...(process.env.QUILLGON_CODEX_PATH ? { codexPathOverride: process.env.QUILLGON_CODEX_PATH } : {}),
         env,
         config: { forced_login_method: 'chatgpt', model_provider: 'openai', features: { shell_tool: false, apps: false } },
         configOverrides: ['mcp_servers={}'],
