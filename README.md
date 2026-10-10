@@ -10,7 +10,7 @@ Quillgon is an early-stage, local novel-writing workspace for planning, drafting
 
 [Website and writing guides](https://quillgon.vercel.app) · [Download source preview](https://github.com/JeremySNR/quillgon/releases/tag/v0.1.0-alpha.1) · [Get started](https://quillgon.vercel.app/get-started/) · [Report a problem or suggest a feature](https://github.com/JeremySNR/quillgon/issues)
 
-The sample novella and offline workflows are tested. Offline generation uses placeholder text; a complete 80,000-word novel with live models has not yet been validated. Quillgon currently runs from source, with no packaged installers. The website source lives in [`apps/site`](apps/site/README.md).
+The sample novella and offline workflows are tested. Offline generation uses placeholder text; a complete 80,000-word novel with live models has not yet been validated. Quillgon runs from source. You can build a desktop installer yourself with `pnpm dist` (see [Desktop app and installers](#desktop-app-and-installers)); no installers have been published yet. The website source lives in [`apps/site`](apps/site/README.md).
 
 Quillgon is available under the [MIT license](LICENSE). Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -26,7 +26,7 @@ pnpm build          # build the UI
 pnpm serve          # http://127.0.0.1:4317, then "Open the sample novella"
 ```
 
-For the Electron shell, stop the server and run `pnpm desktop`. It also requires Node.js on your `PATH`. The app stores books in local Markdown and YAML files; connected AI providers receive relevant story context when you use generation or analysis.
+For the Electron shell, stop the server and run `pnpm desktop`. It also requires Node.js on your `PATH`. To build an installer instead, see [Desktop app and installers](#desktop-app-and-installers). The app stores books in local Markdown and YAML files; connected AI providers receive relevant story context when you use generation or analysis.
 
 The app works with no API key: choose **Offline** models when you create a book (or set `QUILLGON_OFFLINE=1`). Offline output is placeholder text, but every screen and workflow works.
 
@@ -54,6 +54,35 @@ Verification: a short synthetic request through the real Codex SDK and local Cha
 Anthropic (`ANTHROPIC_API_KEY`) and OpenAI-compatible Chat Completions endpoints remain available per tier. Existing explicit provider settings are preserved. Select **OpenAI API** in Settings to apply the new defaults to an existing book. The [OpenAI model catalog](https://developers.openai.com/api/docs/models) lists current availability and prices; stored prices are estimates rather than invoices.
 
 For development, `pnpm dev` runs the API and the Vite dev server with hot reload on http://localhost:5173.
+
+## Desktop app and installers
+
+`pnpm desktop` runs the Electron shell from your checkout. To build an installer for the computer you are on:
+
+```bash
+pnpm install
+pnpm dist           # installers in apps/desktop/release/
+```
+
+| Platform | Output |
+| --- | --- |
+| macOS (Apple silicon) | `.dmg` and `.zip` |
+| Windows (x64) | NSIS installer (`.exe`) |
+| Linux (x64) | `.AppImage` and `.deb` |
+
+`pnpm dist` builds the UI, bundles the server into a single file with esbuild, rebuilds `better-sqlite3` for Electron, and runs electron-builder (see `apps/desktop/scripts/prepare-package.mjs` and `apps/desktop/electron-builder.config.cjs`). The installed app runs that bundled server with its own Electron runtime, so it needs neither Node.js nor the source tree. The `better-sqlite3` rebuild needs a C/C++ toolchain, Python 3 and network access to electronjs.org for the Electron headers. `pnpm -C apps/desktop dist:dir` skips the installer and leaves the unpacked app in `apps/desktop/release/`.
+
+Pushing a `v*` tag runs [`.github/workflows/release.yml`](.github/workflows/release.yml), which builds all three platforms and attaches the installers to a draft GitHub release.
+
+Before you install one:
+
+- **Installers are unsigned unless you configure signing.** macOS builds are only ad-hoc signed, so macOS reports an unidentified developer: Control-click the app and choose **Open** the first time. Windows SmartScreen warns about an unknown publisher. To sign, set electron-builder's variables (`CSC_LINK` and `CSC_KEY_PASSWORD`, plus `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID` to notarize); the release workflow reads them from the repository secrets listed at its top.
+- **Git must be installed.** Every book is a Git repository. The `.deb` depends on `git`.
+- **API keys come from the environment.** An app started from the Dock, the Start menu or a launcher does not see variables set in your shell profile. Start it from a terminal where `OPENAI_API_KEY` is set (on macOS, `/Applications/Quillgon.app/Contents/MacOS/Quillgon`), or use Offline models.
+- **Codex subscription needs a source checkout for now.** The Codex SDK runs the Codex binary from its own npm package, which the installer does not include.
+- The installers use Electron's default icon.
+
+Verified so far: on Linux x64, electron-builder produces the AppImage, the `.deb` and the unpacked app, and the packaged app starts its bundled server and shows the UI. Not yet verified: opening a book in an installed build, which needs `better-sqlite3` rebuilt for Electron (the release workflow does this; it could not be done where the packaging was developed), and the macOS and Windows installers, which so far are built only by the release workflow.
 
 ## Using it
 
@@ -155,7 +184,7 @@ pnpm test:live      # live-model tests; needs QUILLGON_LIVE=1 and an API key
 ## Notes and deviations from the plan
 
 - **OpenAI Responses API and Codex SDK.** Quillgon owns the story graph and review workflow; each writing agent requests a structured result through the official OpenAI SDK. A hosted Agents API execution environment is unnecessary for these calls. The local Codex SDK provides a separate path for users signing in with ChatGPT.
-- **Electron runs the core as a plain Node process.** This lets `better-sqlite3` load without an Electron rebuild. It needs `node` on your `PATH` (or set `QUILLGON_NODE`).
+- **Electron runs the core as a separate process.** From a checkout (`pnpm desktop`) it is a plain Node process running the CLI through tsx, so `better-sqlite3` needs no Electron rebuild; it needs `node` on your `PATH` (or set `QUILLGON_NODE`). An installed app runs the bundled server with Electron's own Node (`ELECTRON_RUN_AS_NODE`) and a `better-sqlite3` rebuilt for it. Either way the window only shows the server's own pages: other navigation is blocked, web and mail links open in your browser, permission requests are denied, and if the server stops the app offers to restart it.
 - **Reader prediction matching is mechanical** (embedding similarity, synonym folding, and the prediction must name the right person). A cheap model judge would be more accurate and is an easy swap.
 - **Two small additions to the data model:** `scenes/<id>/facts.yaml` holds extracted facts, so the index can rebuild from files, and an optional `locations.yaml` / `facts.yaml` glossary gives ids human-readable names.
 
