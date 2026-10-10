@@ -45,6 +45,8 @@ export interface UsageRecord {
   cost_usd: number;
   attempts: number;
   ok: boolean;
+  /** Why the call failed, when ok is false. */
+  error?: string;
 }
 
 export class RefusalError extends Error {
@@ -58,5 +60,16 @@ export class SchemaFailure extends Error {
   constructor(public agent: string, public attempts: number, public lastError: string, public lastText: string) {
     super(`${agent}: output failed validation after ${attempts} attempts: ${lastError}`);
     this.name = 'SchemaFailure';
+  }
+}
+
+/**
+ * A backend failure. `transient` failures (rate limits, overload, a dropped stream) are
+ * worth retrying; the adapter does so with backoff. `retryAfterMs` honours the provider.
+ */
+export class BackendError extends Error {
+  constructor(message: string, public transient: boolean, public retryAfterMs?: number, public status?: number) {
+    super(message);
+    this.name = 'BackendError';
   }
 }

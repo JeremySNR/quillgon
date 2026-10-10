@@ -38,6 +38,9 @@ export const ModelConfig = z.object({
   /** USD per million tokens, used for cost logging and `novel estimate`. */
   price_in: z.number().optional(),
   price_out: z.number().optional(),
+  /** USD per million prompt-cache tokens. Default to 1.25x (write) and 0.1x (read) of price_in. */
+  price_cache_write: z.number().optional(),
+  price_cache_read: z.number().optional(),
 });
 export type ModelConfig = z.infer<typeof ModelConfig>;
 

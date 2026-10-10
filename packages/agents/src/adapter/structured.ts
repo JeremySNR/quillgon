@@ -1,7 +1,8 @@
 import { z, type ZodType } from 'zod';
 import { DEFAULT_MODELS, type Book, type ModelConfig, type ModelTier } from '@quillgon/core';
-import type { Backend, Message, UsageRecord } from './types.js';
-import { SchemaFailure } from './types.js';
+import type { Backend, Message, RawRequest, RawResponse, UsageRecord } from './types.js';
+import { BackendError, RefusalError, SchemaFailure } from './types.js';
+import { stripInventedNulls } from './schema.js';
 
 export interface CompleteOptions<T> {
   agent: string;
@@ -49,17 +50,72 @@ export function formatZodError(e: z.ZodError): string {
     .join('\n');
 }
 
+const TRANSIENT_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504, 529]);
+const TRANSIENT_CODES = new Set(['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EPIPE', 'EAI_AGAIN', 'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT']);
+
+/**
+ * Worth retrying? Rate limits, overload, server errors and dropped connections are; a
+ * refusal, a bad request, a missing key or an exhausted quota are not.
+ */
+export function isTransient(e: unknown): boolean {
+  if (e instanceof RefusalError || e instanceof SchemaFailure) return false;
+  if (e instanceof BackendError) return e.transient;
+  const err = e as { status?: number; code?: string; name?: string; cause?: { code?: string } };
+  if (typeof err?.status === 'number') return TRANSIENT_STATUS.has(err.status) || err.status >= 500;
+  if (err?.name === 'APIConnectionError' || err?.name === 'APIConnectionTimeoutError') return true;
+  const code = err?.code ?? err?.cause?.code;
+  return !!code && TRANSIENT_CODES.has(code);
+}
+
+function retryAfterMs(e: unknown): number | undefined {
+  if (e instanceof BackendError) return e.retryAfterMs;
+  const h = (e as { headers?: unknown })?.headers;
+  const raw = h && typeof (h as Headers).get === 'function' ? (h as Headers).get('retry-after') : (h as Record<string, string> | undefined)?.['retry-after'];
+  const secs = raw ? Number(raw) : NaN;
+  return Number.isFinite(secs) ? secs * 1000 : undefined;
+}
+
+export interface AdapterOptions {
+  /** Extra attempts after a transient failure (the provider SDKs already retry twice). */
+  networkRetries?: number;
+  /** First backoff delay; doubles each time, with jitter, capped at a minute. */
+  backoffMs?: number;
+  sleep?: (ms: number) => Promise<void>;
+}
+
 /**
  * The one adapter the agents use: complete(messages, schema, options) -> parsed object.
  * Validates with Zod; on failure re-prompts with the validation error (max 2 retries).
- * Logs model, tokens and cost for every call.
+ * Retries transient backend failures with backoff. Logs model, tokens and cost for every
+ * call, failed ones included, so the cost report counts what was actually spent.
  */
 export class ModelAdapter {
+  private retries: number;
+  private backoff: number;
+  private sleep: (ms: number) => Promise<void>;
+
   constructor(
     private backends: Record<string, Backend>,
     private book: () => Book,
     private onUsage: (u: UsageRecord) => void = () => undefined,
-  ) {}
+    opts: AdapterOptions = {},
+  ) {
+    this.retries = opts.networkRetries ?? 2;
+    this.backoff = opts.backoffMs ?? 2000;
+    this.sleep = opts.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  }
+
+  private async call(backend: Backend, req: RawRequest): Promise<RawResponse> {
+    for (let n = 0; ; n++) {
+      try {
+        return await backend.call(req);
+      } catch (e) {
+        if (n >= this.retries || !isTransient(e)) throw e;
+        const base = Math.min(60_000, this.backoff * 4 ** n);
+        await this.sleep(Math.min(120_000, retryAfterMs(e) ?? base * (0.75 + Math.random() * 0.5)));
+      }
+    }
+  }
 
   configFor(tier: ModelTier): ModelConfig {
     return { ...DEFAULT_MODELS[tier], ...(this.book().models[tier] ?? {}) } as ModelConfig;
@@ -79,41 +135,52 @@ export class ModelAdapter {
     let cacheW = 0;
     let cacheR = 0;
     let model = config.model;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      const res = await backend.call({ config, system, messages, jsonSchema, schemaName: opts.schemaName, maxTokens: opts.maxTokens ?? 32000 });
-      inTok += res.inputTokens;
-      outTok += res.outputTokens;
-      cacheW += res.cacheWriteTokens ?? 0;
-      cacheR += res.cacheReadTokens ?? 0;
-      model = res.model;
-      lastText = res.text;
-      let parsed: unknown;
-      try {
-        parsed = extractJson(res.text);
-      } catch (e) {
-        lastError = (e as Error).message;
-        messages.push({ role: 'assistant', content: res.text }, { role: 'user', content: `That was not valid JSON (${lastError}). Reply again with only the JSON object.` });
-        continue;
+    let attempt = 0;
+    try {
+      for (attempt = 1; attempt <= 3; attempt++) {
+        const res = await this.call(backend, { config, system, messages, jsonSchema, schemaName: opts.schemaName, maxTokens: opts.maxTokens ?? 32000 });
+        inTok += res.inputTokens;
+        outTok += res.outputTokens;
+        cacheW += res.cacheWriteTokens ?? 0;
+        cacheR += res.cacheReadTokens ?? 0;
+        model = res.model;
+        lastText = res.text;
+        let parsed: unknown;
+        try {
+          parsed = stripInventedNulls(extractJson(res.text), jsonSchema);
+        } catch (e) {
+          lastError = (e as Error).message;
+          messages.push({ role: 'assistant', content: res.text }, { role: 'user', content: `That was not valid JSON (${lastError}). Reply again with only the JSON object.` });
+          continue;
+        }
+        const r = opts.schema.safeParse(parsed);
+        if (r.success) {
+          this.log(opts, config, model, inTok, outTok, attempt, true, cacheW, cacheR);
+          return r.data;
+        }
+        lastError = formatZodError(r.error);
+        messages.push(
+          { role: 'assistant', content: res.text },
+          { role: 'user', content: `Your JSON did not validate:\n${lastError}\n\nReply again with the corrected JSON object only. Change nothing else.` },
+        );
       }
-      const r = opts.schema.safeParse(parsed);
-      if (r.success) {
-        this.log(opts, config, model, inTok, outTok, attempt, true, cacheW, cacheR);
-        return r.data;
-      }
-      lastError = formatZodError(r.error);
-      messages.push(
-        { role: 'assistant', content: res.text },
-        { role: 'user', content: `Your JSON did not validate:\n${lastError}\n\nReply again with the corrected JSON object only. Change nothing else.` },
-      );
+    } catch (e) {
+      // A backend failure part-way (after earlier attempts were billed) is still logged.
+      this.log(opts, config, model, inTok, outTok, Math.max(attempt, 1), false, cacheW, cacheR, (e as Error).message);
+      throw e;
     }
-    this.log(opts, config, model, inTok, outTok, 3, false, cacheW, cacheR);
+    this.log(opts, config, model, inTok, outTok, 3, false, cacheW, cacheR, lastError);
     throw new SchemaFailure(opts.agent, 3, lastError, lastText);
   }
 
-  private log(opts: CompleteOptions<unknown>, config: ModelConfig, model: string, inTok: number, outTok: number, attempts: number, ok: boolean, cacheW = 0, cacheR = 0) {
+  private log(opts: CompleteOptions<unknown>, config: ModelConfig, model: string, inTok: number, outTok: number, attempts: number, ok: boolean, cacheW = 0, cacheR = 0, error?: string) {
     const pin = config.price_in ?? 0;
+    // Cache prices differ by model (reads are 0.025x to 0.1x input): configurable per tier,
+    // with the common 1.25x write / 0.1x read as the fallback.
+    const pcw = config.price_cache_write ?? pin * 1.25;
+    const pcr = config.price_cache_read ?? pin * 0.1;
     // Subscription use has no per-token API charge; quota use is still logged.
-    const cost = config.provider === 'codex' ? 0 : (inTok * pin + cacheW * pin * 1.25 + cacheR * pin * 0.1 + outTok * (config.price_out ?? 0)) / 1e6;
+    const cost = config.provider === 'codex' ? 0 : (inTok * pin + cacheW * pcw + cacheR * pcr + outTok * (config.price_out ?? 0)) / 1e6;
     this.onUsage({
       ts: new Date().toISOString(),
       agent: opts.agent,
@@ -127,6 +194,7 @@ export class ModelAdapter {
       cost_usd: Math.round(cost * 1e6) / 1e6,
       attempts,
       ok,
+      ...(error ? { error: error.slice(0, 500) } : {}),
     });
   }
 }

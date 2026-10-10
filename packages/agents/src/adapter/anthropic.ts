@@ -1,6 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { Backend, RawRequest, RawResponse } from './types.js';
 import { RefusalError } from './types.js';
+import { strictify } from './schema.js';
+
+export { strictify };
 
 /**
  * Claude via the official SDK. Streams (long prose outputs), uses adaptive thinking with
@@ -29,7 +32,9 @@ export class AnthropicBackend implements Backend {
     try {
       return await this.send(req, native);
     } catch (e) {
-      if (native && e instanceof Anthropic.BadRequestError && /schema|output_config|format/i.test(e.message)) {
+      // Only a rejection of the output schema itself downgrades this schema to prompt-only
+      // JSON; any other 400 (a too-long prompt, say) is a real error.
+      if (native && e instanceof Anthropic.BadRequestError && /output_config|json_schema|\bschema\b/i.test(e.message)) {
         this.noNative.add(req.schemaName);
         return this.send(req, false);
       }
@@ -41,7 +46,7 @@ export class AnthropicBackend implements Backend {
     const client = this.client(req);
     const outputConfig: Record<string, unknown> = {};
     if (req.config.effort) outputConfig.effort = req.config.effort;
-    if (native) outputConfig.format = { type: 'json_schema', schema: strictify(req.jsonSchema) };
+    if (native) outputConfig.format = { type: 'json_schema', schema: strictify(req.jsonSchema, 'optional') };
     const fallbackCapable = /^claude-(opus-5|fable-5|sonnet-5-5)/.test(req.config.model);
     const params = {
       model: req.config.model,
@@ -74,23 +79,4 @@ export class AnthropicBackend implements Backend {
       model: msg.model,
     };
   }
-}
-
-const DROP = new Set(['minLength', 'maxLength', 'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'pattern', 'format', 'maxItems', 'default', '$schema', 'propertyNames']);
-
-/** Native structured outputs accept a JSON Schema subset; drop constraints Zod still enforces locally. */
-export function strictify(schema: unknown): unknown {
-  if (Array.isArray(schema)) return schema.map(strictify);
-  if (!schema || typeof schema !== 'object') return schema;
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(schema as Record<string, unknown>)) {
-    if (DROP.has(k)) continue;
-    if (k === 'minItems' && typeof v === 'number' && v > 1) continue;
-    out[k] = strictify(v);
-  }
-  if (out.type === 'object' && out.properties) {
-    out.additionalProperties = false;
-    out.required = Object.keys(out.properties as object);
-  }
-  return out;
 }
