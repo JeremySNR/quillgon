@@ -14,5 +14,6 @@ export function copyFixture(): string {
 
 export function edit(dir: string, rel: string, fn: (text: string) => string) {
   const p = path.join(dir, rel);
-  fs.writeFileSync(p, fn(fs.readFileSync(p, 'utf8')));
+  // Fixture mutations use LF patterns, including on Windows Git checkouts.
+  fs.writeFileSync(p, fn(fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n')));
 }

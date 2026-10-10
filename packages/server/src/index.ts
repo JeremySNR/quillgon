@@ -235,7 +235,7 @@ export class NovelServer {
       '/api/init',
       async ({ body, server }) => {
         const dir = path.resolve(expandHome(body.dir));
-        const store = await initProject(dir, { title: body.title, genre: body.genre, target_words: Number(body.target_words) || 12000, offline: !!body.offline });
+        const store = await initProject(dir, { title: body.title, genre: body.genre, target_words: Number(body.target_words) || 12000, offline: !!body.offline, codex: !!body.codex });
         store.close();
         server.open(dir);
         return { ok: true, dir };

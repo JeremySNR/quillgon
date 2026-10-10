@@ -6,8 +6,6 @@ settings:
 
 importers:
 
-  apps/site: {}
-
   .:
     devDependencies:
       '@quillgon/agents':
@@ -106,7 +104,7 @@ importers:
         version: 10.0.6
       electron:
         specifier: ^44.7.0
-        version: 44.7.0
+        version: 44.7.0(supports-color@10.2.2)
       typescript:
         specifier: ^5.9.0
         version: 5.9.3
@@ -114,14 +112,22 @@ importers:
         specifier: ^8.3.4
         version: 8.3.4(@types/node@24.19.1)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1)
 
+  apps/site: {}
+
   packages/agents:
     dependencies:
       '@anthropic-ai/sdk':
         specifier: ^0.133.0
         version: 0.133.0(zod@4.6.5)
+      '@openai/codex-sdk':
+        specifier: ^0.162.0
+        version: 0.162.0
       '@quillgon/core':
         specifier: workspace:*
         version: link:../core
+      openai:
+        specifier: ^7.31.0
+        version: 7.31.0(undici@7.30.0)(zod@4.6.5)
       zod:
         specifier: ^4.1.0
         version: 4.6.5
@@ -160,7 +166,7 @@ importers:
         version: 8.0.4
       simple-git:
         specifier: ^3.28.0
-        version: 3.36.0
+        version: 3.36.0(supports-color@10.2.2)
       yaml:
         specifier: ^2.8.1
         version: 2.9.1
@@ -460,6 +466,51 @@ packages:
   '@marijn/find-cluster-break@1.0.4':
     resolution: {integrity: sha512-Wy0V7+SGUjnF9/TkiM1hKVDPj7jKXduPNboMVtHTA8dySMURWqfg/JZ9E2Sq8JgSJmkl7k7Qe9FLeMSrSraWmQ==}
 
+  '@openai/codex-sdk@0.162.0':
+    resolution: {integrity: sha512-SAe7x2td4hDlOm1wilgnFqfYZTJsewGQ9gTOsFnn3963ZuLhQNiuR7q7YecLhUNJ5pYra8DSH+JWpTD2+ZD6IA==}
+    engines: {node: '>=18'}
+
+  '@openai/codex@0.162.0':
+    resolution: {integrity: sha512-qWWckMfknyVym1lD5y2rTwPJA2sgHkzePF2l/Uevss4hVpqbt23rMIHKNTrqECdnv82denylHWEzrAmDnCYNIw==}
+    engines: {node: '>=16'}
+    hasBin: true
+
+  '@openai/codex@0.162.0-darwin-arm64':
+    resolution: {integrity: sha512-hyiGlMCbZog7IY2TcSWzXbsmtUnynT93QA4utqGlVmFlmz8TurADk3LV28zqUIdgh9GLOzumDIdHQbYieo9Nqw==}
+    engines: {node: '>=16'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@openai/codex@0.162.0-darwin-x64':
+    resolution: {integrity: sha512-4XzCUJgEDDdme6VWDEKvbWDA6f+470d4xhhorYUgNBZwY8Dq5NYqvWkO33rnc1vjxkqSj+SwkymHxRMxL6h1CA==}
+    engines: {node: '>=16'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@openai/codex@0.162.0-linux-arm64':
+    resolution: {integrity: sha512-6NYWwy09FsZ+/0Dz/bvV/yz3aFhkNzj86fSiux9Ax9VMBOID5nPdwd51OySm7fy8TMRud4fgJFELSi3Enc1s7Q==}
+    engines: {node: '>=16'}
+    cpu: [arm64]
+    os: [linux]
+
+  '@openai/codex@0.162.0-linux-x64':
+    resolution: {integrity: sha512-qHWp6oKpf456PqjberGN8avs8zChv2oS+UuDiqVFYAuDOhq6vBc1drh8jEsnR7dBX+zcw03PN5VLtePGlMcC3w==}
+    engines: {node: '>=16'}
+    cpu: [x64]
+    os: [linux]
+
+  '@openai/codex@0.162.0-win32-arm64':
+    resolution: {integrity: sha512-scdBHlUz4AfLOUWT4r4kwe3GFvjbBbWxreLDGoLSyMFf566e7sHSJvlJuV7uha2S7uRoQnMmWwmqYMJuT322UQ==}
+    engines: {node: '>=16'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@openai/codex@0.162.0-win32-x64':
+    resolution: {integrity: sha512-W8kqHaqpW0qPz71E0rRT5dq+socGz1BbJyYN7o3SP1TWQt8Zl6ML74R9Hvt/xn1NNLVlDTRfXqNmaMkte6yEMQ==}
+    engines: {node: '>=16'}
+    cpu: [x64]
+    os: [win32]
+
   '@oxc-project/types@0.153.0':
     resolution: {integrity: sha512-jSNrRIyvPVLL5E1z/tS5zLAprosGz/FuI1PWwEOz59j3E4TTTzSpqKb/RDGqJhhW0QHYISGXxq582wGx6T11Tw==}
 
@@ -666,36 +717,42 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [linux]
+    libc: [glibc]
 
   '@rolldown/binding-linux-arm64-musl@1.2.13':
     resolution: {integrity: sha512-xU+Kvv9N2A3SY35zFh1FWWNjxbadE/BKeqnkXe7vScU4GZsw757BlVmDLITZEq8DPpk6m7uoDYkK7P+x/uU5Ow==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [arm64]
     os: [linux]
+    libc: [musl]
 
   '@rolldown/binding-linux-ppc64-gnu@1.2.13':
     resolution: {integrity: sha512-XMk/hnhh25oQ756Lclb1Q11h4ll0xC0Esa5w4Vzp+mAE2S3AGJgeM0SonrIgY8fHhjarb6hcoTuwoFG0VVP2ig==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [ppc64]
     os: [linux]
+    libc: [glibc]
 
   '@rolldown/binding-linux-s390x-gnu@1.2.13':
     resolution: {integrity: sha512-U1BoTHYmlywE2n3HUWjzZ+8EQsKr+OwpxYuDWaubx42tUL8QSL7nOqRz/NVHanibbFP3M1Rxuprz/wNcbMKjqw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [s390x]
     os: [linux]
+    libc: [glibc]
 
   '@rolldown/binding-linux-x64-gnu@1.2.13':
     resolution: {integrity: sha512-J4cm80Pc6wEwV5AZ42o62sIQgDk+Y7R2s646jIwuvO+4V46QB58N4vVuMPWCBaNgursXLpmUWJV//WQAkPvHBQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   '@rolldown/binding-linux-x64-musl@1.2.13':
     resolution: {integrity: sha512-W0euZS40U4V6JkmEnVCIX9mcsL6cbXQ4X8c2w+MMOIjFg68TXUW+u3RT+2e1t1pv9mg/EP3pDtK3POXdQ7Rxyw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [linux]
+    libc: [musl]
 
   '@rolldown/binding-openharmony-arm64@1.2.13':
     resolution: {integrity: sha512-do/AF/4n9MRshia3a5aXoy8xM2c6mgfT6D7H/dY6my5z+hfCIR4ab7mk4IRj++nsEQpKy39kd0DQnDq+r692tw==}
@@ -1023,24 +1080,28 @@ packages:
     engines: {node: '>= 12.0.0'}
     cpu: [arm64]
     os: [linux]
+    libc: [glibc]
 
   lightningcss-linux-arm64-musl@1.33.0:
     resolution: {integrity: sha512-yiO5ROMuYQgXbC60yjZU5CYSFZGKXL0HFATXt9mHJn1+zW55oCtMI9NfcVhYLMFDL7gV7oBPon/EmMMGg2OvtQ==}
     engines: {node: '>= 12.0.0'}
     cpu: [arm64]
     os: [linux]
+    libc: [musl]
 
   lightningcss-linux-x64-gnu@1.33.0:
     resolution: {integrity: sha512-ar+Ju7LmcN0Jo4FpL4hpFybwNG9/3A/Br5KW2n2jyODg3MEZXaDYADdemoNS+BDNfMgKvylJLj4S5tyRActuAg==}
     engines: {node: '>= 12.0.0'}
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   lightningcss-linux-x64-musl@1.33.0:
     resolution: {integrity: sha512-RYiYbkokw0trfKqqzfF55lginwEPrD3OJDfTuJzFs1MK6iFnDenaz1fqLLtX4ITG3OktJQXOeTaw1awrBAlZPw==}
     engines: {node: '>= 12.0.0'}
     cpu: [x64]
     os: [linux]
+    libc: [musl]
 
   lightningcss-win32-arm64-msvc@1.33.0:
     resolution: {integrity: sha512-1K+MPfLSFVpphzpdbfkhlWk6wBrTObBzS2T6db10PNOZgR9GoVsAWzwNyuhUYYbTp23j+4RrncfujZ4uAzXvwA==}
@@ -1101,6 +1162,30 @@ packages:
 
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
+
+  openai@7.31.0:
+    resolution: {integrity: sha512-ZGAzauuYb0DdB53qVbIR+X8rdmNtWgiElrrMthbZCVreLcIsQJBwzAIWUbpB2FkQu2Cj6OJ9zJR1EKMUYn4/SQ==}
+    engines: {node: '>=22.0.0'}
+    peerDependencies:
+      '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
+      '@smithy/hash-node': '>=4.3.0 <5'
+      '@smithy/signature-v4': '>=5.4.0 <6'
+      undici: '>=5 <9'
+      ws: ^8.21.0
+      zod: ^3.25 || ^4.0
+    peerDependenciesMeta:
+      '@aws-sdk/credential-provider-node':
+        optional: true
+      '@smithy/hash-node':
+        optional: true
+      '@smithy/signature-v4':
+        optional: true
+      undici:
+        optional: true
+      ws:
+        optional: true
+      zod:
+        optional: true
 
   pathe@2.0.3:
     resolution: {integrity: sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==}
@@ -1573,14 +1658,14 @@ snapshots:
 
   '@electron-internal/extract-zip@1.0.5': {}
 
-  '@electron/get@5.1.0':
+  '@electron/get@5.1.0(supports-color@10.2.2)':
     dependencies:
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
       env-paths: 3.0.0
       graceful-fs: 4.2.11
       progress: 2.0.3
       semver: 7.8.5
-      sumchecker: 3.0.1
+      sumchecker: 3.0.1(supports-color@10.2.2)
     optionalDependencies:
       undici: 7.30.0
     transitivePeerDependencies:
@@ -1672,9 +1757,9 @@ snapshots:
 
   '@jridgewell/sourcemap-codec@1.6.0': {}
 
-  '@kwsites/file-exists@1.1.1':
+  '@kwsites/file-exists@1.1.1(supports-color@10.2.2)':
     dependencies:
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -1714,6 +1799,37 @@ snapshots:
       '@lezer/highlight': 1.2.5
 
   '@marijn/find-cluster-break@1.0.4': {}
+
+  '@openai/codex-sdk@0.162.0':
+    dependencies:
+      '@openai/codex': 0.162.0
+
+  '@openai/codex@0.162.0':
+    optionalDependencies:
+      '@openai/codex-darwin-arm64': '@openai/codex@0.162.0-darwin-arm64'
+      '@openai/codex-darwin-x64': '@openai/codex@0.162.0-darwin-x64'
+      '@openai/codex-linux-arm64': '@openai/codex@0.162.0-linux-arm64'
+      '@openai/codex-linux-x64': '@openai/codex@0.162.0-linux-x64'
+      '@openai/codex-win32-arm64': '@openai/codex@0.162.0-win32-arm64'
+      '@openai/codex-win32-x64': '@openai/codex@0.162.0-win32-x64'
+
+  '@openai/codex@0.162.0-darwin-arm64':
+    optional: true
+
+  '@openai/codex@0.162.0-darwin-x64':
+    optional: true
+
+  '@openai/codex@0.162.0-linux-arm64':
+    optional: true
+
+  '@openai/codex@0.162.0-linux-x64':
+    optional: true
+
+  '@openai/codex@0.162.0-win32-arm64':
+    optional: true
+
+  '@openai/codex@0.162.0-win32-x64':
+    optional: true
 
   '@oxc-project/types@0.153.0': {}
 
@@ -2057,9 +2173,11 @@ snapshots:
 
   csstype@3.2.3: {}
 
-  debug@4.4.3:
+  debug@4.4.3(supports-color@10.2.2):
     dependencies:
       ms: 2.1.3
+    optionalDependencies:
+      supports-color: 10.2.2
 
   decompress-response@6.0.0:
     dependencies:
@@ -2073,10 +2191,10 @@ snapshots:
 
   diff@8.0.4: {}
 
-  electron@44.7.0:
+  electron@44.7.0(supports-color@10.2.2):
     dependencies:
       '@electron-internal/extract-zip': 1.0.5
-      '@electron/get': 5.1.0
+      '@electron/get': 5.1.0(supports-color@10.2.2)
       '@types/node': 24.19.1
     transitivePeerDependencies:
       - supports-color
@@ -2245,6 +2363,11 @@ snapshots:
     dependencies:
       wrappy: 1.0.2
 
+  openai@7.31.0(undici@7.30.0)(zod@4.6.5):
+    optionalDependencies:
+      undici: 7.30.0
+      zod: 4.6.5
+
   pathe@2.0.3: {}
 
   picocolors@1.1.1: {}
@@ -2371,13 +2494,13 @@ snapshots:
       once: 1.4.0
       simple-concat: 1.0.1
 
-  simple-git@3.36.0:
+  simple-git@3.36.0(supports-color@10.2.2):
     dependencies:
-      '@kwsites/file-exists': 1.1.1
+      '@kwsites/file-exists': 1.1.1(supports-color@10.2.2)
       '@kwsites/promise-deferred': 1.1.1
       '@simple-git/args-pathspec': 1.0.4
       '@simple-git/argv-parser': 1.1.1
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -2410,9 +2533,9 @@ snapshots:
 
   style-mod@4.1.4: {}
 
-  sumchecker@3.0.1:
+  sumchecker@3.0.1(supports-color@10.2.2):
     dependencies:
-      debug: 4.4.3
+      debug: 4.4.3(supports-color@10.2.2)
     transitivePeerDependencies:
       - supports-color
 

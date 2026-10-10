@@ -23,7 +23,7 @@ export const ModelTier = z.enum(['frontier', 'mid', 'small', 'reader']);
 export type ModelTier = z.infer<typeof ModelTier>;
 
 export const ModelConfig = z.object({
-  provider: z.enum(['anthropic', 'openai-compatible', 'offline']).default('anthropic'),
+  provider: z.enum(['openai', 'codex', 'anthropic', 'openai-compatible', 'offline']).default('openai'),
   model: z.string(),
   base_url: z.string().optional(),
   api_key_env: z.string().optional(),
@@ -51,11 +51,16 @@ export const AgentName = z.enum([
 export type AgentName = z.infer<typeof AgentName>;
 
 export const DEFAULT_MODELS: Record<ModelTier, ModelConfig> = {
-  frontier: { provider: 'anthropic', model: 'claude-opus-5-5', effort: 'high', price_in: 4, price_out: 20 },
-  mid: { provider: 'anthropic', model: 'claude-sonnet-5-5', effort: 'medium', price_in: 2, price_out: 10 },
-  small: { provider: 'anthropic', model: 'claude-haiku-5-5', effort: 'low', price_in: 0.1, price_out: 0.5 },
-  reader: { provider: 'anthropic', model: 'claude-sonnet-5-5', effort: 'medium', price_in: 2, price_out: 10 },
+  frontier: { provider: 'openai', model: 'gpt-6.1-sol', effort: 'high', price_in: 2, price_out: 10 },
+  mid: { provider: 'openai', model: 'gpt-6.1-sol', effort: 'medium', price_in: 2, price_out: 10 },
+  small: { provider: 'openai', model: 'gpt-6-luna', effort: 'low', price_in: 0.1, price_out: 0.5 },
+  reader: { provider: 'openai', model: 'gpt-6.1-sol', effort: 'medium', price_in: 2, price_out: 10 },
 };
+
+/** Empty model lets Codex choose a model available to the signed-in account. */
+export const CODEX_MODELS: Record<ModelTier, ModelConfig> = Object.fromEntries(
+  ModelTier.options.map((tier) => [tier, { provider: 'codex', model: '', effort: DEFAULT_MODELS[tier].effort, price_in: 0, price_out: 0 }]),
+) as Record<ModelTier, ModelConfig>;
 
 export const DEFAULT_AGENT_TIERS: Record<AgentName, ModelTier> = {
   muse: 'frontier',

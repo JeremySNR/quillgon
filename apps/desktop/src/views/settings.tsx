@@ -6,6 +6,7 @@ import type { Book } from '../lib/types';
 import { loadPref, money, savePref } from '../lib/util';
 import { Badge, Button, Field, Segmented } from '../components/ui';
 import { StyleSettings } from './style-settings';
+import { DEFAULT_MODELS, CODEX_MODELS } from '@quillgon/core/schemas';
 
 const TABS = [
   { id: 'book', label: 'Book', icon: BookOpen },
@@ -152,12 +153,6 @@ function BookSettings() {
 }
 
 const TIERS = ['frontier', 'mid', 'small', 'reader'] as const;
-const DEFAULTS: Record<string, { model: string; price_in: number; price_out: number; effort: string }> = {
-  frontier: { model: 'claude-opus-5-5', price_in: 4, price_out: 20, effort: 'high' },
-  mid: { model: 'claude-sonnet-5-5', price_in: 2, price_out: 10, effort: 'medium' },
-  small: { model: 'claude-haiku-5-5', price_in: 0.1, price_out: 0.5, effort: 'low' },
-  reader: { model: 'claude-sonnet-5-5', price_in: 2, price_out: 10, effort: 'medium' },
-};
 const AGENTS = ['interviewer', 'planner', 'writer', 'reviser', 'extractor', 'voice', 'humaniser', 'reader', 'continuity'] as const;
 const AGENT_DEFAULT: Record<string, string> = { interviewer: 'frontier', planner: 'frontier', writer: 'frontier', reviser: 'frontier', extractor: 'mid', voice: 'mid', humaniser: 'mid', reader: 'reader', continuity: 'small' };
 
@@ -166,7 +161,7 @@ function ModelSettings() {
   const save = useSaver();
   const [b, setB] = useState<Book>(p!.book);
   useEffect(() => setB(p!.book), [p!.book]);
-  const tier = (t: (typeof TIERS)[number]) => ({ provider: 'anthropic', ...DEFAULTS[t], ...(b.models[t] ?? {}) }) as Required<Book['models']>['frontier'];
+  const tier = (t: (typeof TIERS)[number]) => ({ ...DEFAULT_MODELS[t], ...(b.models[t] ?? {}) });
   const setTier = (t: (typeof TIERS)[number], patch: object) => setB({ ...b, models: { ...b.models, [t]: { ...tier(t), ...patch } } });
   const offline = tier('frontier').provider === 'offline';
   return (
@@ -175,18 +170,19 @@ function ModelSettings() {
         <div className="row">
           <h3 className="grow">Models by tier</h3>
           <Segmented
-            value={offline ? 'offline' : 'live'}
+            value={offline ? 'offline' : TIERS.every((t) => tier(t).provider === 'codex') ? 'codex' : TIERS.every((t) => tier(t).provider === 'openai') ? 'live' : 'custom'}
             options={[
-              { value: 'live', label: 'Claude' },
+              { value: 'live', label: 'OpenAI API' },
+              { value: 'codex', label: 'Codex subscription' },
               { value: 'offline', label: 'Offline' },
             ]}
             onChange={(v) => {
-              const models = Object.fromEntries(TIERS.map((t) => [t, v === 'offline' ? { provider: 'offline', model: 'offline', price_in: 0, price_out: 0 } : { provider: 'anthropic', ...DEFAULTS[t] }]));
+              const models = Object.fromEntries(TIERS.map((t) => [t, v === 'offline' ? { provider: 'offline', model: 'offline', price_in: 0, price_out: 0 } : v === 'codex' ? CODEX_MODELS[t] : DEFAULT_MODELS[t]]));
               setB({ ...b, models });
             }}
           />
         </div>
-        <p className="muted">Each agent uses a tier. Swap providers here; an OpenAI-compatible endpoint works too (set its base URL and the environment variable holding its key). Run the reader on a different vendor than the writer if you can.</p>
+        <p className="muted">OpenAI Responses API is the default. Set OPENAI_API_KEY before launching Quillgon; API usage is billed separately from ChatGPT. For Codex subscription, run <code>codex login</code> and sign in with ChatGPT on this computer. Plan limits and model access apply. A blank Codex model uses your account default. Subscription token counts are logged; $0 means no API charge, not unlimited use.</p>
         {offline && <div className="banner warning" style={{ marginBottom: 0 }}><Cpu /><div className="banner-body"><span className="banner-title">Offline models</span><span>Placeholder output for trying the app. No API calls, no cost.</span></div></div>}
         {!offline &&
           TIERS.map((t) => {
@@ -197,10 +193,12 @@ function ModelSettings() {
                   <Badge kind="outline">{t}</Badge>
                 </div>
                 <Field label="Model">
-                  <input className="input mono" value={m.model} onChange={(e) => setTier(t, { model: e.target.value })} />
+                  <input className="input mono" value={m.model} placeholder={m.provider === 'codex' ? 'Account default' : 'Model ID'} onChange={(e) => setTier(t, { model: e.target.value })} />
                 </Field>
                 <Field label="Provider">
-                  <select className="select" value={m.provider} onChange={(e) => setTier(t, { provider: e.target.value })}>
+                  <select className="select" value={m.provider} onChange={(e) => setTier(t, e.target.value === 'codex' ? CODEX_MODELS[t] : e.target.value === 'openai' ? DEFAULT_MODELS[t] : { provider: e.target.value, model: e.target.value === 'anthropic' ? 'claude-sonnet-5-5' : '', effort: undefined, base_url: undefined, api_key_env: undefined, price_in: 0, price_out: 0 })}>
+                    <option value="openai">OpenAI Responses API</option>
+                    <option value="codex">Codex subscription</option>
                     <option value="anthropic">Anthropic</option>
                     <option value="openai-compatible">OpenAI-compatible</option>
                   </select>
@@ -214,18 +212,18 @@ function ModelSettings() {
                 </Field>
                 <Field label="$ / M tokens in · out">
                   <div className="row">
-                    <input className="input num" type="number" step={0.1} value={m.price_in ?? 0} onChange={(e) => setTier(t, { price_in: Number(e.target.value) })} />
-                    <input className="input num" type="number" step={0.1} value={m.price_out ?? 0} onChange={(e) => setTier(t, { price_out: Number(e.target.value) })} />
+                    <input className="input num" type="number" step={0.1} disabled={m.provider === 'codex'} value={m.provider === 'codex' ? 0 : m.price_in ?? 0} onChange={(e) => setTier(t, { price_in: Number(e.target.value) })} />
+                    <input className="input num" type="number" step={0.1} disabled={m.provider === 'codex'} value={m.provider === 'codex' ? 0 : m.price_out ?? 0} onChange={(e) => setTier(t, { price_out: Number(e.target.value) })} />
                   </div>
                 </Field>
-                {m.provider === 'openai-compatible' && (
+                {(m.provider === 'openai-compatible' || m.provider === 'openai' || m.provider === 'anthropic') && (
                   <>
                     <div />
                     <Field label="Base URL">
                       <input className="input mono" value={m.base_url ?? ''} onChange={(e) => setTier(t, { base_url: e.target.value })} placeholder="https://api.example.com/v1" />
                     </Field>
                     <Field label="Key variable">
-                      <input className="input mono" value={m.api_key_env ?? ''} onChange={(e) => setTier(t, { api_key_env: e.target.value })} placeholder="OPENAI_API_KEY" />
+                      <input className="input mono" value={m.api_key_env ?? ''} onChange={(e) => setTier(t, { api_key_env: e.target.value })} placeholder={m.provider === 'anthropic' ? 'ANTHROPIC_API_KEY' : 'OPENAI_API_KEY'} />
                     </Field>
                   </>
                 )}

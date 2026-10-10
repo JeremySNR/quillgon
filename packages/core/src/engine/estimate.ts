@@ -31,8 +31,8 @@ export function estimate(p: Project): Estimate {
   const cfg = (a: AgentName) => ({ ...DEFAULT_MODELS[tierOf(a)], ...(p.book.models[tierOf(a)] ?? {}) });
   const line = (stage: string, agent: AgentName, calls: number, inTok: number, outTok: number): EstimateLine => {
     const c = cfg(agent);
-    const cost = (calls * (inTok * (c.price_in ?? 0) + outTok * (c.price_out ?? 0))) / 1e6;
-    return { stage, agent, model: c.model, calls, input_tokens: calls * inTok, output_tokens: calls * outTok, cost_usd: Math.round(cost * 100) / 100 };
+    const cost = c.provider === 'codex' ? 0 : (calls * (inTok * (c.price_in ?? 0) + outTok * (c.price_out ?? 0))) / 1e6;
+    return { stage, agent, model: c.model || (c.provider === 'codex' ? 'Codex account default' : 'Unspecified model'), calls, input_tokens: calls * inTok, output_tokens: calls * outTok, cost_usd: Math.round(cost * 100) / 100 };
   };
   const order = sceneOrder(p);
   const chapters = p.structure.acts.flatMap((a) => a.chapters);

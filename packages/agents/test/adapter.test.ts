@@ -11,7 +11,7 @@ const book = Book.parse({ title: 'T' });
 function backend(replies: string[]): Backend & { requests: RawRequest[] } {
   const requests: RawRequest[] = [];
   return {
-    provider: 'anthropic',
+    provider: 'openai',
     requests,
     async call(req) {
       requests.push(structuredClone(req));
@@ -31,17 +31,17 @@ describe('phase 3: model adapter', () => {
   it('validates output and logs cost', async () => {
     const usage: UsageRecord[] = [];
     const b = backend(['{"answer":"yes","score":4}']);
-    const a = new ModelAdapter({ anthropic: b }, () => book, (u) => usage.push(u));
+    const a = new ModelAdapter({ openai: b }, () => book, (u) => usage.push(u));
     const r = await a.complete({ agent: 'reader.read', tier: 'frontier', system: 'S', messages: [{ role: 'user', content: 'Q' }], schema: Out, schemaName: 'reader.read' });
     expect(r).toEqual({ answer: 'yes', score: 4 });
-    expect(usage[0]).toMatchObject({ agent: 'reader.read', model: 'claude-opus-5-5', input_tokens: 1000, output_tokens: 200, attempts: 1, ok: true });
-    expect(usage[0].cost_usd).toBeCloseTo((1000 * 4 + 200 * 20) / 1e6);
+    expect(usage[0]).toMatchObject({ agent: 'reader.read', model: 'gpt-6.1-sol', input_tokens: 1000, output_tokens: 200, attempts: 1, ok: true });
+    expect(usage[0].cost_usd).toBeCloseTo((1000 * 2 + 200 * 10) / 1e6);
     expect(b.requests[0].system).toContain('JSON Schema');
   });
 
   it('re-prompts with the validation error, at most twice', async () => {
     const b = backend(['not json', '{"answer":"x","score":9}', '{"answer":"x","score":3}']);
-    const a = new ModelAdapter({ anthropic: b }, () => book);
+    const a = new ModelAdapter({ openai: b }, () => book);
     const r = await a.complete({ agent: 'x', tier: 'mid', system: 'S', messages: [{ role: 'user', content: 'Q' }], schema: Out, schemaName: 'x' });
     expect(r.score).toBe(3);
     expect(b.requests).toHaveLength(3);
@@ -52,7 +52,7 @@ describe('phase 3: model adapter', () => {
   it('fails after three bad attempts', async () => {
     const b = backend(['{}', '{}', '{}']);
     const usage: UsageRecord[] = [];
-    const a = new ModelAdapter({ anthropic: b }, () => book, (u) => usage.push(u));
+    const a = new ModelAdapter({ openai: b }, () => book, (u) => usage.push(u));
     await expect(a.complete({ agent: 'x', tier: 'mid', system: 'S', messages: [], schema: Out, schemaName: 'x' })).rejects.toBeInstanceOf(SchemaFailure);
     expect(usage[0]).toMatchObject({ ok: false, attempts: 3 });
   });
@@ -75,10 +75,10 @@ describe('phase 3: model adapter', () => {
   it('records and replays responses', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rec-'));
     const live = backend(['{"answer":"recorded","score":2}']);
-    const rec = new ModelAdapter({ anthropic: new RecordReplayBackend(dir, 'record', live) }, () => book);
+    const rec = new ModelAdapter({ openai: new RecordReplayBackend(dir, 'record', live) }, () => book);
     const opts = { agent: 'x', tier: 'mid' as const, system: 'S', messages: [{ role: 'user' as const, content: 'Q' }], schema: Out, schemaName: 'x.y' };
     await rec.complete(opts);
-    const rep = new ModelAdapter({ anthropic: new RecordReplayBackend(dir, 'replay') }, () => book);
+    const rep = new ModelAdapter({ openai: new RecordReplayBackend(dir, 'replay') }, () => book);
     expect(await rep.complete(opts)).toEqual({ answer: 'recorded', score: 2 });
     await expect(rep.complete({ ...opts, messages: [{ role: 'user', content: 'other' }] })).rejects.toThrow(/no recording/);
   });

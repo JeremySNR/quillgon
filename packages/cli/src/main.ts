@@ -130,11 +130,11 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
   },
 
   init: {
-    help: 'init <dir> [--title T] [--words 12000] [--offline]   Create a new book',
+    help: 'init <dir> [--title T] [--words 12000] [--offline | --codex]   Create a new book (OpenAI API by default)',
     async run() {
       const dir = args[0] ?? (await ask('Folder for the new book:', 'my-book'));
       const title = (flags.title as string) ?? (await ask('Title:', path.basename(dir)));
-      const store = await initProject(dir, { title, target_words: Number(flags.words) || 12000, offline: !!flags.offline });
+      const store = await initProject(dir, { title, target_words: Number(flags.words) || 12000, offline: !!flags.offline, codex: !!flags.codex });
       say(green(`Created ${store.dir}`));
       say(`Next: ${cyan(`quillgon spark --dir ${dir}`)} to develop an idea, or ${cyan(`quillgon intent --dir ${dir}`)} if you have a premise.`);
       store.close();

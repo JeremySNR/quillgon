@@ -3,6 +3,8 @@ import type { AgentSuite, GraphStore } from '@quillgon/core';
 import { ModelAdapter } from './adapter/structured.js';
 import { AnthropicBackend } from './adapter/anthropic.js';
 import { OpenAICompatibleBackend } from './adapter/openai.js';
+import { OpenAIBackend } from './adapter/responses.js';
+import { CodexBackend } from './adapter/codex.js';
 import { RecordReplayBackend } from './adapter/record.js';
 import type { Backend, UsageRecord } from './adapter/types.js';
 import { ModelSuite } from './suite.js';
@@ -33,6 +35,8 @@ export function createSuite(store: GraphStore, opts: CreateOptions = {}): AgentS
     return b;
   };
   const backends: Record<string, Backend> = {
+    openai: wrap(new OpenAIBackend()),
+    codex: wrap(new CodexBackend()),
     anthropic: wrap(new AnthropicBackend()),
     'openai-compatible': wrap(new OpenAICompatibleBackend()),
   };

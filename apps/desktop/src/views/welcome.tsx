@@ -11,7 +11,7 @@ export function Welcome() {
   const [title, setTitle] = useState('');
   const [dir, setDir] = useState('');
   const [words, setWords] = useState(12000);
-  const [offline, setOffline] = useState(false);
+  const [provider, setProvider] = useState('openai');
   const [openPath, setOpenPath] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -35,7 +35,7 @@ export function Welcome() {
     if (!title.trim()) return;
     setBusy(true);
     try {
-      await post('/init', { title, dir: dir || `~/Novels/${title.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-')}`, target_words: words, offline });
+      await post('/init', { title, dir: dir || `~/Novels/${title.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-')}`, target_words: words, offline: provider === 'offline', codex: provider === 'codex' });
       go('build');
       await refresh();
     } catch (e) {
@@ -86,12 +86,14 @@ export function Welcome() {
                   </select>
                 </Field>
                 <Field label="Models">
-                  <select className="select" value={offline ? 'offline' : 'claude'} onChange={(e) => setOffline(e.target.value === 'offline')}>
-                    <option value="claude">Claude (API key)</option>
+                  <select className="select" value={provider} onChange={(e) => setProvider(e.target.value)}>
+                    <option value="openai">OpenAI (API key)</option>
+                    <option value="codex">Codex subscription</option>
                     <option value="offline">Offline (try it out)</option>
                   </select>
                 </Field>
               </div>
+              <p className="muted">{provider === 'codex' ? 'Sign in with ChatGPT using codex login on this computer first. Your Codex plan limits apply.' : provider === 'openai' ? 'Set OPENAI_API_KEY before starting Quillgon. API usage is billed separately from ChatGPT.' : 'Placeholder output for exploring the workflow without a model connection.'}</p>
               <Field label="Folder" hint="Choose where your manuscript is saved on this computer.">
                 <input className="input" value={dir} onChange={(e) => setDir(e.target.value)} placeholder={`~/Novels/${title.replace(/\s+/g, '-') || 'my-book'}`} />
               </Field>

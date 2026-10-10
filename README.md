@@ -30,14 +30,28 @@ For the Electron shell, stop the server and run `pnpm desktop`. It also requires
 
 The app works with no API key: choose **Offline** models when you create a book (or set `QUILLGON_OFFLINE=1`). Offline output is placeholder text, but every screen and workflow works.
 
-To use Claude, set `ANTHROPIC_API_KEY`. Models per tier live in each book's `book.yaml`, and you can also change them under Settings → Models. The defaults are:
+**OpenAI is the default**, using the Responses API through the official OpenAI SDK. Set `OPENAI_API_KEY` in the environment that launches Quillgon, then restart it. API usage is billed separately from ChatGPT/Codex subscriptions. Models per tier live in each book's `book.yaml`, and you can change them under Settings → Models. Defaults (editable prices in USD per million tokens):
 
 | Tier | Default | Used by |
 | --- | --- | --- |
-| frontier | `claude-opus-5-5` | muse, interviewer, planner, writer, reviser, critic, judge |
-| mid | `claude-sonnet-5-5` | extractor, voice checker, line editor |
-| small | `claude-haiku-5-5` | continuity |
-| reader | `claude-sonnet-5-5` | simulated reader (point it at another vendor through an OpenAI-compatible endpoint if you can) |
+| frontier | `gpt-6.1-sol` | muse, interviewer, planner, writer, reviser, critic, judge |
+| mid | `gpt-6.1-sol` | extractor, voice checker, line editor |
+| small | `gpt-6-luna` | continuity |
+| reader | `gpt-6.1-sol` | simulated reader (another vendor can reduce shared biases) |
+
+### Use your Codex subscription
+
+1. Install the [Codex CLI](https://developers.openai.com/codex/cli), then run `codex login` on the same computer and OS account as Quillgon. Choose **Sign in with ChatGPT** with a plan that includes Codex.
+2. Choose **Codex subscription** when creating a book, or in Settings → Models, then save. CLI: `pnpm quillgon init my-book --title "My book" --codex`.
+3. Leave the model blank to use your Codex account's default, or enter a model available to your plan.
+
+Quillgon calls the official local [Codex SDK](https://developers.openai.com/codex/sdk). Codex manages sign-in and token refresh; Quillgon does not read or copy your authentication tokens. Each request runs in a fresh empty directory with read-only access, shell and web search disabled, and no MCP servers. The supplied story context is sent to OpenAI. Codex sessions may persist locally under your Codex home.
+
+Your subscription's usage limits, available models, workspace rules, and data policies apply. Quillgon logs token usage with **$0 API cost** for Codex; this does not mean unlimited usage or a free subscription. Authentication or quota errors never fall back to API billing. API credentials are excluded from the Codex child process and ChatGPT authentication is required.
+
+Verification: a short synthetic request through the real Codex SDK and local ChatGPT sign-in succeeded. API adapter behavior is covered by mocked SDK tests; a live Responses API call still needs `OPENAI_API_KEY`. This is not a full-novel quality evaluation.
+
+Anthropic (`ANTHROPIC_API_KEY`) and OpenAI-compatible Chat Completions endpoints remain available per tier. Existing explicit provider settings are preserved. Select **OpenAI API** in Settings to apply the new defaults to an existing book. The [OpenAI model catalog](https://developers.openai.com/api/docs/models) lists current availability and prices; stored prices are estimates rather than invoices.
 
 For development, `pnpm dev` runs the API and the Vite dev server with hot reload on http://localhost:5173.
 
@@ -110,7 +124,7 @@ fixtures/novella/    "The Tidekeeper's Ledger": 12 scenes, 4 characters, 3 threa
 - **The index is disposable.** `.engine/index.sqlite` holds entities, references, facts and scene embeddings. Delete it and it rebuilds. Embeddings are local and deterministic (hashed term vectors), so impact analysis needs no network.
 - **Sync** compares the card hash the prose was generated from with the prose hash at its last extraction. The result is `in_sync`, `card_ahead`, `prose_ahead` or `conflict`, and a conflict blocks generation.
 - **Impact analysis** walks references, facts and per-scene state. Hop 0 is the edited scene, hop 1 a direct reference, hop 2 a thread or character state, and hop 3 similarity only (listed, never proposed). Locked scenes become conflicts with three choices: unlock, keep (recorded in `reports/known-inconsistencies.md`), or revert.
-- **Model adapter:** `complete(messages, schema, options) → parsed object`. It streams from Claude with adaptive thinking, the configured effort and native JSON-schema output (falling back to prompt-only JSON), validates the result, and re-prompts with the validation error up to twice. The system prompt (intent, hard rules, agent prompt) is cached, so repeated calls across a chapter pay a tenth for it. Every call is logged to `reports/costs.jsonl`, cache reads and writes priced separately.
+- **Model adapter:** `complete(messages, schema, options) → parsed object`. OpenAI Responses streams structured JSON with the configured reasoning effort and `store: false`. Schemas containing arbitrary-key records use JSON mode and local validation. The adapter validates with Zod and re-prompts with validation errors up to twice. Codex subscription uses the local Codex SDK; Anthropic and compatible endpoints are optional. Every completed call is logged to `reports/costs.jsonl`, including cache tokens and estimated API cost.
 - **Judges never see one order only.** Any comparison (a line edit against the original, two candidates) is judged twice with the texts swapped; a split verdict is a tie and the original stays. An OpenAI-compatible backend is included for other vendors.
 - **Prompts are Markdown** (`packages/agents/src/agents/<name>/prompt.md`). Edit them in the app; overrides are saved to `prompts/<agent>.md` in the book. The intent and its hard rules are always in the system prompt.
 
@@ -139,7 +153,7 @@ pnpm test:live      # live-model tests; needs QUILLGON_LIVE=1 and an API key
 
 ## Notes and deviations from the plan
 
-- **Anthropic SDK, not the Agent SDK.** Every agent call is a single structured completion, so the agents use `@anthropic-ai/sdk` directly. The Agent SDK's file and tool loop isn't needed.
+- **OpenAI Responses API and Codex SDK.** Quillgon owns the story graph and review workflow; each writing agent requests a structured result through the official OpenAI SDK. A hosted Agents API execution environment is unnecessary for these calls. The local Codex SDK provides a separate path for users signing in with ChatGPT.
 - **Electron runs the core as a plain Node process.** This lets `better-sqlite3` load without an Electron rebuild. It needs `node` on your `PATH` (or set `QUILLGON_NODE`).
 - **Reader prediction matching is mechanical** (embedding similarity, synonym folding, and the prediction must name the right person). A cheap model judge would be more accurate and is an easy swap.
 - **Two small additions to the data model:** `scenes/<id>/facts.yaml` holds extracted facts, so the index can rebuild from files, and an optional `locations.yaml` / `facts.yaml` glossary gives ids human-readable names.

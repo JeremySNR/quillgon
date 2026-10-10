@@ -112,7 +112,8 @@ export class ModelAdapter {
 
   private log(opts: CompleteOptions<unknown>, config: ModelConfig, model: string, inTok: number, outTok: number, attempts: number, ok: boolean, cacheW = 0, cacheR = 0) {
     const pin = config.price_in ?? 0;
-    const cost = (inTok * pin + cacheW * pin * 1.25 + cacheR * pin * 0.1 + outTok * (config.price_out ?? 0)) / 1e6;
+    // Subscription use has no per-token API charge; quota use is still logged.
+    const cost = config.provider === 'codex' ? 0 : (inTok * pin + cacheW * pin * 1.25 + cacheR * pin * 0.1 + outTok * (config.price_out ?? 0)) / 1e6;
     this.onUsage({
       ts: new Date().toISOString(),
       agent: opts.agent,

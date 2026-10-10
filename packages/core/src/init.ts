@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { GraphStore } from './store.js';
+import { DEFAULT_MODELS, CODEX_MODELS } from './schemas/index.js';
 
 export const DEFAULT_BANNED = `# Banned patterns
 
@@ -27,7 +28,7 @@ their rhythm, diction and how they handle feeling. Your own writing works best.
 `;
 
 /** Create a new manuscript repo: book.yaml, intent.md, style files, git. */
-export async function initProject(dir: string, opts: { title: string; genre?: string; target_words?: number; offline?: boolean }) {
+export async function initProject(dir: string, opts: { title: string; genre?: string; target_words?: number; offline?: boolean; codex?: boolean }) {
   const root = path.resolve(dir);
   if (fs.existsSync(path.join(root, 'book.yaml'))) throw new Error(`${root} already has a book.yaml`);
   fs.mkdirSync(root, { recursive: true });
@@ -41,7 +42,7 @@ export async function initProject(dir: string, opts: { title: string; genre?: st
     target_words: opts.target_words ?? 12000,
     // Start at the idea stage; an author who already has a premise can skip straight to intent.
     stage: 'idea',
-    models: opts.offline ? { frontier: offline, mid: offline, small: offline, reader: offline } : {},
+    models: opts.offline ? { frontier: offline, mid: offline, small: offline, reader: offline } : opts.codex ? CODEX_MODELS : DEFAULT_MODELS,
   });
   store.saveIntent({});
   store.saveStructure({ acts: [] });
