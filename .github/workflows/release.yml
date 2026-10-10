@@ -1,0 +1,93 @@
+name: Release
+
+# Pushing a tag like v0.2.0 builds the desktop app on macOS (Apple silicon), Windows (x64) and
+# Linux (x64) and attaches the installers to a draft GitHub release for that tag. Review the
+# draft, then publish it. Running the workflow by hand builds the same installers as workflow
+# artifacts without creating a release.
+#
+# Signing is optional. Without these repository secrets the installers are unsigned (macOS builds
+# are ad-hoc signed): MAC_CSC_LINK, MAC_CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD,
+# APPLE_TEAM_ID (sign and notarize for macOS); WIN_CSC_LINK, WIN_CSC_KEY_PASSWORD (Windows).
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+        if: runner.os == 'Linux'
+      # Builds the UI, bundles the server, rebuilds better-sqlite3 for Electron, then runs
+      # electron-builder for this platform. Output: apps/desktop/release/.
+      - run: pnpm dist
+        env:
+          QUILLGON_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          CSC_LINK: ${{ runner.os == 'macOS' && secrets.MAC_CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ runner.os == 'macOS' && secrets.MAC_CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quillgon-${{ runner.os }}
+          if-no-files-found: error
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+
+  release:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          merge-multiple: true
+      - name: Attach the installers to a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ls -l installers
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" installers/* --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            prerelease=""
+            case "$TAG" in *-*) prerelease="--prerelease" ;; esac
+            gh release create "$TAG" installers/* --draft $prerelease --verify-tag --generate-notes \
+              --title "Quillgon $TAG" --repo "$GITHUB_REPOSITORY"
+          fi

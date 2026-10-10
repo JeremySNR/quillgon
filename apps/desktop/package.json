@@ -10,7 +10,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "electron": "vite build && electron ."
+    "electron": "vite build && electron .",
+    "bundle": "node scripts/prepare-package.mjs",
+    "dist": "vite build && node scripts/prepare-package.mjs && electron-builder --config electron-builder.config.cjs --publish never",
+    "dist:dir": "vite build && node scripts/prepare-package.mjs && electron-builder --config electron-builder.config.cjs --publish never --dir"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",
@@ -31,13 +34,17 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.2.1",
     "@quillgon/core": "workspace:*",
+    "@quillgon/server": "workspace:*",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.1.2",
     "electron": "^44.7.0",
+    "electron-builder": "26.15.3",
+    "esbuild": "^0.28.2",
     "typescript": "^5.9.0",
     "vite": "^8.3.4"
   }

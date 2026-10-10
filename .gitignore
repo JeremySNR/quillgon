@@ -7,3 +7,4 @@ out/
 coverage/
 .vite/
 .vercel/
+release/
