@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, FolderOpen, Sparkles, ArrowRight, Clock } from 'lucide-react';
+import { BookOpen, FolderOpen, Feather, ArrowRight, Clock } from 'lucide-react';
 import { get, post } from '../lib/api';
 import { useApp } from '../lib/app';
 import { ago } from '../lib/util';
@@ -64,11 +64,11 @@ export function Welcome() {
       <div className="welcome-inner">
         <div style={{ display: 'grid', placeItems: 'center', marginBottom: 20 }}>
           <span className="brand-mark" style={{ width: 52, height: 52, borderRadius: 14 }}>
-            <BookOpen size={26} strokeWidth={2.2} />
+            <Feather size={36} strokeWidth={1.4} />
           </span>
         </div>
         <h1>Quillgon</h1>
-        <p className="tag">Plan it, write it, change your mind. The story stays consistent and every change waits for your approval.</p>
+        <p className="tag">A considered space for your next book. From the first idea to the final page.</p>
         <div className="welcome-grid">
           <div className="card">
             <h3>Start a new book</h3>
@@ -92,10 +92,10 @@ export function Welcome() {
                   </select>
                 </Field>
               </div>
-              <Field label="Folder" hint="Each book is a folder of plain Markdown and YAML, tracked with git.">
+              <Field label="Folder" hint="Choose where your manuscript is saved on this computer.">
                 <input className="input" value={dir} onChange={(e) => setDir(e.target.value)} placeholder={`~/Novels/${title.replace(/\s+/g, '-') || 'my-book'}`} />
               </Field>
-              <Button variant="primary" size="lg" disabled={!title.trim() || busy} onClick={create} icon={<Sparkles />}>
+              <Button variant="primary" size="lg" disabled={!title.trim() || busy} onClick={create} icon={<Feather />}>
                 Create book
               </Button>
             </div>

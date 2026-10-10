@@ -1,59 +1,59 @@
-# Design: warm ink on paper
+# Quillgon: an editorial workspace
 
-The interface follows a short research brief on current practice in productivity and writing tools (Linear, Raycast, iA Writer, Vercel Geist, Radix, NN/g). The aim is an app that is easy to follow and quiet enough to write in, without looking plain. The tokens live in `apps/desktop/src/styles/tokens.css` and the components in `app.css`.
+The refresh puts the manuscript ahead of the machinery supporting it. The writing desk opens with the book, its premise, and a clear Continue writing action. Chapter navigation stays available while the author writes; scene cards move into a secondary inspector. Planning, revision, and review retain their existing API flows.
 
-## Typography
+## Research and decisions
 
-- **UI: Inter** (variable), with `cv11` and `ss01` enabled and tabular numbers for counts. Weights 400, 500 and 600 only.
-- **Prose and page titles: Literata.** It was designed for long-form reading on screens, and its optical-size axis is used. The serif makes the app feel literary while the controls stay neutral.
-- **IDs and metadata: JetBrains Mono.**
-- **UI scale:** 11 / 12 / **13** / 14 / 16 / 20 / 24 / 32 px.
-- **Prose:** 19px (adjustable from 16 to 23) at line-height 1.65, in a 66-character column (adjustable from 50 to 80), with `text-wrap: pretty`.
-- **Fonts are bundled locally** (`@fontsource`), so the app works offline.
+These are concrete product references, not a claim that there is one objectively best UI. The choices below are design judgments for Quillgon's long-form writing workflow.
 
-## Colour
+| Reference | Relevant principle | Quillgon implementation |
+| --- | --- | --- |
+| [Ulysses: Library & Editor](https://help.ulysses.app/en_US/getting-started/first-steps-library-editor) | Organizing a long work and editing its parts belong together. | Chapter and scene navigation in the sidebar, single-click scene titles, and a remembered last-opened scene per manuscript. |
+| [iA Writer](https://ia.net/writer) | The text should have visual priority while writing. | A generous reading column, restrained controls, and an optional scene-details inspector. Existing focus mode remains available. |
+| [Linear: A calmer interface for a product in motion](https://linear.app/now/behind-the-latest-design-refresh) | Supporting navigation should recede; controls should have predictable locations and visual weight. | Muted navigation, consistent headings and controls, fewer competing card surfaces, and one primary next action. |
+| [Ulysses: Designing the Editor](https://stories.ulysses.app/designing-the-ulysses-editor/) | Powerful editing can still feel straightforward. | Keep all scene-card and review capabilities accessible while reducing the amount shown by default. |
 
-- **Palette:** OKLCH tokens. Neutrals carry a slight amber tint (hue 65–85), with one ember accent. Status colours (success, warning, danger, info) are used only to carry meaning.
-- **Contrast:** Body text clears 13:1. Secondary text, tertiary text, the accent and the status colours each clear 4.5:1 on every surface.
-- **Themes:** Dark is the default. Light follows the system setting or a manual override.
-- **Surfaces:** navigation sits on `--bg-sunken`, content on `--surface`, and interactive elements on `--surface-2`.
-- **Diffs:** insertions are tinted green with an underline; deletions are tinted red with a strikethrough.
-- **Threads and characters** get a stable hue derived from their id, so the same thread is the same colour everywhere.
+## Visual system
 
-## Shape, space, depth, motion
+- Paper and sage surfaces with forest-green actions; a complementary dark palette. Status colors retain their meanings.
+- Literata for manuscript text and editorial headings; Inter for controls; existing bundled fonts continue working offline.
+- Small corner radii, fine separators, consistent spacing, and minimal shadows. The manuscript cover is generated from the actual book title and genre, with no external imagery.
+- `tokens.css` owns colors, type, and dimensions. `app.css` keeps the established component styles; `workspace.css` supplies the editorial layout and responsive rules.
+- Theme changes persist, including preferences written by previous versions. Prose size and line-length preferences remain honored.
 
-- **Radius:** 4 / 6 / 8 / 12 px, plus pills.
-- **Spacing:** a 4px scale. Rows are 30–32px high.
-- **Depth:** dark mode shows depth with a lighter surface step, an inset highlight and a 1px border. Light mode uses soft two-layer shadows.
-- **Motion:** 100ms for a press, 150ms for popovers, 200ms for panels, 280ms for dialogs, with `cubic-bezier(.23,1,.32,1)`. Only transform and opacity are animated. With `prefers-reduced-motion`, everything becomes a 120ms fade.
-- **Focus:** a 2px accent ring on `:focus-visible`.
+## Workflow changes
 
-## Patterns adopted
+- **Writing desk:** book summary, word target, Continue writing, chapter list, recent changes, and actionable editor notes. Additional notes expand rather than disappearing.
+- **Navigation:** explicit Writing desk / Story planning / Manuscript labels; expandable chapters; persistent search. Existing shortcuts remain mapped to their original routes.
+- **Editor:** prose first. Scene details opens an inspector on the right, or an overlay in smaller windows. Its preference persists. Focus mode can be exited by opening Scene details.
+- **Manuscript:** titles open on a single click; row selection, dragging, and keyboard reorder controls are retained.
+- **Settings and welcome:** shared visual language and clearer copy. Settings sections wrap and stack in smaller windows.
+- **Accessibility:** native buttons, named navigation, current-page states, expanded-state reporting, a skip link, visible keyboard focus, and reduced-motion support. Hidden tooltips no longer widen the viewport. This is not a formal accessibility certification.
 
-1. **⌘K command palette:** every view, scene, character, thread and action, each with its shortcut shown.
-2. **Visible pipeline stepper:** Intent → Plot points → Structure → Scene cards → Prose → Review, showing which steps are done, current or locked.
-3. **Progressive disclosure:** a scene card shows about seven fields; people, threads and facts sit under "More".
-4. **Autosave:** prose saves as you type, and the status bar shows "Saved · 2s ago". The scene card has an explicit Save, because saving it triggers impact analysis.
-5. **Undo instead of confirm** where reversible: decisions in ripple review and reordering both offer Undo.
-6. **Keyboard-first review:** `j`/`k` to move, `a`/`r` to decide, `⇧↵` to apply. The cursor stays where it is after a decision.
-7. **Prose diffs** in the reading font. Paragraphs are aligned first, then word-level diffs show within edited paragraphs. Unchanged paragraphs collapse, and you can switch to side by side.
-8. **Severity dots and hop badges** on affected scenes, with conflicts pinned to the top.
-9. **Skeletons** for layout-known loads. Model work shows a named stage ("Humaniser pass", "Reading back into the graph"), never a bare spinner.
-10. **Drag and drop with a keyboard equivalent:** `⌥↑` / `⌥↓` in the outline.
-11. **Empty states that teach:** one sentence, one primary action, and the sample novella as a way in.
-12. **Status chips used only for meaning:** Draft, Approved, Locked, and the sync states.
-13. **Tooltips** appear after a 500ms delay and show the shortcut.
-14. **Saved preferences:** theme, prose size, line length and sidebar state persist per user.
+## Screenshots
 
-## Sources
+Captured from the running application with the sample novella, not static mockups.
 
-- Linear UI redesign: https://linear.app/now/how-we-redesigned-the-linear-ui
-- OKLCH in CSS (Evil Martians): https://evilmartians.com/chronicles/oklch-in-css-why-quit-rgb-hsl
-- Radix colour roles: https://radix-ui.com/themes/docs/theme/color
-- Vercel Geist: https://vercel.com/geist
-- Line length (Baymard): https://baymard.com/blog/line-length-readability
-- iA Writer on writing fonts: https://ia.net/topics/in-search-of-the-perfect-writing-font
-- WCAG 2.2 focus criteria: https://www.w3.org/WAI/standards-guidelines/wcag/new-in-22/
-- Command palettes (Superhuman): https://blog.superhuman.com/how-to-build-a-remarkable-command-palette/
-- Empty states (NN/g): https://www.nngroup.com/articles/empty-state-interface-design
-- Skeletons and loading indicators (NN/g): https://www.nngroup.com/videos/skeleton-screens-vs-progress-bars-vs-spinners/
+| Screen | Preview |
+| --- | --- |
+| Original overview | [Before](screenshots/ui-refresh/before-overview.png) |
+| Writing desk | [Light](screenshots/ui-refresh/desk-light.png) · [Dark](screenshots/ui-refresh/desk-dark.png) |
+| Editor | [Writing](screenshots/ui-refresh/editor.png) · [Scene details](screenshots/ui-refresh/editor-details.png) |
+| Manuscript | [Outline](screenshots/ui-refresh/manuscript.png) |
+| Planning and characters | [Planning](screenshots/ui-refresh/planning.png) · [Characters](screenshots/ui-refresh/characters.png) |
+| Settings | [Desktop](screenshots/ui-refresh/settings.png) · [390px](screenshots/ui-refresh/settings-390.png) |
+| Narrow workspace | [Writing desk](screenshots/ui-refresh/desk-390.png) · [Editor](screenshots/ui-refresh/editor-390.png) |
+
+## Verification
+
+`CHROME=/usr/bin/chromium pnpm test:ui-refresh` builds the app, opens a disposable copy of the sample manuscript through the UI, checks navigation and saving against the real server, and captures the main screens. Set `CHROME` to your Chromium executable if different.
+
+Verified with Node 22 and Chromium:
+
+- Frontend and backend TypeScript checks and production build.
+- Existing suite: 94 passed, one live-provider test skipped.
+- Open manuscript → Continue writing → edit → autosave API → reload and read the saved text.
+- Scene inspector and focus-mode transitions, keyboard search, remembered scene, single-click manuscript links, and persisted theme.
+- Main screens render without page errors; desktop plus 900px and 390px layouts for the writing desk, editor, manuscript, and settings have no page overflow.
+
+Live model calls and the packaged Electron binary were not exercised. Native SQLite required a Node 22-compatible build in this environment; no dependency or engine changes are part of the UI refresh.

@@ -38,7 +38,10 @@ export function firstName(chars: { id: string; bio: { name: string } }[], id: st
 export function loadPref<T>(key: string, fallback: T): T {
   try {
     const v = localStorage.getItem(`ne.${key}`);
-    return v === null ? fallback : (JSON.parse(v) as T);
+    if (v === null) return fallback;
+    // Theme preferences written by older versions were stored as plain strings.
+    if (key === 'theme' && ['light', 'dark', 'system'].includes(v)) return v as T;
+    return JSON.parse(v) as T;
   } catch {
     return fallback;
   }

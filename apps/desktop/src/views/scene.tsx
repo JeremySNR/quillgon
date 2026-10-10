@@ -22,11 +22,12 @@ import {
   Trash2,
   Link2,
   SpellCheck,
+  PanelRight,
 } from 'lucide-react';
 import { del, get, post, put, runJob } from '../lib/api';
 import { useApp } from '../lib/app';
 import type { ExtractionResult, Fact, ImpactResult, SceneCard, SceneDetail, StyleReport, StyleViolation } from '../lib/types';
-import { factLabel, firstName, keys, plural } from '../lib/util';
+import { factLabel, firstName, keys, loadPref, plural, savePref } from '../lib/util';
 import { Avatar, Badge, Button, Chip, Dialog, Empty, Field, ListEditor, StatusBadge, SyncBadge, TagSelect, Working } from '../components/ui';
 import { ProseEditor, bannedRegexes, type StyleMark } from '../components/prose-editor';
 import { PredictabilityCheck } from './critique';
@@ -47,6 +48,8 @@ export function SceneEditor({ id }: { id: string }) {
   const saveTimer = useRef<number | null>(null);
   const [styleReport, setStyleReport] = useState<StyleReport | null>(null);
   const [styleOpen, setStyleOpen] = useState(false);
+  const [inspector, setInspector] = useState(() => loadPref('sceneInspector', false));
+  useEffect(() => { if (p) savePref(`lastScene:${p.dir}`, id); }, [p?.dir, id]);
   const [jump, setJump] = useState<{ from: number; to: number } | null>(null);
   const checkTimer = useRef<number | null>(null);
   // Check every word against the style sheet shortly after typing stops.
@@ -231,9 +234,10 @@ export function SceneEditor({ id }: { id: string }) {
   const pov = chars.find((c) => c.id === card.pov);
 
   return (
-    <div className={`editor ${focus ? 'focus' : ''}`}>
+    <div className={`editor ${focus ? 'focus' : ''} ${inspector ? 'inspector-open' : ''}`}>
       {/* ---------------- card */}
-      <aside className="card-pane" aria-label="Scene card">
+      <aside className="card-pane" id="scene-inspector" aria-label="Scene card" hidden={!inspector || focus}>
+        <div className="inspector-title"><span>Scene details</span><Button size="sm" variant="ghost" iconOnly icon={<X />} tip="Close scene details" onClick={() => { setInspector(false); savePref('sceneInspector', false); }} /></div>
         <div className="card-pane-inner">
           <div className="row">
             <span className="mono faint">{id}</span>
@@ -379,10 +383,12 @@ export function SceneEditor({ id }: { id: string }) {
             {card.status === 'approved' ? 'Approved' : 'Approve'}
           </Button>
           <Button size="sm" variant="ghost" iconOnly icon={card.lock === 'none' ? <LockOpen /> : <Lock />} tip={card.lock === 'none' ? 'Lock card and prose' : 'Unlock'} onClick={() => setLock(card.lock === 'none' ? 'both' : 'none')} disabled={!!busy} />
+          <Button size="sm" variant="ghost" icon={<PanelRight />} aria-expanded={inspector && !focus} aria-controls="scene-inspector" onClick={() => { const next = focus || !inspector; if (focus) setFocus(false); setInspector(next); savePref('sceneInspector', next); }}>Scene details{cardDirty ? ' •' : ''}</Button>
           <Button size="sm" variant="ghost" iconOnly icon={focus ? <Minimize2 /> : <Maximize2 />} tip="Focus mode" kbd={keys('.')} onClick={() => setFocus(!focus)} />
         </div>
         <div className="prose-scroll">
           <div className="prose-column">
+            <div className="scene-kicker">{p.structure.acts.flatMap(a => a.chapters).find(c => c.scenes.includes(id))?.title || 'MANUSCRIPT'}<span>SCENE {String(p.scenes.findIndex(s => s.id === id) + 1).padStart(2, '0')}</span></div>
             <h1 className="scene-heading">{card.title || 'Untitled scene'}</h1>
             <div className="scene-sub">
               {pov && (

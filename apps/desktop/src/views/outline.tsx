@@ -111,10 +111,10 @@ export function Outline() {
       <div className="page-inner wide">
         <div className="page-head">
           <div>
-            <h1>Outline</h1>
+            <span className="eyebrow">THE BIG PICTURE</span><h1>Manuscript</h1>
             <p className="sub">
-              Drag scenes to reorder them, or select one and press <Kbd>⌥</Kbd>
-              <Kbd>↑</Kbd>/<Kbd>↓</Kbd>. If the new order breaks what characters know, you’ll be offered a ripple.
+              Your story, scene by scene. Drag to reorder, or use <Kbd>⌥</Kbd>
+              <Kbd>↑</Kbd>/<Kbd>↓</Kbd>. Open a scene to keep writing.
             </p>
           </div>
         </div>
@@ -228,7 +228,7 @@ function SceneRow({ s, p, last, selected, onSelect, onOpen, onMove }: { s: Scene
       <span className="sid mono">{s.id}</span>
       <span className="stitle">
         {pov && <Avatar id={pov.id} name={pov.bio.name} />}
-        <span>{c.title || 'Untitled'}</span>
+        <button className="scene-title-link" onClick={(e) => { e.stopPropagation(); onOpen(); }}>{c.title || 'Untitled'}</button>
       </span>
       <span className="purpose" title={c.purpose}>
         {s.excerpt ? <span className="serif" style={{ fontSize: 13 }}>{s.excerpt}</span> : c.purpose || <span className="faint">No purpose yet</span>}

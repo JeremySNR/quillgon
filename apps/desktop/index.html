@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'" />
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23ec9d53'/><path d='M10 9h3l6 10V9h3v14h-3l-6-10v10h-3z' fill='%231d140d'/></svg>" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23345d49'/><text x='16' y='23' text-anchor='middle' font-family='Georgia' font-size='24' fill='%23fffefa'>Q</text></svg>" />
     <title>Quillgon</title>
     <script>
-      try { const t = localStorage.getItem('ne.theme'); if (t && t !== 'system') document.documentElement.dataset.theme = t; } catch {}
+      try { const raw = localStorage.getItem('ne.theme'); let t = raw; try { t = JSON.parse(raw); } catch {} if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}
     </script>
   </head>
   <body>
