@@ -53,6 +53,7 @@ Search intent maps to real pages:
 | `/features/revision/` | AI novel editing; reviewed revisions |
 | `/guides/plotting-a-novel/` | How to plot a novel |
 | `/guides/fixing-plot-holes/` | How to find and fix plot holes |
+| `/guides/character-knowledge/` | How to track character knowledge in a novel |
 | `/get-started/` | Quillgon setup and requirements |
 
 All pages are complete static HTML with unique titles, descriptions, canonical URLs, semantic headings, internal links, and relevant JSON-LD. Images have alternate text and intrinsic dimensions; below-the-fold screenshots load lazily. Core content, navigation, and FAQs work without JavaScript.
