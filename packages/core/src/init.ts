@@ -54,6 +54,6 @@ export async function initProject(dir: string, opts: { title: string; genre?: st
     if (!fs.readdirSync(path.join(root, d)).length) fs.writeFileSync(keep, '');
   }
   await store.repo.init();
-  await store.commit(`New book: ${opts.title}`);
+  await store.checkpoint(`New book: ${opts.title}`);
   return store;
 }

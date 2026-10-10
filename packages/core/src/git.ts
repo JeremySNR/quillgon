@@ -53,11 +53,19 @@ export class Repo {
   }
 
   async init() {
-    if (this.isRepo()) return;
+    if (this.isRepo()) return this.ensureIgnored();
     await this.git.init(['-b', 'main']);
-    const ignore = path.join(this.dir, '.gitignore');
-    if (!fs.existsSync(ignore)) fs.writeFileSync(ignore, '.engine/\nexport/\n');
+    this.ensureIgnored();
     await this.ensureIdentity();
+  }
+
+  /** The index, proposals and exports never belong in history, even in a pre-existing repo. */
+  ensureIgnored() {
+    const ignore = path.join(this.dir, '.gitignore');
+    const text = fs.existsSync(ignore) ? fs.readFileSync(ignore, 'utf8') : '';
+    const lines = new Set(text.split(/\r?\n/).map((l) => l.trim()));
+    const missing = ['.engine/', 'export/'].filter((e) => !lines.has(e) && !lines.has(e.slice(0, -1)) && !lines.has('/' + e));
+    if (missing.length) fs.writeFileSync(ignore, text + (text && !text.endsWith('\n') ? '\n' : '') + missing.join('\n') + '\n');
   }
 
   private async ensureIdentity() {
@@ -67,18 +75,46 @@ export class Repo {
     if (!email.value) await this.git.addConfig('user.email', 'engine@localhost');
   }
 
-  /** Stage everything (or just `files`) and commit. Returns the hash, or null if nothing changed. */
-  async commit(message: string, files?: string[]): Promise<string | null> {
+  /**
+   * Commit. With no options, a checkpoint: everything in the working tree. With `files`,
+   * only those paths (deletions included), whatever else is modified. With `exclude`,
+   * everything except those paths. Returns the hash, or null if there was nothing to commit.
+   */
+  async commit(message: string, opts: string[] | { files?: string[]; exclude?: string[] } = {}): Promise<string | null> {
     if (!this.isRepo()) return null;
+    const { files, exclude } = Array.isArray(opts) ? { files: opts, exclude: undefined } : opts;
     await this.ensureIdentity();
-    if (files?.length) await this.git.add(files);
-    else await this.git.add(['-A']);
-    const status = await this.git.status();
-    if (status.staged.length === 0 && status.created.length === 0 && status.deleted.length === 0 && status.renamed.length === 0) {
-      if (status.files.length === 0) return null;
+    const hasHead = await this.git.raw(['rev-parse', '--verify', '-q', 'HEAD']).then(() => true, () => false);
+    // Start from a clean index, so nothing staged earlier rides along.
+    if (hasHead) await this.git.raw(['reset', '-q']);
+    if (files) {
+      if (!files.length) return null;
+      const literal = files.map((f) => `:(literal)${f}`);
+      // A path that was written and removed again before any commit is unknown to git.
+      const tracked = new Set((await this.git.raw(['ls-files', '-z', '--', ...literal])).split('\0').filter(Boolean));
+      const known = files.filter((f) => fs.existsSync(path.join(this.dir, f)) || [...tracked].some((t) => t === f || t.startsWith(f + '/')));
+      if (!known.length) return null;
+      await this.git.raw(['add', '-A', '--', ...known.map((f) => `:(literal)${f}`)]);
+    } else if (exclude?.length) {
+      await this.git.raw(['add', '-A', '--', '.', ...exclude.map((f) => `:(exclude,literal)${f}`)]);
+    } else {
+      await this.git.add(['-A']);
     }
+    const staged = (await this.git.raw(['diff', '--cached', '--name-only'])).trim();
+    if (!staged) return null;
     const r = await this.git.commit(message);
     return r.commit || null;
+  }
+
+  /** Commits that touched a path, newest first. */
+  async history(rel: string, limit = 50): Promise<string[]> {
+    if (!this.isRepo()) return [];
+    try {
+      const out = await this.git.raw(['log', `--max-count=${limit}`, '--format=%H', '--', `:(literal)${rel}`]);
+      return out.split('\n').filter(Boolean);
+    } catch {
+      return [];
+    }
   }
 
   async log(limit = 50): Promise<Commit[]> {

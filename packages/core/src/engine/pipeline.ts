@@ -11,7 +11,7 @@ import type {
 import { Intent, SceneCard, type PipelineStage, type StateSnapshot } from '../schemas/index.js';
 import type { GraphStore } from '../store.js';
 import { paths, sceneOrder } from '../project.js';
-import { canGenerate, sceneSync } from '../sync.js';
+import { canGenerate, cardHash, sceneSync } from '../sync.js';
 import { writerContext } from '../context.js';
 import { fromYaml, slugify, uniq } from '../util.js';
 import { runStylePasses, type Progress, type StylePassReport } from './style-passes.js';
@@ -405,12 +405,24 @@ export class Pipeline {
     return { before, after: out.prose };
   }
 
-  /** The card as last committed: what the current prose was written against, if the card has since moved. */
+  /**
+   * The card the current prose was written against: the version in history whose hash is
+   * the prose's `generated_from`. HEAD is not reliable, because the edited card may already
+   * have been committed (by a checkpoint, or any later commit) before regenerating.
+   */
   private async committedCard(sceneId: string): Promise<SceneCard | null> {
-    const text = await this.store.repo.readAt('HEAD', paths.card(sceneId)).catch(() => null);
-    if (!text) return null;
-    const r = SceneCard.safeParse(fromYaml(text));
-    return r.success ? r.data : null;
+    const rel = paths.card(sceneId);
+    const want = this.store.scene(sceneId).prose?.meta.generated_from ?? null;
+    let head: SceneCard | null = null;
+    for (const hash of await this.store.repo.history(rel, 50)) {
+      const text = await this.store.repo.readAt(hash, rel).catch(() => null);
+      if (!text) continue;
+      const r = SceneCard.safeParse(fromYaml(text));
+      if (!r.success) continue;
+      head ??= r.data;
+      if (!want || cardHash(r.data) === want) return r.data;
+    }
+    return head;
   }
 
   async acceptProse(sceneId: string, prose: string) {

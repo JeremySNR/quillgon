@@ -73,7 +73,7 @@ describe('phase 1: schemas and store', () => {
     const dir = copyFixture();
     const store = GraphStore.open(dir, { memoryIndex: true });
     await store.repo.init();
-    await store.commit('Initial');
+    await store.checkpoint('Initial');
     const card = { ...store.scene('s03').card, location: 'harbour' };
     store.saveCard(card);
     expect(store.sceneSync('s03').state).toBe('card_ahead');

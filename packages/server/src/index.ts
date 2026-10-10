@@ -327,7 +327,7 @@ export class NovelServer {
           fs.cpSync(fixture, dir, { recursive: true, filter: (src) => !src.includes(`${path.sep}.engine`) });
           const store = GraphStore.open(dir, { noIndex: true });
           await store.repo.init();
-          await store.commit('The Tidekeeper’s Ledger (sample)');
+          await store.checkpoint('The Tidekeeper’s Ledger (sample)');
           store.close();
         }
         server.open(dir);
@@ -649,7 +649,7 @@ export class NovelServer {
     r('GET', '/api/history', async ({ engine, query }) => engine.store.repo.log(Number(query.get('limit')) || 100));
     r('GET', '/api/history/:hash', async ({ engine, params }) => engine.store.repo.show(params.hash));
     r('POST', '/api/history/revert', ({ engine, body, server }) => server.job('revert', async () => {
-      await engine.store.commit('Checkpoint before revert');
+      await engine.store.checkpoint('Checkpoint before revert');
       await engine.store.repo.revert(body.hash);
       engine.store.reload();
       return { ok: true };
@@ -691,12 +691,7 @@ export class NovelServer {
     );
     r('PUT', '/api/prompts/:name', async ({ engine, params, body }) => {
       if (!AgentName.safeParse(params.name).success) throw new HttpError(404, `no agent "${params.name}"`);
-      const file = path.join(engine.store.dir, 'prompts', `${params.name}.md`);
-      if (body.reset) fs.rmSync(file, { force: true });
-      else {
-        fs.mkdirSync(path.dirname(file), { recursive: true });
-        fs.writeFileSync(file, String(body.text));
-      }
+      engine.store.savePrompt(params.name, body.reset ? null : String(body.text));
       await engine.store.commit(`${body.reset ? 'Reset' : 'Edit'} ${params.name} prompt`);
       return { ok: true };
     });

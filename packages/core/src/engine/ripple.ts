@@ -4,7 +4,7 @@ import type { AgentSuite } from '../agents/contracts.js';
 import { SceneCard } from '../schemas/index.js';
 import type { GraphStore } from '../store.js';
 import { paths, sceneOrder, stateBefore } from '../project.js';
-import { analyseImpact, cardDiffSummary, partitionImpacts, type Change, type Impact } from '../impact.js';
+import { analyseImpact, cardDiffSummary, changeFiles, partitionImpacts, type Change, type Impact } from '../impact.js';
 import { applyExtraction, runExtraction } from './extraction.js';
 import type { Progress } from './style-passes.js';
 import { cardHash } from '../sync.js';
@@ -102,13 +102,16 @@ export class Ripple {
 
   /**
    * Start a ripple for a change the author has already made through the store.
-   * The originating edit is committed first, so the whole ripple can be reverted.
+   * The originating edit is committed first, so the whole ripple can be reverted. Any other
+   * uncommitted work is checkpointed separately beforehand, so a revert cannot undo it.
    */
   static async start(store: GraphStore, agents: AgentSuite, change: Change, opts: { hopLimit?: number; roundCap?: number } = {}): Promise<Ripple> {
     const existing = Ripple.current(store, agents);
     if (existing) existing.abandon();
     const impact = analyseImpact(store.project, change, store.index);
-    const originCommit = await store.commit(`Edit: ${impact.description}`);
+    const files = changeFiles(change);
+    await store.checkpoint('Work in progress before a ripple', { exclude: files });
+    const originCommit = await store.commit(`Edit: ${impact.description}`, { files });
     const r = new Ripple(store, agents, {
       id: timestamp(),
       created: new Date().toISOString(),
@@ -366,6 +369,9 @@ export class Ripple {
     const blockers = this.blockers();
     if (blockers.length) throw new Error(`round ${this.round.n} still needs decisions:\n${blockers.join('\n')}`);
     const round = this.round;
+    // Commit the round alone: earlier work (an autosave elsewhere during review) goes first.
+    await this.store.commit('Work in progress before a ripple round');
+    const mark = this.store.writeMark();
     const changed: { scene: string; before: SceneCard; after: SceneCard }[] = [];
     for (const it of round.items) {
       if ((it.status === 'accepted') && it.card?.after && it.kind === 'card') {
@@ -396,7 +402,7 @@ export class Ripple {
       ...(kept.length ? [`Kept locked: ${kept.join(', ')}`] : []),
       ...round.items.filter((i) => i.status === 'no_change').map((i) => `No change needed in ${i.scene}: ${i.card?.justification ?? ''}`),
     ].join('\n');
-    round.commit = await this.store.commit(msg);
+    round.commit = await this.store.commit(msg, { files: this.store.writtenSince(mark) });
     round.applied = true;
 
     // Cascade: impact of the accepted card changes.
@@ -424,7 +430,7 @@ export class Ripple {
   /** Revert every commit this ripple made, including the originating edit. */
   async revert() {
     const hashes = [...this.data.rounds.map((r) => r.commit).filter((h): h is string => !!h).reverse(), ...(this.data.originCommit ? [this.data.originCommit] : [])];
-    await this.store.commit('Checkpoint before reverting ripple');
+    await this.store.checkpoint('Checkpoint before reverting ripple');
     for (const h of hashes) await this.store.repo.revert(h);
     this.store.reload();
     if (!this.data.originCommit) {

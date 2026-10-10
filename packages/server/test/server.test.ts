@@ -32,7 +32,7 @@ beforeAll(async () => {
   const dir = copyFixture();
   const s = GraphStore.open(dir, { memoryIndex: true });
   await s.repo.init();
-  await s.commit('Fixture');
+  await s.checkpoint('Fixture');
   s.close();
   server = new NovelServer();
   server.open(dir);

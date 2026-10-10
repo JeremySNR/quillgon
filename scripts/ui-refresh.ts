@@ -19,7 +19,7 @@ fs.mkdirSync(out, { recursive: true });
 fs.cpSync(path.join(root, 'fixtures/novella'), dir, { recursive: true });
 const seed = GraphStore.open(dir, { noIndex: true });
 await seed.repo.init();
-await seed.commit('Sample manuscript');
+await seed.checkpoint('Sample manuscript');
 seed.close();
 const server = new NovelServer({ staticDir: path.join(root, 'apps/desktop/dist') });
 const base = `http://127.0.0.1:${await server.listen(0)}`;

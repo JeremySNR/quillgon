@@ -1,5 +1,5 @@
 import type { Fact, Obligation, PlotPoint, SceneCard, StateSnapshot, Thread } from './schemas/index.js';
-import { sceneOrder, type Project } from './project.js';
+import { paths, sceneOrder, type Project } from './project.js';
 import type { ProjectIndex } from './index-db.js';
 import { uniq } from './util.js';
 
@@ -22,6 +22,38 @@ export type Change =
   | { kind: 'obligation'; before: Obligation | null; after: Obligation | null; description?: string }
   | { kind: 'reorder'; before: string[]; after: string[]; description?: string }
   | { kind: 'delete-scene'; scene: string; card: SceneCard; orderBefore: string[]; description?: string };
+
+/**
+ * The files an edit of this kind writes. A ripple commits these as its origin commit,
+ * apart from any other uncommitted work, so reverting the ripple reverts exactly the edit.
+ */
+export function changeFiles(change: Change): string[] {
+  switch (change.kind) {
+    case 'card':
+      return [paths.card(change.scene)];
+    case 'state':
+      return [paths.state(change.character)];
+    case 'character':
+      return [paths.bio(change.character), paths.voice(change.character)];
+    case 'thread':
+      return [...new Set([change.before?.id, change.after?.id].filter((x): x is string => !!x))].map(paths.thread);
+    case 'plot':
+      return [...new Set([change.before?.id, change.after?.id].filter((x): x is string => !!x))].map(paths.plotPoint);
+    case 'obligation': {
+      const ids = [change.before?.id, change.after?.id].filter((x): x is string => !!x);
+      // Moving where an obligation is planted or paid also rewrites those scenes' cards.
+      const scenes = [change.before, change.after].flatMap((o) => (o ? [o.setup_scene, o.payoff_scene] : [])).filter((x): x is string => !!x);
+      return [...new Set([...ids.map(paths.obligation), ...scenes.map(paths.card)])];
+    }
+    case 'reorder':
+      return [paths.structure];
+    case 'delete-scene': {
+      // Deleting a scene also drops it from the structure and from its cast's state files.
+      const cast = [...new Set([change.card.pov, ...change.card.characters])];
+      return [`scenes/${change.scene}`, paths.structure, ...cast.map(paths.state)];
+    }
+  }
+}
 
 export interface Impact {
   scene: string;

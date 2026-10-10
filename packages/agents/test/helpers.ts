@@ -9,7 +9,7 @@ export async function fixtureEngine(overrides: Partial<AgentSuite> = {}) {
   const dir = copyFixture();
   const store = GraphStore.open(dir, { memoryIndex: true });
   await store.repo.init();
-  await store.commit('Fixture');
+  await store.checkpoint('Fixture');
   const agents = new ScriptedSuite(overrides);
   return { dir, store, agents, engine: new Engine(store, agents) };
 }
