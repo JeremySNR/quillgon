@@ -128,7 +128,8 @@ export function applyTalk(board: IdeaBoard, out: TalkOutput): { board: IdeaBoard
     ['cliches', out.avoid.length ? uniq([...b.cliches, ...out.avoid.map((x) => x.trim()).filter(Boolean)]) : null],
   ];
   for (const [f, v] of lists) {
-    if (!v) continue;
+    // null and [] both mean "leave alone" — models often emit empty lists for unused fields.
+    if (!v?.length) continue;
     const next = uniq(v.map((x) => x.trim()).filter(Boolean));
     if (same(next, b[f])) continue;
     changes.push({ path: f, label: `${BOARD_LABELS[f]} updated`, before: b[f], after: next });

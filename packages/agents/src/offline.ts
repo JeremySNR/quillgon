@@ -41,7 +41,7 @@ export class OfflineSuite implements AgentSuite {
         ending_type: known.ending_type || a('ending_type'),
         hard_rules: known.hard_rules?.length ? known.hard_rules : splitList(a('hard_rules')),
         tone: known.tone || a('tone') || 'Restrained and specific.',
-        notes: answers.filter((x) => !known_.has(x.question)).map((x) => `${x.question} ${x.answer}`).join('\n'),
+        notes: [known.notes, answers.filter((x) => !known_.has(x.question)).map((x) => `${x.question} ${x.answer}`).join('\n')].filter(Boolean).join('\n\n'),
       },
       needs_decision: [],
     };

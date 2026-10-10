@@ -30,7 +30,7 @@ export const InterviewInput = z.object({
   premise: z.string(),
   answers: z.array(z.object({ question: z.string(), answer: z.string() })).default([]),
   /** Already decided (usually while talking the idea through): not to be asked again. */
-  known: Intent.pick({ themes: true, tone: true, ending_type: true, hard_rules: true }).partial().default({}),
+  known: Intent.pick({ themes: true, tone: true, ending_type: true, hard_rules: true, notes: true }).partial().default({}),
 });
 export type InterviewInput = z.infer<typeof InterviewInput>;
 
@@ -486,7 +486,7 @@ export const TalkOutput = z.object({
   set: z
     .object({ seed: Keep, genre: Keep, logline: Keep, paragraph: Keep, synopsis: Keep, tone: Keep, ending: Keep })
     .default({ seed: null, genre: null, logline: null, paragraph: null, synopsis: null, tone: null, ending: null }),
-  /** Whole lists to replace; null leaves the list alone. */
+  /** Whole lists to replace; null or [] leaves the list alone. */
   themes: z.array(z.string()).nullable().default(null),
   never: z.array(z.string()).nullable().default(null),
   open: z.array(z.string()).nullable().default(null),

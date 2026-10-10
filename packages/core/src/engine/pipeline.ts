@@ -94,6 +94,7 @@ export class Pipeline {
       ...(i.tone ? { tone: i.tone } : {}),
       ...(i.ending_type ? { ending_type: i.ending_type } : {}),
       ...(i.hard_rules.length ? { hard_rules: i.hard_rules } : {}),
+      ...(i.notes ? { notes: i.notes } : {}),
     };
     const out = await this.agents.interview({ premise, answers, known });
     const drafted = out.done && out.intent ? { ...out.intent } : null;

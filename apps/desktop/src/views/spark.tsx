@@ -356,7 +356,7 @@ export function IdeaStep({ job }: { job: any }) {
           </Empty>
         )}
       </div>
-      <TalkPanel board={board} onBoard={setBoard} focus={focus} setFocus={setFocus} inputRef={composer} />
+      <TalkPanel board={board} onBoard={setBoard} focus={focus} setFocus={setFocus} inputRef={composer} seed={seed} genre={genre} />
     </div>
   );
 }
@@ -370,7 +370,7 @@ const STARTERS = [
   { label: 'Help me find the ending', text: 'Help me find the ending.', needsSeed: true },
 ];
 
-function TalkPanel({ board, onBoard, focus, setFocus, inputRef }: { board: IdeaBoard; onBoard: (b: IdeaBoard) => void; focus: string | null; setFocus: (f: string | null) => void; inputRef: RefObject<HTMLTextAreaElement | null> }) {
+function TalkPanel({ board, onBoard, focus, setFocus, inputRef, seed, genre }: { board: IdeaBoard; onBoard: (b: IdeaBoard) => void; focus: string | null; setFocus: (f: string | null) => void; inputRef: RefObject<HTMLTextAreaElement | null>; seed: string; genre: string }) {
   const { job: run } = useApp();
   const [text, setText] = useState('');
   const [pending, setPending] = useState<string | null>(null);
@@ -385,6 +385,8 @@ function TalkPanel({ board, onBoard, focus, setFocus, inputRef }: { board: IdeaB
     setPending(message);
     setText('');
     try {
+      // Persist the seed/genre fields first so the partner sees what the author typed.
+      if (seed !== board.seed || genre !== board.genre) await post('/idea/start', { seed, genre });
       onBoard(await run<IdeaBoard>('/idea/talk', { message, focus }, 'Thinking partner'));
       setFocus(null);
     } catch {
@@ -527,8 +529,25 @@ function FieldHead({ label, onTalk }: { label: string; onTalk: () => void }) {
 /** A settled text field: saved when you click away, and kept in step with the partner's edits. */
 function SettledText({ value, placeholder, onSave }: { value: string; placeholder: string; onSave: (t: string) => void }) {
   const [text, setText] = useState(value);
-  useEffect(() => setText(value), [value]);
-  return <textarea className="textarea" rows={2} value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} onBlur={() => text.trim() !== value && onSave(text.trim())} />;
+  const editing = useRef(false);
+  useEffect(() => {
+    if (!editing.current) setText(value);
+  }, [value]);
+  return (
+    <textarea
+      className="textarea"
+      rows={2}
+      value={text}
+      placeholder={placeholder}
+      onChange={(e) => setText(e.target.value)}
+      onFocus={() => (editing.current = true)}
+      onBlur={() => {
+        editing.current = false;
+        if (text.trim() !== value) onSave(text.trim());
+        else setText(value);
+      }}
+    />
+  );
 }
 
 /** A settled list: edited locally, saved when focus leaves it, so typing never races a save. */

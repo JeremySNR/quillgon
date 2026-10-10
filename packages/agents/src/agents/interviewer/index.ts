@@ -23,6 +23,7 @@ function settled(k: InterviewInput['known']): string {
     k.tone ? `Tone: ${k.tone}` : '',
     k.ending_type ? `Ending: ${k.ending_type}` : '',
     k.hard_rules?.length ? `Must never: ${k.hard_rules.join('; ')}` : '',
+    k.notes ? `Notes:\n${k.notes}` : '',
   ].filter(Boolean);
   return lines.length ? `## Already settled (do not ask about these)\n${lines.join('\n')}` : '';
 }

@@ -84,6 +84,15 @@ describe('talking it through: applying a turn to the board', () => {
     const { changes } = applyTalk(board, reply({ set: { seed: board.seed, genre: null, logline: ` ${board.logline} `, paragraph: null, synopsis: null, tone: null, ending: null }, themes: [] }));
     expect(changes).toEqual([]);
   });
+
+  it('empty lists leave settled themes, never-rules and open questions alone', () => {
+    const settled = { ...board, themes: ['inheritance'], never: ['Never explain the watering'], open: ['Who pays?'] };
+    const { board: b, changes } = applyTalk(settled, reply({ themes: [], never: [], open: [] }));
+    expect(b.themes).toEqual(['inheritance']);
+    expect(b.never).toEqual(['Never explain the watering']);
+    expect(b.open).toEqual(['Who pays?']);
+    expect(changes).toEqual([]);
+  });
 });
 
 describe('talking it through: the conversation', () => {
@@ -146,9 +155,11 @@ describe('talking it through: the conversation', () => {
     expect(store.project.intent).toMatchObject({ tone: 'Hushed', ending_type: 'She keeps it and never learns who.', themes: ['inheritance'], hard_rules: ['Never explain the watering'] });
     expect(store.project.intent.notes).toMatch(/Still open:\n- Who pays the water bill\?/);
     const state = await engine.pipeline.interview(store.project.intent.premise);
-    expect((agents.calls.find((c) => c.method === 'interview')!.input as any).known).toEqual({ themes: ['inheritance'], tone: 'Hushed', ending_type: 'She keeps it and never learns who.', hard_rules: ['Never explain the watering'] });
+    const notes = store.project.intent.notes;
+    expect((agents.calls.find((c) => c.method === 'interview')!.input as any).known).toEqual({ themes: ['inheritance'], tone: 'Hushed', ending_type: 'She keeps it and never learns who.', hard_rules: ['Never explain the watering'], notes });
     // The interviewer left them out of its draft; they survive anyway.
-    expect(state.intent).toMatchObject({ premise: 'P', tone: 'Hushed', themes: ['inheritance'], hard_rules: ['Never explain the watering'] });
+    expect(state.intent).toMatchObject({ premise: 'P', tone: 'Hushed', themes: ['inheritance'], hard_rules: ['Never explain the watering'], notes });
+    expect(state.intent!.notes).toMatch(/Still open:\n- Who pays the water bill\?/);
   });
 
   it('the update route only touches the settled fields', async () => {
