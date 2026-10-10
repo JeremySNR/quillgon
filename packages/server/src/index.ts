@@ -3,6 +3,8 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 import {
   AgentName,
   analyseImpact,
@@ -21,6 +23,7 @@ import {
   suggestRules,
   suggestSheet,
   SchemaError,
+  InvalidRefError,
   sceneOrder,
   type Change,
   type ReaderReport,
@@ -57,10 +60,28 @@ export class HttpError extends Error {
 }
 
 const RECENT = path.join(os.homedir(), '.quillgon', 'recent.json');
+const MAX_BODY = 20 * 1024 * 1024;
+const TOKEN_HEADER = 'x-quillgon-token';
+const LOOPBACK_HOST = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+const EXPORT_FORMATS = new Set(['md', 'docx', 'epub']);
+
+export interface ServerOptions {
+  staticDir?: string;
+  /** Required on every API request. Defaults to QUILLGON_TOKEN, else a random per-launch value. */
+  token?: string;
+  /** Extra browser origins allowed to call the API (same-origin requests are always allowed). */
+  allowedOrigins?: string[];
+}
 
 /**
  * The local boundary between the UI and the core. JSON over HTTP, server-sent events for
  * job progress and file changes. Single user, binds to localhost only.
+ *
+ * Binding to localhost is not enough on its own: any web page the author visits can send
+ * requests to 127.0.0.1, and DNS rebinding can make those requests same-origin. So every
+ * API request must carry the per-launch token (injected into the UI's index.html), the
+ * Host header must be a loopback name, browser requests must come from an allowed origin,
+ * and request bodies must be JSON.
  */
 export class NovelServer {
   engine: Engine | null = null;
@@ -71,8 +92,12 @@ export class NovelServer {
   private quietUntil = 0;
   private reloadTimer: NodeJS.Timeout | null = null;
   readonly http: http.Server;
+  readonly token: string;
+  private allowedOrigins: Set<string>;
 
-  constructor(private opts: { staticDir?: string } = {}) {
+  constructor(private opts: ServerOptions = {}) {
+    this.token = opts.token || process.env.QUILLGON_TOKEN || randomBytes(24).toString('base64url');
+    this.allowedOrigins = new Set(opts.allowedOrigins ?? []);
     this.http = http.createServer((req, res) => this.handle(req, res));
     this.register();
   }
@@ -93,12 +118,16 @@ export class NovelServer {
   // ------------------------------------------------------------------ project lifecycle
 
   open(dir: string) {
-    const abs = path.resolve(dir);
+    if (typeof dir !== 'string' || !dir.trim()) throw new HttpError(400, 'dir is required');
+    const abs = path.resolve(expandHome(dir));
     if (!fs.existsSync(path.join(abs, paths.book))) throw new HttpError(404, `no book.yaml in ${abs}`);
-    this.watcher?.close();
-    this.engine?.store.close();
+    // Open the new book before closing the current one, so a book that fails to load
+    // leaves the current one usable.
     const store = GraphStore.open(abs);
     const engine = new Engine(store, createSuite(store));
+    this.watcher?.close();
+    this.watcher = null;
+    this.engine?.store.close();
     this.engine = engine;
     store.on((e) => {
       this.quietUntil = Date.now() + 800;
@@ -135,7 +164,7 @@ export class NovelServer {
 
   /** Run a long operation in the background; progress and completion go out over SSE. */
   job(name: string, fn: (progress: (stage: string, detail?: string) => void) => Promise<unknown>): { job: string } {
-    const id = `${name}-${Date.now().toString(36)}`;
+    const id = `${name}-${randomUUID().slice(0, 8)}`;
     const job: Job = { id, name, state: 'running', stage: 'starting', detail: '', started: Date.now() };
     this.jobs.set(id, job);
     this.broadcast('job', job);
@@ -151,7 +180,7 @@ export class NovelServer {
       })
       .catch((e: Error) => {
         job.state = 'error';
-        job.error = e instanceof SchemaError ? e.message : e.message;
+        job.error = e.message;
       })
       .finally(() => {
         this.broadcast('job', job);
@@ -169,12 +198,41 @@ export class NovelServer {
     this.routes.push({ method, pattern, keys, handler, open });
   }
 
+  /** A browser origin is allowed if it is this server itself or explicitly configured. */
+  private originAllowed(origin: string | undefined, host: string): boolean {
+    if (!origin) return true; // not a browser, or a same-origin GET
+    return origin === `http://${host}` || this.allowedOrigins.has(origin);
+  }
+
+  private tokenMatches(given: string | null | undefined): boolean {
+    if (!given) return false;
+    const a = Buffer.from(given);
+    const b = Buffer.from(this.token);
+    return a.length === b.length && timingSafeEqual(a, b);
+  }
+
   private async handle(req: http.IncomingMessage, res: http.ServerResponse) {
     const url = new URL(req.url ?? '/', 'http://localhost');
-    res.setHeader('access-control-allow-origin', req.headers.origin && /^(http:\/\/(localhost|127\.0\.0\.1)(:\d+)?|file:\/\/|app:\/\/)/.test(req.headers.origin) ? req.headers.origin : 'http://localhost');
-    res.setHeader('access-control-allow-headers', 'content-type');
-    res.setHeader('access-control-allow-methods', 'GET,POST,PUT,DELETE,OPTIONS');
-    if (req.method === 'OPTIONS') return void res.end();
+    const host = req.headers.host ?? '';
+    // DNS rebinding: a page on attacker.example resolved to 127.0.0.1 still sends its own Host.
+    if (!LOOPBACK_HOST.test(host)) return send(res, 421, { error: 'unexpected Host header' });
+    const origin = req.headers.origin;
+    const allowed = this.originAllowed(origin, host);
+    if (origin && allowed && origin !== `http://${host}`) {
+      res.setHeader('access-control-allow-origin', origin);
+      res.setHeader('vary', 'origin');
+      res.setHeader('access-control-allow-headers', `content-type, ${TOKEN_HEADER}`);
+      res.setHeader('access-control-allow-methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    }
+    if (req.method === 'OPTIONS') return void res.writeHead(allowed ? 204 : 403).end();
+
+    if (!url.pathname.startsWith('/api/')) return this.serveStatic(url.pathname, res);
+
+    if (!allowed) return send(res, 403, { error: 'origin not allowed' });
+    const given = req.headers[TOKEN_HEADER];
+    // EventSource cannot set headers, so the event stream also accepts ?token=.
+    const token = typeof given === 'string' ? given : url.pathname === '/api/events' ? url.searchParams.get('token') : null;
+    if (!this.tokenMatches(token)) return send(res, 401, { error: 'missing or invalid API token' });
 
     if (url.pathname === '/api/events') {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
@@ -196,6 +254,7 @@ export class NovelServer {
       if (!m) continue;
       try {
         const body = req.method === 'GET' ? {} : await readBody(req);
+        if (body === null || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'request body must be a JSON object');
         if (!r.open && !this.engine) throw new HttpError(409, 'no project is open');
         const params = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])]));
         const out = await r.handler({ params, query: url.searchParams, body, engine: this.engine!, server: this });
@@ -203,6 +262,12 @@ export class NovelServer {
       } catch (e) {
         if (e instanceof SchemaError) return send(res, 422, { error: e.message, issues: e.issues });
         if (e instanceof HttpError) return send(res, e.status, { error: e.message, data: e.data });
+        if (e instanceof InvalidRefError) return send(res, 400, { error: e.message });
+        // Programming errors are the server's fault; everything else is a refused request.
+        if (e instanceof TypeError || e instanceof ReferenceError || e instanceof RangeError) {
+          console.error(e);
+          return send(res, 500, { error: (e as Error).message });
+        }
         return send(res, 400, { error: (e as Error).message });
       }
     }
@@ -215,9 +280,17 @@ export class NovelServer {
       res.writeHead(200, { 'content-type': 'text/plain' });
       return res.end('Quillgon API. Build the UI with `pnpm build` or run `pnpm dev`.');
     }
-    let file = path.join(dir, path.normalize(p).replace(/^(\.\.[/\\])+/, ''));
-    if (!file.startsWith(dir) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(dir, 'index.html');
-    const types: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.png': 'image/png', '.json': 'application/json' };
+    const root = path.resolve(dir);
+    let file = path.join(root, path.normalize(decodeURIComponentSafe(p)).replace(/^(\.\.[/\\])+/, ''));
+    if (!file.startsWith(root + path.sep) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(root, 'index.html');
+    const types: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.woff': 'font/woff', '.png': 'image/png', '.json': 'application/json' };
+    if (path.extname(file) === '.html') {
+      // The UI reads its API token from here. Only same-machine pages can read it: the Host
+      // check refuses rebound DNS names, and there are no CORS headers for other origins.
+      const html = fs.readFileSync(file, 'utf8').replace('</head>', `  <meta name="quillgon-token" content="${this.token}" />\n  </head>`);
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+      return void res.end(html);
+    }
     res.writeHead(200, { 'content-type': types[path.extname(file)] ?? 'application/octet-stream' });
     fs.createReadStream(file).pipe(res);
   }
@@ -248,7 +321,7 @@ export class NovelServer {
       async ({ server }) => {
         const dir = path.join(os.homedir(), 'Novels', 'The-Tidekeepers-Ledger');
         if (!fs.existsSync(path.join(dir, paths.book))) {
-          const here = path.dirname(new URL(import.meta.url).pathname);
+          const here = path.dirname(fileURLToPath(import.meta.url));
           const fixture = path.resolve(here, '../../../fixtures/novella');
           fs.mkdirSync(path.dirname(dir), { recursive: true });
           fs.cpSync(fixture, dir, { recursive: true, filter: (src) => !src.includes(`${path.sep}.engine`) });
@@ -629,7 +702,11 @@ export class NovelServer {
     });
 
     // --- export
-    r('GET', '/api/export', ({ engine, query }) => exportManuscript(engine.store, (query.get('format') as 'md' | 'docx' | 'epub') ?? 'md'));
+    r('GET', '/api/export', ({ engine, query }) => {
+      const format = query.get('format') ?? 'md';
+      if (!EXPORT_FORMATS.has(format)) throw new HttpError(400, `unknown export format "${format}"`);
+      return exportManuscript(engine.store, format as 'md' | 'docx' | 'epub');
+    });
   }
 }
 
@@ -642,17 +719,43 @@ function send(res: http.ServerResponse, status: number, body: unknown) {
 
 function readBody(req: http.IncomingMessage): Promise<any> {
   return new Promise((resolve, reject) => {
-    let data = '';
-    req.on('data', (c) => (data += c));
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let failed = false;
+    const fail = (e: HttpError) => {
+      if (failed) return;
+      failed = true;
+      req.resume(); // drain, so the error response can be sent
+      reject(e);
+    };
+    req.on('data', (c: Buffer) => {
+      size += c.length;
+      if (size > MAX_BODY) fail(new HttpError(413, 'request body too large'));
+      else if (!failed) chunks.push(c);
+    });
     req.on('end', () => {
+      if (failed) return;
+      const data = Buffer.concat(chunks).toString('utf8');
+      if (!data) return resolve({});
+      // JSON only: a cross-site form or text/plain "simple request" never reaches a handler.
+      const type = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
+      if (type !== 'application/json') return fail(new HttpError(415, 'request body must be application/json'));
       try {
-        resolve(data ? JSON.parse(data) : {});
+        resolve(JSON.parse(data));
       } catch {
-        reject(new HttpError(400, 'invalid JSON body'));
+        fail(new HttpError(400, 'invalid JSON body'));
       }
     });
     req.on('error', reject);
   });
+}
+
+function decodeURIComponentSafe(p: string) {
+  try {
+    return decodeURIComponent(p);
+  } catch {
+    return p;
+  }
 }
 
 function expandHome(p: string) {

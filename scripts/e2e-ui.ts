@@ -19,7 +19,7 @@ process.env.QUILLGON_OFFLINE = '1';
 const { NovelServer } = await import('@quillgon/server');
 const server = new NovelServer({ staticDir: path.resolve(here, '..', 'apps', 'desktop', 'dist') });
 const base = `http://127.0.0.1:${await server.listen(0)}`;
-const api = async (p: string) => (await fetch(`${base}/api${p}`)).json() as Promise<any>;
+const api = async (p: string) => (await fetch(`${base}/api${p}`, { headers: { 'x-quillgon-token': server.token } })).json() as Promise<any>;
 const browser = await chromium.launch({ executablePath: process.env.CHROME ?? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const errors: string[] = [];
@@ -88,7 +88,7 @@ try {
 
   // ---------------------------------------------------------------- B
   console.log('B. A new book through every gate in the UI');
-  await page.evaluate(() => fetch('/api/init', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dir: '~/Novels/Glasshouse', title: 'The Glasshouse', target_words: 12000, offline: true }) }));
+  await page.evaluate(() => fetch('/api/init', { method: 'POST', headers: { 'content-type': 'application/json', 'x-quillgon-token': document.querySelector<HTMLMetaElement>('meta[name="quillgon-token"]')!.content }, body: JSON.stringify({ dir: '~/Novels/Glasshouse', title: 'The Glasshouse', target_words: 12000, offline: true }) }));
   await page.goto(`${base}/#/build`);
   await page.getByPlaceholder(/harbourmaster drowns/).fill('A glasshouse whose orchids are watered every night, though the house has been empty for a year.');
   await page.getByRole('button', { name: 'Show me ideas' }).click();

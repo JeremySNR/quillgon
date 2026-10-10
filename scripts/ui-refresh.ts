@@ -28,7 +28,7 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, co
 const errors: string[] = [];
 page.on('pageerror', e => errors.push(e.message));
 const api = async (method: string, route: string, body?: unknown) => {
-  const r = await fetch(`${base}/api${route}`, { method, headers: { 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch(`${base}/api${route}`, { method, headers: { 'content-type': 'application/json', 'x-quillgon-token': server.token }, body: body ? JSON.stringify(body) : undefined });
   assert.ok(r.ok, `${method} ${route}: ${r.status}`);
   return r.json();
 };

@@ -7,6 +7,8 @@ declare global {
 }
 
 const BASE = window.quillgon?.apiBase ?? '';
+/** The server injects a per-launch API token into index.html (the dev server does the same). */
+const TOKEN = document.querySelector<HTMLMetaElement>('meta[name="quillgon-token"]')?.content ?? '';
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public data?: any) {
@@ -17,7 +19,7 @@ export class ApiError extends Error {
 export async function api<T = any>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${BASE}/api${path}`, {
     method,
-    headers: body !== undefined ? { 'content-type': 'application/json' } : undefined,
+    headers: { 'x-quillgon-token': TOKEN, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const json = await res.json().catch(() => ({}));
@@ -37,7 +39,7 @@ let source: EventSource | null = null;
 export function subscribe(fn: Listener): () => void {
   listeners.add(fn);
   if (!source) {
-    source = new EventSource(`${BASE}/api/events`);
+    source = new EventSource(`${BASE}/api/events?token=${encodeURIComponent(TOKEN)}`);
     for (const t of ['store', 'reloaded', 'job', 'hello']) {
       source.addEventListener(t, (e) => {
         const data = JSON.parse((e as MessageEvent).data || '{}');

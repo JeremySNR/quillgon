@@ -22,11 +22,18 @@ export type Lock = z.infer<typeof Lock>;
 export const ModelTier = z.enum(['frontier', 'mid', 'small', 'reader']);
 export type ModelTier = z.infer<typeof ModelTier>;
 
+const blankToUndefined = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? undefined : v);
+
 export const ModelConfig = z.object({
   provider: z.enum(['openai', 'codex', 'anthropic', 'openai-compatible', 'offline']).default('openai'),
   model: z.string(),
-  base_url: z.string().optional(),
-  api_key_env: z.string().optional(),
+  base_url: z.preprocess(blankToUndefined, z.string().regex(/^https?:\/\/\S+$/, 'must be an http(s) URL').optional()),
+  /**
+   * The environment variable holding the key. Restricted to *_API_KEY names so a book file
+   * (which may come from someone else) cannot send an arbitrary secret, like a cloud or
+   * GitHub credential, to a model endpoint.
+   */
+  api_key_env: z.preprocess(blankToUndefined, z.string().regex(/^[A-Z][A-Z0-9_]*_API_KEY$/, 'must name an environment variable ending in _API_KEY').optional()),
   effort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
   /** USD per million tokens, used for cost logging and `novel estimate`. */
   price_in: z.number().optional(),

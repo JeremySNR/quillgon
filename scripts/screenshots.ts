@@ -19,7 +19,7 @@ const server = new NovelServer({ staticDir: path.resolve(here, '..', 'apps', 'de
 const port = await server.listen(0);
 const base = `http://127.0.0.1:${port}`;
 const api = async (method: string, p: string, body?: unknown) => {
-  const r = await fetch(`${base}/api${p}`, { method, headers: { 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch(`${base}/api${p}`, { method, headers: { 'content-type': 'application/json', 'x-quillgon-token': server.token }, body: body ? JSON.stringify(body) : undefined });
   const j: any = await r.json();
   if (!r.ok) throw new Error(`${p}: ${j.error}`);
   return j;

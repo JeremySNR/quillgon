@@ -119,6 +119,7 @@ packages/cli/        the `quillgon` command
 fixtures/novella/    "The Tidekeeper's Ledger": 12 scenes, 4 characters, 3 threads, 2 plot points
 ```
 
+- **The local API is locked to the app.** The server binds to 127.0.0.1 and requires a per-launch token on every API request; the UI reads it from the page the server serves. Requests with a non-loopback `Host` (DNS rebinding) or a foreign `Origin` are refused, request bodies must be JSON, and git refs from the UI are validated before they reach git. Set `QUILLGON_TOKEN` to choose the token yourself, for example to script against `pnpm serve`. A book's `api_key_env` must name a variable ending in `_API_KEY`, so a shared book file cannot send another secret to a model endpoint.
 - **Only the graph store writes to the manuscript.** Agents return structured output, validated with Zod, and the store writes files, updates the index and commits.
 - **A book is a git repo of Markdown and YAML** (`book.yaml`, `intent.md`, `plot-points/`, `threads/`, `characters/<id>/{bio.md,voice.md,state.yaml}`, `scenes/<id>/{card.yaml,prose.md,facts.yaml}`, `obligations/`, `idea.yaml`, `structure.yaml`, `timeline.yaml`, `style/` (samples, banned patterns, `style.yaml`), `reports/`). You can edit any of it in another editor; the app reloads.
 - **The index is disposable.** `.engine/index.sqlite` holds entities, references, facts and scene embeddings. Delete it and it rebuilds. Embeddings are local and deterministic (hashed term vectors), so impact analysis needs no network.

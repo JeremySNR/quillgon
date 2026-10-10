@@ -2,6 +2,34 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { simpleGit, type SimpleGit } from 'simple-git';
 
+/**
+ * Refs arrive from the UI (branch names, hashes from history, compare targets). Anything
+ * git could read as an option, or that is not a plausible ref, is refused before it reaches
+ * the command line.
+ */
+export function assertRef(ref: unknown, what = 'ref'): string {
+  const ok =
+    typeof ref === 'string' &&
+    ref.length <= 200 &&
+    /^[A-Za-z0-9][A-Za-z0-9._/~^-]*$/.test(ref) &&
+    !ref.includes('..') &&
+    !ref.includes('//') &&
+    !ref.endsWith('/') &&
+    !ref.endsWith('.') &&
+    !ref.endsWith('.lock');
+  if (!ok) throw new InvalidRefError(`invalid ${what}: ${JSON.stringify(ref)}`);
+  return ref;
+}
+
+/** A branch name: a ref without revision suffixes. */
+export function assertBranch(name: unknown): string {
+  const ref = assertRef(name, 'branch name');
+  if (/[~^]/.test(ref)) throw new InvalidRefError(`invalid branch name: ${JSON.stringify(name)}`);
+  return ref;
+}
+
+export class InvalidRefError extends Error {}
+
 export interface Commit {
   hash: string;
   date: string;
@@ -64,6 +92,7 @@ export class Repo {
   }
 
   async show(hash: string): Promise<{ files: string[]; patch: string }> {
+    assertRef(hash, 'commit');
     const files = (await this.git.raw(['show', '--name-only', '--format=', hash])).split('\n').filter(Boolean);
     const patch = await this.git.raw(['show', '--format=', hash]);
     return { files, patch };
@@ -86,20 +115,24 @@ export class Repo {
 
   /** Start a "what if": commit pending work, then branch from here. */
   async createBranch(name: string) {
+    assertBranch(name);
     await this.commit(`Checkpoint before what-if "${name}"`);
     await this.git.checkoutLocalBranch(name);
   }
 
   async switchBranch(name: string) {
+    assertBranch(name);
     await this.commit(`Checkpoint before switching to "${name}"`);
     await this.git.checkout(name);
   }
 
   async deleteBranch(name: string) {
+    assertBranch(name);
     await this.git.deleteLocalBranch(name, true);
   }
 
   async merge(from: string): Promise<{ ok: boolean; conflicts: string[] }> {
+    assertBranch(from);
     try {
       await this.git.merge([from, '--no-ff', '-m', `Merge what-if "${from}"`]);
       return { ok: true, conflicts: [] };
@@ -111,11 +144,13 @@ export class Repo {
   }
 
   async revert(hash: string) {
+    assertRef(hash, 'commit');
     await this.git.revert(hash, ['--no-edit']);
   }
 
   /** Read a file as it is on another branch (for scene-by-scene comparison). */
   async readAt(ref: string, rel: string): Promise<string | null> {
+    assertRef(ref);
     try {
       return await this.git.show([`${ref}:${rel}`]);
     } catch {
@@ -124,6 +159,8 @@ export class Repo {
   }
 
   async changedBetween(a: string, b: string): Promise<string[]> {
+    assertRef(a);
+    assertRef(b);
     const out = await this.git.raw(['diff', '--name-only', `${a}...${b}`]);
     return out.split('\n').filter(Boolean);
   }
