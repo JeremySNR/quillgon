@@ -111,7 +111,7 @@ export class Ripple {
     const existing = Ripple.current(store, agents);
     if (existing) existing.abandon();
     const impact = analyseImpact(store.project, change, store.index);
-    const files = changeFiles(change);
+    const files = changeFiles(change, store.uncommitted());
     await store.checkpoint('Work in progress before a ripple', { exclude: files });
     const originCommit = await store.commit(`Edit: ${impact.description}`, { files });
     const r = new Ripple(store, agents, {
@@ -400,7 +400,14 @@ export class Ripple {
       ...(kept.length ? [`Kept locked: ${kept.join(', ')}`] : []),
       ...round.items.filter((i) => i.status === 'no_change').map((i) => `No change needed in ${i.scene}: ${i.card?.justification ?? ''}`),
     ].join('\n');
-    round.commit = await this.store.commit(msg, { files: this.store.writtenSince(mark) });
+    // Only this round's writes: an author's autosave in another scene during a slow
+    // extraction is left for its own commit, so reverting the ripple cannot undo it.
+    const inRound = new Set(round.items.map((i) => i.scene));
+    const files = this.store.writtenSince(mark).filter((f) => {
+      const scene = /^scenes\/([^/]+)\//.exec(f)?.[1];
+      return !scene || inRound.has(scene);
+    });
+    round.commit = await this.store.commit(msg, { files });
     round.applied = true;
 
     // Cascade: impact of the accepted card changes.
@@ -432,64 +439,70 @@ export class Ripple {
    */
   async revert() {
     const hashes = [...this.data.rounds.map((r) => r.commit).filter((h): h is string => !!h).reverse(), ...(this.data.originCommit ? [this.data.originCommit] : [])];
-    await this.store.checkpoint('Checkpoint before reverting ripple');
     try {
-      await this.store.repo.revertAll(hashes, `Revert ripple: ${this.data.description}`);
+      await this.store.revertCommits(hashes, `Revert ripple: ${this.data.description}`);
     } finally {
       this.store.reload();
     }
-    if (!this.data.originCommit) {
-      // The originating edit was committed before the ripple started: restore it from the change.
-      const c = this.data.change;
-      if (c.kind === 'card') this.store.saveCard(c.before);
-      else if (c.kind === 'state') {
-        const ch = this.store.project.characters.get(c.character);
-        if (ch) {
-          const { [c.scene]: _drop, ...rest } = ch.state;
-          this.store.saveCharacterState(c.character, c.before ? { ...rest, [c.scene]: c.before } : rest);
-        }
-      } else if (c.kind === 'thread') c.before ? this.store.saveThread(c.before) : c.after && this.store.deleteThread(c.after.id);
-      else if (c.kind === 'plot') c.before ? this.store.savePlotPoint(c.before) : c.after && this.store.deletePlotPoint(c.after.id);
-      else if (c.kind === 'obligation') c.before ? this.store.saveObligation(c.before) : c.after && this.store.deleteObligation(c.after.id);
-      else if (c.kind === 'reorder') {
-        const st = structuredClone(this.store.project.structure);
-        let i = 0;
-        for (const a of st.acts) for (const ch of a.chapters) ch.scenes = ch.scenes.map(() => c.before[i++]);
-        this.store.saveStructure(st);
-      } else if (c.kind === 'delete-scene' || c.kind === 'character') {
-        // No "before" is kept in the change for these: take the files from just before the
-        // commit that last touched them before this ripple started.
-        const files = changeFiles(c).filter((f) => f !== paths.structure);
-        const before = await this.commitBefore(files[0]);
-        if (before) await this.store.repo.restore(before, files);
-        this.store.reload();
-        if (c.kind === 'delete-scene' && before) {
-          const st = structuredClone(this.store.project.structure);
-          const chapters = st.acts.flatMap((a) => a.chapters);
-          const prevIdx = c.orderBefore.indexOf(c.scene) - 1;
-          const prev = prevIdx >= 0 ? c.orderBefore[prevIdx] : null;
-          const ch = (prev && chapters.find((x) => x.scenes.includes(prev))) || chapters[0];
-          if (ch && !chapters.some((x) => x.scenes.includes(c.scene))) {
-            ch.scenes.splice(prev ? ch.scenes.indexOf(prev) + 1 : 0, 0, c.scene);
-            this.store.saveStructure(st);
-          }
-        }
-        await this.store.checkpoint(`Revert: ${this.data.description}`);
-      }
-      await this.store.commit(`Revert: ${this.data.description}`);
-    }
+    if (!this.data.originCommit) await this.restoreOrigin();
     this.data.state = 'reverted';
     this.save();
   }
 
-  /** The parent of the newest commit touching `rel` made before this ripple started. */
-  private async commitBefore(rel: string | undefined): Promise<string | null> {
-    if (!rel) return null;
+  /** The originating edit was committed before the ripple started: put it back from the change. */
+  private async restoreOrigin() {
+    const c = this.data.change;
+    if (c.kind === 'delete-scene' || c.kind === 'character') {
+      // No "before" is kept in the change for these: restore every file the commit that made
+      // the edit touched (the scene, and the state files a deletion rewrote) from its parent.
+      const dir = c.kind === 'delete-scene' ? `scenes/${c.scene}` : `characters/${c.character}`;
+      const commit = await this.lastCommitBefore(dir);
+      if (commit) {
+        const files = (await this.store.repo.show(commit)).files.filter((f) => f.startsWith(`${dir}/`) || (c.kind === 'delete-scene' && /^characters\/[^/]+\/state\.yaml$/.test(f)));
+        await this.store.repo.restore(`${commit}~1`, files);
+      }
+      this.store.reload();
+      if (c.kind === 'delete-scene' && commit) {
+        const st = structuredClone(this.store.project.structure);
+        const chapters = st.acts.flatMap((a) => a.chapters);
+        const prevIdx = c.orderBefore.indexOf(c.scene) - 1;
+        const prev = prevIdx >= 0 ? c.orderBefore[prevIdx] : null;
+        const ch = (prev && chapters.find((x) => x.scenes.includes(prev))) || chapters[0];
+        if (ch && !chapters.some((x) => x.scenes.includes(c.scene))) {
+          ch.scenes.splice(prev ? ch.scenes.indexOf(prev) + 1 : 0, 0, c.scene);
+          this.store.saveStructure(st);
+        }
+      }
+      // Files restored by git are not store writes: commit the whole tree.
+      await this.store.checkpoint(`Revert: ${this.data.description}`);
+      return;
+    }
+    if (c.kind === 'card') this.store.saveCard(c.before);
+    else if (c.kind === 'state') {
+      const ch = this.store.project.characters.get(c.character);
+      if (ch) {
+        const { [c.scene]: _drop, ...rest } = ch.state;
+        this.store.saveCharacterState(c.character, c.before ? { ...rest, [c.scene]: c.before } : rest);
+      }
+    } else if (c.kind === 'thread') c.before ? this.store.saveThread(c.before) : c.after && this.store.deleteThread(c.after.id);
+    else if (c.kind === 'plot') c.before ? this.store.savePlotPoint(c.before) : c.after && this.store.deletePlotPoint(c.after.id);
+    else if (c.kind === 'obligation') c.before ? this.store.saveObligation(c.before) : c.after && this.store.deleteObligation(c.after.id);
+    else if (c.kind === 'reorder') {
+      const st = structuredClone(this.store.project.structure);
+      let i = 0;
+      for (const a of st.acts) for (const ch of a.chapters) ch.scenes = ch.scenes.map(() => c.before[i++]);
+      this.store.saveStructure(st);
+    }
+    await this.store.commit(`Revert: ${this.data.description}`);
+  }
+
+  /** The newest commit touching anything under `dir`, made before this ripple started. */
+  private async lastCommitBefore(dir: string): Promise<string | null> {
     const started = Date.parse(this.data.created);
-    const log = await this.store.repo.git.raw(['log', '--format=%H %cI', '--', `:(literal)${rel}`]).catch(() => '');
+    const log = await this.store.repo.git.raw(['log', '--format=%H %cI', '--', `:(literal)${dir}`]).catch(() => '');
     for (const line of log.split('\n').filter(Boolean)) {
       const [hash, date] = line.split(' ');
-      if (Date.parse(date) <= started + 1000) return `${hash}~1`;
+      if (Date.parse(date) <= started + 1000) return hash;
     }
     return null;
   }

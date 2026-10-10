@@ -119,3 +119,94 @@ describe('prose edits', () => {
     expect(store.sceneSync('s03').state).toBe('card_ahead');
   });
 });
+
+describe('review fixes', () => {
+  it('branch names follow git, refusing only what git refuses (and leading dashes)', async () => {
+    const { assertBranch, assertRef } = await import('@quillgon/core');
+    for (const ok of ["what-if-tom's-death", 'what-if-élan', 'a+b', 'feature/x', 'v1.2']) expect(assertBranch(ok)).toBe(ok);
+    for (const bad of ['-x', '--output=/tmp/x', 'a..b', 'a b', 'a:b', 'a~1', 'x.lock', 'a/.b', '@']) expect(() => assertBranch(bad)).toThrow(/invalid/);
+    expect(assertRef('HEAD~2')).toBe('HEAD~2');
+    expect(() => assertRef('-p')).toThrow(/invalid/);
+  });
+
+  it('reverting a merged what-if works; a failure that is not a conflict says so', async () => {
+    const { store } = await fixtureEngine();
+    await store.repo.createBranch('what-if');
+    store.saveCard({ ...store.scene('s02').card, purpose: 'On the branch.' });
+    await store.commit('Branch edit');
+    await store.repo.switchBranch('main');
+    const merged = await store.repo.merge('what-if');
+    expect(merged.ok).toBe(true);
+    const mergeHash = (await store.repo.log(1))[0].hash;
+    await store.revertCommits([mergeHash], 'Revert the merge');
+    store.reload();
+    expect(store.scene('s02').card.purpose).not.toBe('On the branch.');
+    const err = await store.revertCommits(['deadbeefdeadbeef'], 'x').catch((e) => e);
+    expect(err).not.toBeInstanceOf(RevertConflictError);
+    expect(err.message).toMatch(/not applied/);
+  });
+
+  it('a revert checkpoints again when an autosave lands between checkpoint and revert', async () => {
+    const { dir, store, ripple } = await appliedRippleFor();
+    const original = store.repo.revertAll.bind(store.repo);
+    let calls = 0;
+    store.repo.revertAll = async (hashes, message) => {
+      if (++calls === 1) fs.appendFileSync(path.join(dir, paths.prose('s02')), '\nTyped just now.\n');
+      return original(hashes, message);
+    };
+    await ripple.revert();
+    expect(calls).toBe(2);
+    expect(read(dir, paths.prose('s02'))).toContain('Typed just now.');
+    expect(ripple.data.state).toBe('reverted');
+  });
+
+  it("an autosave in another scene during a round's extraction stays out of the round's commit", async () => {
+    const { store, engine } = await fixtureEngine();
+    const base = fixtureExtractor(store);
+    (engine.agents as any).extract = async (i: any) => {
+      store.saveProse('s02', store.scene('s02').prose!.body + '\n\nTyped during extraction.\n', 'author');
+      return base(i);
+    };
+    const snap = store.project.characters.get('mara')!.state['s04'];
+    const ripple = await engine.startRipple(engine.editState('mara', 's04', { ...snap, knows: snap.knows.filter((f) => f !== 'eliza-holds-debts') }));
+    await ripple.propose();
+    ripple.accept('s06');
+    ripple.reject('s11');
+    await ripple.proposeProse();
+    ripple.acceptProse('s06');
+    const round = await ripple.apply();
+    const files = (await store.repo.show(round.commit!)).files;
+    expect(files).toContain(paths.prose('s06'));
+    expect(files).not.toContain(paths.prose('s02'));
+  });
+
+  it("reverting a scene deletion restores the state of characters who were not on the card", async () => {
+    const { dir, store, engine } = await fixtureEngine();
+    const card = structuredClone(store.scene('s07').card);
+    const outsider = [...store.project.characters.keys()].find((c) => c !== card.pov && !card.characters.includes(c))!;
+    const snap = structuredClone(Object.values(store.project.characters.get(outsider)!.state)[0]);
+    store.saveCharacterState(outsider, { ...store.project.characters.get(outsider)!.state, s07: snap });
+    await store.commit('State for an outsider in s07');
+    const orderBefore = sceneOrder(store.project);
+    store.deleteScene('s07');
+    await store.commit('Delete s07');
+    await new Promise((r) => setTimeout(r, 1100));
+    const ripple = await engine.startRipple({ kind: 'delete-scene', scene: 's07', card, orderBefore });
+    await ripple.revert();
+    expect(store.project.characters.get(outsider)!.state.s07).toBeTruthy();
+    expect(fs.existsSync(path.join(dir, paths.card('s07')))).toBe(true);
+  });
+});
+
+async function appliedRippleFor() {
+  const env = await fixtureEngine();
+  (env.engine.agents as any).extract = fixtureExtractor(env.store);
+  const snap = env.store.project.characters.get('mara')!.state['s04'];
+  const ripple = await env.engine.startRipple(env.engine.editState('mara', 's04', { ...snap, knows: snap.knows.filter((f) => f !== 'eliza-holds-debts') }));
+  await ripple.propose();
+  ripple.accept('s06');
+  ripple.reject('s11');
+  ripple.rejectProse('s06');
+  await ripple.apply();
+  return { ...env, ripple };
+}

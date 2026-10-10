@@ -25,6 +25,7 @@ import {
   SchemaError,
   InvalidRefError,
   RevertConflictError,
+  assertRef,
   sceneOrder,
   type Change,
   type ReaderReport,
@@ -681,8 +682,9 @@ export class NovelServer {
     r('GET', '/api/history', async ({ engine, query }) => engine.store.repo.log(Number(query.get('limit')) || 100));
     r('GET', '/api/history/:hash', async ({ engine, params }) => engine.store.repo.show(params.hash));
     r('POST', '/api/history/revert', ({ engine, body, server }) => server.job('revert', async () => {
-      await engine.store.checkpoint('Checkpoint before revert');
-      await engine.store.repo.revert(body.hash);
+      const hash = assertRef(body.hash, 'commit');
+      const subject = (await engine.store.repo.git.raw(['log', '-1', '--format=%s', hash])).trim();
+      await engine.store.revertCommits([hash], `Revert "${subject}"`);
       engine.store.reload();
       return { ok: true };
     }));

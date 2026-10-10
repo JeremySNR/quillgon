@@ -27,14 +27,15 @@ export type Change =
  * The files an edit of this kind writes. A ripple commits these as its origin commit,
  * apart from any other uncommitted work, so reverting the ripple reverts exactly the edit.
  */
-export function changeFiles(change: Change): string[] {
+export function changeFiles(change: Change, uncommitted: string[] = []): string[] {
   switch (change.kind) {
     case 'card':
       return [paths.card(change.scene)];
     case 'state':
       return [paths.state(change.character)];
     case 'character':
-      return [paths.bio(change.character), paths.voice(change.character)];
+      // saveCharacter writes the state file as well (empty for a new character).
+      return [paths.bio(change.character), paths.voice(change.character), paths.state(change.character)];
     case 'thread':
       return [...new Set([change.before?.id, change.after?.id].filter((x): x is string => !!x))].map(paths.thread);
     case 'plot':
@@ -48,9 +49,11 @@ export function changeFiles(change: Change): string[] {
     case 'reorder':
       return [paths.structure];
     case 'delete-scene': {
-      // Deleting a scene also drops it from the structure and from its cast's state files.
-      const cast = [...new Set([change.card.pov, ...change.card.characters])];
-      return [`scenes/${change.scene}`, paths.structure, ...cast.map(paths.state)];
+      // Deleting a scene also drops it from the structure and from the state file of every
+      // character with an entry for it, cast or not: take those that are still uncommitted.
+      const cast = [change.card.pov, ...change.card.characters].map(paths.state);
+      const states = uncommitted.filter((f) => /^characters\/[^/]+\/state\.yaml$/.test(f));
+      return [...new Set([`scenes/${change.scene}`, paths.structure, ...cast, ...states])];
     }
   }
 }

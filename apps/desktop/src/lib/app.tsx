@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { get, post, runJob, subscribe } from './api';
 import type { Job, Snapshot } from './types';
-import { allowUnload, describeUnsaved, installUnloadGuard, unsavedChanges } from './unsaved';
+import { describeUnsaved, installUnloadGuard, unsavedChanges } from './unsaved';
 import { useConfirm } from '../components/confirm';
 
 export type View = 'dashboard' | 'build' | 'outline' | 'scene' | 'ripple' | 'threads' | 'characters' | 'reader' | 'history' | 'settings';
@@ -208,21 +208,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('unhandledrejection', h);
   }, [fail]);
 
-  // Closing or reloading the window with unsaved edits. Electron closes without a prompt, so ask in-app there.
-  useEffect(
-    () =>
-      installUnloadGuard(
-        window.quillgon
-          ? (what) =>
-              void confirmLeave(what, 'close').then((ok) => {
-                if (!ok) return;
-                allowUnload();
-                window.close();
-              })
-          : undefined,
-      ),
-    [confirmLeave],
-  );
+  // Closing or reloading the window with unsaved edits: the browser asks, and in Electron
+  // the main process does (will-prevent-unload in electron/main.cjs).
+  useEffect(() => installUnloadGuard(), []);
 
   const markSaved = useCallback(() => (setSavedAt(Date.now()), setSaveProblem(null)), []);
   const markSaveFailed = useCallback((message: string | null) => setSaveProblem(message), []);

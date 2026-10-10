@@ -3,32 +3,38 @@ import path from 'node:path';
 import { simpleGit, type SimpleGit } from 'simple-git';
 
 /**
- * Refs arrive from the UI (branch names, hashes from history, compare targets). Anything
- * git could read as an option, or that is not a plausible ref, is refused before it reaches
- * the command line.
+ * Refs arrive from the UI (branch names, hashes from history, compare targets). The rules
+ * are git's own (git check-ref-format), plus the one that matters for safety: nothing that
+ * starts with "-", which git would read as an option. Revisions may end in ~n or ^n.
  */
 export function assertRef(ref: unknown, what = 'ref'): string {
-  const ok =
-    typeof ref === 'string' &&
-    ref.length <= 200 &&
-    /^[A-Za-z0-9][A-Za-z0-9._/~^-]*$/.test(ref) &&
-    !ref.includes('..') &&
-    !ref.includes('//') &&
-    !ref.endsWith('/') &&
-    !ref.endsWith('.') &&
-    !ref.endsWith('.lock');
-  if (!ok) throw new InvalidRefError(`invalid ${what}: ${JSON.stringify(ref)}`);
-  return ref;
+  if (!validRef(ref, true)) throw new InvalidRefError(`invalid ${what}: ${JSON.stringify(ref)}`);
+  return ref as string;
 }
 
 /** A branch name: a ref without revision suffixes. */
 export function assertBranch(name: unknown): string {
-  const ref = assertRef(name, 'branch name');
-  if (/[~^]/.test(ref)) throw new InvalidRefError(`invalid branch name: ${JSON.stringify(name)}`);
-  return ref;
+  if (!validRef(name, false)) throw new InvalidRefError(`invalid branch name: ${JSON.stringify(name)}`);
+  return name as string;
+}
+
+function validRef(ref: unknown, revision: boolean): boolean {
+  if (typeof ref !== 'string' || !ref || ref.length > 200 || ref === '@') return false;
+  // Strip a trailing revision suffix (HEAD~2, abc123^, main^2) before checking the name.
+  const name = revision ? ref.replace(/([~^]\d*)+$/, '') : ref;
+  if (!name || name.startsWith('-')) return false;
+  // Control characters, space and ~ ^ : ? * [ \ are never allowed in a ref name.
+  // eslint-disable-next-line no-control-regex
+  if (/[\x00-\x20\x7f~^:?*[\\]/.test(name)) return false;
+  if (name.includes('..') || name.includes('@{') || name.includes('//')) return false;
+  if (name.endsWith('/') || name.endsWith('.') || name.endsWith('.lock')) return false;
+  return name.split('/').every((part) => part && !part.startsWith('.'));
 }
 
 export class InvalidRefError extends Error {}
+
+/** The working tree had uncommitted changes, so a revert was not attempted. */
+export class DirtyTreeError extends Error {}
 
 /** A revert that would overwrite later work. Nothing was changed. */
 export class RevertConflictError extends Error {
@@ -91,7 +97,7 @@ export class Repo {
     if (!this.isRepo()) return null;
     const { files, exclude } = Array.isArray(opts) ? { files: opts, exclude: undefined } : opts;
     await this.ensureIdentity();
-    const hasHead = await this.git.raw(['rev-parse', '--verify', '-q', 'HEAD']).then(() => true, () => false);
+    const hasHead = !!(await this.head());
     // Start from a clean index, so nothing staged earlier rides along.
     if (hasHead) await this.git.raw(['reset', '-q']);
     if (files) {
@@ -208,16 +214,24 @@ export class Repo {
     const head = await this.head();
     if (!head) throw new Error('nothing to revert: the book has no commits');
     if ((await this.git.raw(['status', '--porcelain', '--untracked-files=no'])).trim()) {
-      throw new Error('commit or checkpoint pending changes before reverting');
+      throw new DirtyTreeError('commit or checkpoint pending changes before reverting');
     }
+    // A merge commit (a merged what-if) is reverted relative to the branch it was merged into.
+    for (const h of hashes) {
+      // Not -q: simple-git only rejects when git writes to stderr.
+      const known = await this.git.raw(['rev-parse', '--verify', `${h}^{commit}`]).then((out) => !!out.trim(), () => false);
+      if (!known) throw new Error(`the revert was not applied (nothing was changed): no commit ${h}`);
+    }
+    const merge = hashes.length === 1 && (await this.git.raw(['rev-list', '--parents', '-n', '1', hashes[0]])).trim().split(/\s+/).length > 2;
     try {
-      await this.git.raw(['revert', '--no-commit', ...hashes]);
+      await this.git.raw(['revert', '--no-commit', ...(merge ? ['-m', '1'] : []), ...hashes]);
     } catch (e) {
       const conflicted = (await this.git.status()).conflicted;
       await this.git.raw(['revert', '--abort']).catch(() => this.git.raw(['reset', '-q', '--hard', head]));
       // Belt and braces: whatever abort did, HEAD and the tree are as they were.
       if ((await this.head()) !== head) await this.git.raw(['reset', '-q', '--hard', head]);
-      throw new RevertConflictError(conflicted.length ? conflicted : [(e as Error).message]);
+      if (conflicted.length) throw new RevertConflictError(conflicted);
+      throw new Error(`the revert was not applied (nothing was changed): ${(e as Error).message}`);
     }
     if (!(await this.git.raw(['diff', '--cached', '--name-only'])).trim()) {
       await this.git.raw(['revert', '--quit']).catch(() => undefined);
@@ -228,10 +242,17 @@ export class Repo {
     return r.commit || null;
   }
 
-  /** Put files back as they were at a commit (e.g. a deleted scene, from before its deletion). */
+  /**
+   * Put files back as they were at a commit (e.g. a deleted scene, from before its
+   * deletion). Files that did not exist then are removed.
+   */
   async restore(ref: string, rels: string[]) {
     assertRef(ref);
-    if (rels.length) await this.git.raw(['checkout', ref, '--', ...rels.map((r) => `:(literal)${r}`)]);
+    if (!rels.length) return;
+    const existed = new Set((await this.git.raw(['ls-tree', '-r', '--name-only', ref, '--', ...rels.map((r) => `:(literal)${r}`)])).split('\n').filter(Boolean));
+    const back = rels.filter((r) => existed.has(r));
+    if (back.length) await this.git.raw(['checkout', ref, '--', ...back.map((r) => `:(literal)${r}`)]);
+    for (const r of rels.filter((x) => !existed.has(x))) fs.rmSync(path.join(this.dir, r), { force: true });
   }
 
   /** Read a file as it is on another branch (for scene-by-scene comparison). */

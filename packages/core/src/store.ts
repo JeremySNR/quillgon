@@ -34,7 +34,7 @@ import {
   type ProseFile,
 } from './project.js';
 import { ProjectIndex } from './index-db.js';
-import { Repo } from './git.js';
+import { DirtyTreeError, Repo } from './git.js';
 import { cardHash, proseHash, projectSync, sceneSync } from './sync.js';
 import { parseBannedPatterns } from './style.js';
 import { timestamp, toYaml, wordCount } from './util.js';
@@ -474,6 +474,21 @@ export class GraphStore {
     this.settle([...this.dirty.keys()].filter((f) => !ex.has(f)), seq);
     if (hash) this.emit({ type: 'committed', hash, message });
     return hash;
+  }
+
+  /**
+   * Revert commits (newest first) as one commit, after checkpointing pending work. An
+   * autosave can land between the checkpoint and the revert; then checkpoint again.
+   */
+  async revertCommits(hashes: string[], message: string): Promise<string | null> {
+    for (let attempt = 1; ; attempt++) {
+      await this.checkpoint('Checkpoint before revert');
+      try {
+        return await this.repo.revertAll(hashes, message);
+      } catch (e) {
+        if (!(e instanceof DirtyTreeError) || attempt >= 3) throw e;
+      }
+    }
   }
 
   /** Forget files that are now committed, unless they were written again while committing. */

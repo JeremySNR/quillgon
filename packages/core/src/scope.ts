@@ -43,7 +43,8 @@ export function relevantFacts(p: Project, opts: { must?: Iterable<string>; query
   const picked = all.filter((f) => must.has(f.id));
   const room = limit - picked.length;
   if (room <= 0) return picked;
-  const q = vec(opts.query);
+  // Queries are one-off (they include scene text): embed them uncached; cache fact vectors only.
+  const q = embedder.embedOne(opts.query);
   const ranked = all
     .filter((f) => !must.has(f.id))
     .map((f) => ({ f, score: cosine(q, vec(`${f.id.replace(/-/g, ' ')} ${f.statement}`)) + (opts.prefer?.has(f.id) ? 0.15 : 0) }))
