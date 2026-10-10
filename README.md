@@ -1,22 +1,130 @@
-# Quillgon
+<div align="center">
 
-**A whole novel. Still your story.**
+<a href="https://quillgon.vercel.app">
+  <img src="docs/media/quillgon-teaser.gif" alt="Quillgon: start with one idea" width="100%">
+</a>
 
-Quillgon is an early-stage, local novel-writing workspace for planning, drafting, and revising with AI. You set the intent, pin plot points, choose between alternatives, and edit anything. It tracks how changes affect scenes, character knowledge, and unresolved threads, then lets you review proposed revisions.
+<h1>Quillgon</h1>
 
-**The story graph is the source; prose is compiled output.** Intent, plot points, threads, character state and scene cards define what is true. Prose is generated from them and can be edited, but every prose edit is read back into the graph so the two never drift.
+<p><strong>A whole novel. Still your story.</strong></p>
+
+<p>The local, open-source writing desk that plans, drafts and revises a full-length novel with AI,<br>while <em>you</em> keep control of every plot point, character and word.</p>
+
+<p>
+  <a href="https://github.com/JeremySNR/quillgon/releases/tag/v0.1.0-alpha.1"><img alt="Release" src="https://img.shields.io/github/v/release/JeremySNR/quillgon?include_prereleases&label=release&color=345d49&style=flat-square"></a>
+  <a href="https://github.com/JeremySNR/quillgon/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/JeremySNR/quillgon/ci.yml?label=CI&style=flat-square"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-65806c?style=flat-square"></a>
+  <a href="https://github.com/JeremySNR/quillgon/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/JeremySNR/quillgon?color=233d32&style=flat-square"></a>
+  <a href="CONTRIBUTING.md"><img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-607c65?style=flat-square"></a>
+</p>
+
+<p>
+  <img alt="Local-first" src="https://img.shields.io/badge/local--first-your_files,_your_machine-233d32?style=flat-square">
+  <img alt="Works offline" src="https://img.shields.io/badge/works_offline-no_API_key_needed-345d49?style=flat-square">
+  <img alt="Git-backed" src="https://img.shields.io/badge/every_change-a_git_commit-65806c?style=flat-square&logo=git&logoColor=white">
+</p>
+
+<p>
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white">
+  <img alt="React" src="https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB">
+  <img alt="Electron" src="https://img.shields.io/badge/Electron-47848F?style=flat-square&logo=electron&logoColor=white">
+  <img alt="Node.js 22+" src="https://img.shields.io/badge/Node.js-22%2B-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white">
+  <img alt="SQLite" src="https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white">
+  <img alt="OpenAI" src="https://img.shields.io/badge/OpenAI-Responses_%2B_Codex-412991?style=flat-square&logo=openai&logoColor=white">
+  <img alt="Anthropic" src="https://img.shields.io/badge/Anthropic-supported-191919?style=flat-square&logo=anthropic&logoColor=white">
+</p>
+
+<h3>
+  <a href="#-quick-start">Quick start</a>
+  <span> · </span>
+  <a href="https://quillgon.vercel.app">Website</a>
+  <span> · </span>
+  <a href="https://quillgon.vercel.app/get-started/">Writing guides</a>
+  <span> · </span>
+  <a href="https://github.com/JeremySNR/quillgon/releases/tag/v0.1.0-alpha.1">Download</a>
+  <span> · </span>
+  <a href="https://github.com/JeremySNR/quillgon/issues">Feedback</a>
+</h3>
+
+</div>
+
+<br>
 
 ![Quillgon writing desk](docs/screenshots/ui-refresh/desk-light.png)
 
-[Website and writing guides](https://quillgon.vercel.app) · [Download source preview](https://github.com/JeremySNR/quillgon/releases/tag/v0.1.0-alpha.1) · [Get started](https://quillgon.vercel.app/get-started/) · [Report a problem or suggest a feature](https://github.com/JeremySNR/quillgon/issues)
+## ✨ Why Quillgon?
 
-The sample novella and offline workflows are tested. Offline generation uses placeholder text; a complete 80,000-word novel with live models has not yet been validated. Quillgon currently runs from source, with no packaged installers. The website source lives in [`apps/site`](apps/site/README.md).
+Most AI writing tools hand you a wall of text and wish you luck. By chapter twelve, a character knows something they never learned, a clue never pays off, and the twist was obvious from page three.
 
-Quillgon is available under the [MIT license](LICENSE). Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
+Quillgon works the other way round. **The story graph is the source; prose is compiled output.** Intent, plot points, threads, character knowledge and scene cards define what is true. Prose is generated from them, you can edit any of it, and every edit is read back into the graph so the two never drift.
 
-## Quick start
+<table>
+<tr>
+<td width="33%" valign="top">
 
-You need **Node.js 22 or newer**, **pnpm 10**, and **Git**. Clone the repository, then run:
+### 🧭 You stay the author
+Pin the plot points that must happen. Pick between **three** structures and **two** beat sequences per chapter. Keep or bin every idea. Nothing changes without your say-so.
+
+</td>
+<td width="33%" valign="top">
+
+### 🌊 Ripples, not rewrites
+Change one scene and Quillgon maps the **blast radius**: which later scenes, character knowledge and threads it breaks. Review the diffs, accept or reject per scene, then revert the whole ripple in one click.
+
+</td>
+<td width="33%" valign="top">
+
+### 🧵 Every setup pays off
+An **obligations ledger** tracks every clue, promise and Chekhov's gun from where it's planted to where it lands. The writer is told what to plant. Dangling setups get flagged.
+
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
+
+### 🎭 Twists that land
+A simulated **reader report** charts engagement, confusion and boredom, and judges every twist from both sides: was it guessed early, and did it feel fair looking back? Run it on the outline, before any prose exists.
+
+</td>
+<td width="33%" valign="top">
+
+### ✍️ Your voice, enforced
+A style sheet of dials checks **every word** against your rules as you type. Deterministic fixes happen automatically. Edits you keep making by hand become rules you can accept.
+
+</td>
+<td width="33%" valign="top">
+
+### 🔒 Local and open
+Your book is a **git repo of Markdown and YAML** on your own machine. Edit it in any editor and the app reloads. Works with OpenAI, your Codex subscription, Anthropic, or fully offline.
+
+</td>
+</tr>
+</table>
+
+### How it compares
+
+| | Chat-based AI writing | Quillgon |
+| --- | :---: | :---: |
+| Remembers what each character knows, scene by scene | ❌ | ✅ |
+| Shows what a change breaks before you apply it | ❌ | ✅ |
+| Tracks setups and payoffs across the whole book | ❌ | ✅ |
+| Checks twists for guessability before you write them | ❌ | ✅ |
+| Hand edits flow back into the plan | ❌ | ✅ |
+| Your manuscript lives in plain files you own, under version control | ❌ | ✅ |
+| Judges compare both orderings to cancel position bias | ❌ | ✅ |
+
+## 📸 Take the tour
+
+| | |
+| :---: | :---: |
+| ![Scene editor](docs/screenshots/ui-refresh/editor.png)<br>**Scene editor:** card on the left, prose on the right | ![Scene details](docs/screenshots/ui-refresh/editor-details.png)<br>**Scene details:** what each scene plants and pays off |
+| ![Manuscript](docs/screenshots/ui-refresh/manuscript.png)<br>**Manuscript:** the whole book at a glance | ![Story planning](docs/screenshots/ui-refresh/planning.png)<br>**Planning:** six gates from idea to prose |
+| ![Characters](docs/screenshots/ui-refresh/characters.png)<br>**Characters:** who knows what, and when | ![Reader report](docs/screenshots/ui-refresh/reader.png)<br>**Reader report:** engagement and twist verdicts |
+| ![Setups and payoffs](docs/screenshots/ui-refresh/ledger.png)<br>**Setups and payoffs:** nothing left dangling | ![Settings](docs/screenshots/ui-refresh/settings.png)<br>**Settings:** models, style dials and prompts |
+
+## 🚀 Quick start
+
+You need **Node.js 22 or newer**, **pnpm 10**, and **Git**.
 
 ```bash
 git clone https://github.com/JeremySNR/quillgon.git
@@ -26,9 +134,17 @@ pnpm build          # build the UI
 pnpm serve          # http://127.0.0.1:4317, then "Open the sample novella"
 ```
 
-For the Electron shell, stop the server and run `pnpm desktop`. It also requires Node.js on your `PATH`. The app stores books in local Markdown and YAML files; connected AI providers receive relevant story context when you use generation or analysis.
+> [!TIP]
+> **No API key? No problem.** Choose **Offline** models when you create a book (or set `QUILLGON_OFFLINE=1`). Offline output is placeholder text, but every screen and workflow works, so you can explore the whole app for free.
 
-The app works with no API key: choose **Offline** models when you create a book (or set `QUILLGON_OFFLINE=1`). Offline output is placeholder text, but every screen and workflow works.
+For the Electron shell, stop the server and run `pnpm desktop` (it also needs Node.js on your `PATH`). For development, `pnpm dev` runs the API and the Vite dev server with hot reload on http://localhost:5173.
+
+Books are stored in local Markdown and YAML files. Connected AI providers receive relevant story context when you use generation or analysis.
+
+> [!NOTE]
+> **Quillgon is an early-stage source preview.** The sample novella and offline workflows are tested end to end. A complete 80,000-word novel with live models has not yet been validated, and there are no packaged installers yet. [Tell us what breaks](https://github.com/JeremySNR/quillgon/issues).
+
+### 🔌 Connect a model
 
 **OpenAI is the default**, using the Responses API through the official OpenAI SDK. Set `OPENAI_API_KEY` in the environment that launches Quillgon, then restart it. API usage is billed separately from ChatGPT/Codex subscriptions. Models per tier live in each book's `book.yaml`, and you can change them under Settings → Models. Defaults (editable prices in USD per million tokens):
 
@@ -39,7 +155,12 @@ The app works with no API key: choose **Offline** models when you create a book 
 | small | `gpt-6-luna` | continuity |
 | reader | `gpt-6.1-sol` | simulated reader (another vendor can reduce shared biases) |
 
-### Use your Codex subscription
+Anthropic (`ANTHROPIC_API_KEY`) and OpenAI-compatible Chat Completions endpoints remain available per tier. Existing explicit provider settings are preserved. Select **OpenAI API** in Settings to apply the new defaults to an existing book. The [OpenAI model catalog](https://developers.openai.com/api/docs/models) lists current availability and prices; stored prices are estimates rather than invoices.
+
+<details>
+<summary><strong>Use your Codex subscription instead of an API key</strong></summary>
+
+<br>
 
 1. Install the [Codex CLI](https://developers.openai.com/codex/cli), then run `codex login` on the same computer and OS account as Quillgon. Choose **Sign in with ChatGPT** with a plan that includes Codex.
 2. Choose **Codex subscription** when creating a book, or in Settings → Models, then save. CLI: `pnpm quillgon init my-book --title "My book" --codex`.
@@ -51,11 +172,16 @@ Your subscription's usage limits, available models, workspace rules, and data po
 
 Verification: a short synthetic request through the real Codex SDK and local ChatGPT sign-in succeeded. API adapter behavior is covered by mocked SDK tests; a live Responses API call still needs `OPENAI_API_KEY`. This is not a full-novel quality evaluation.
 
-Anthropic (`ANTHROPIC_API_KEY`) and OpenAI-compatible Chat Completions endpoints remain available per tier. Existing explicit provider settings are preserved. Select **OpenAI API** in Settings to apply the new defaults to an existing book. The [OpenAI model catalog](https://developers.openai.com/api/docs/models) lists current availability and prices; stored prices are estimates rather than invoices.
+</details>
 
-For development, `pnpm dev` runs the API and the Vite dev server with hot reload on http://localhost:5173.
+## 🛠️ How it works
 
-## Using it
+```mermaid
+flowchart LR
+    A[💡 Idea] --> B[🎯 Intent] --> C[📌 Plot points] --> D[🏛️ Structure] --> E[🗂️ Scene cards] --> F[✍️ Prose]
+    F -- your edits are read back --> G[(Story graph)]
+    G -- ripples & diffs for review --> E
+```
 
 1. **Build** walks you through six gates, top down:
    1. **Idea** (optional): start from a seed. Four different personas propose what-ifs, loglines, characters and twists, each with its own estimate of how typical it is; the least typical come first, near-duplicates are dropped and anything close to a stock cliché is flagged. You keep or bin each one, add your own, then grow the premise one level at a time (one sentence → one paragraph → one page → the cast, with what each wants, needs, the wound and the lie they believe).
@@ -72,18 +198,24 @@ For development, `pnpm dev` runs the API and the Vite dev server with hot reload
 7. **Reader report:** an engagement curve, confusion, runs of boredom, and every twist judged from both sides: was it guessed early, and did it feel fair looking back? Read the **outline** before any prose exists to catch a guessable twist when it's cheap to fix. The **plan check** runs the structural critic on the whole book.
 8. **Settings → Style:** the style sheet (`style/style.yaml`) as dials. **Enforced** rules (spelling, quotes, dialogue tags, em dashes, semicolons, never-words, preferred words, sentence length) are checked by code on every word after every draft; deterministic ones are fixed outright, the rest go to a line editor that proposes span-level edits, and an edit is kept only if code confirms it fixed something without breaking anything, or a judge prefers it in **both** orders. **Guided** rules (rhythm, dialogue share, adverbs, filter words) are measured and nudged. **Set the dials from these** measures your voice samples; **Learned from your edits** turns changes you keep making by hand into rules you can accept.
 
-`⌘K` / `Ctrl K` opens the command palette (every scene, character, thread and action). `⌘\` collapses the sidebar, `⌘.` enters focus mode, and `⌘1`–`⌘7` switch views. The **what-if** menu in the top bar creates, compares and merges git branches.
+### ⌨️ Keyboard first
 
-| | |
+| Shortcut | Action |
 | --- | --- |
-| ![Scene editor](docs/screenshots/ui-refresh/editor.png) | ![Scene details](docs/screenshots/ui-refresh/editor-details.png) |
-| ![Manuscript](docs/screenshots/ui-refresh/manuscript.png) | ![Story planning](docs/screenshots/ui-refresh/planning.png) |
-| ![Characters](docs/screenshots/ui-refresh/characters.png) | ![Reader report](docs/screenshots/ui-refresh/reader.png) |
-| ![Setups and payoffs](docs/screenshots/ui-refresh/ledger.png) | ![Settings](docs/screenshots/ui-refresh/settings.png) |
+| `⌘K` / `Ctrl K` | Command palette: every scene, character, thread and action |
+| `⌘\` | Collapse the sidebar |
+| `⌘.` | Focus mode |
+| `⌘1`–`⌘7` | Switch views |
+| `j` / `k`, `a` / `r`, `⇧↵` | Move, accept/reject, apply a ripple round |
 
-## CLI
+The **what-if** menu in the top bar creates, compares and merges git branches, so you can try a different ending without losing the one you have.
+
+## 💻 CLI
 
 The same engine, headless. `quillgon` lives at `packages/cli/bin/quillgon.mjs`; `pnpm quillgon <command>` also works.
+
+<details>
+<summary><strong>Show all commands</strong></summary>
 
 ```
 quillgon init <dir> [--title T] [--words 12000] [--offline]
@@ -105,12 +237,15 @@ quillgon branch [name | switch <b> | merge <b> | delete <b>]
 quillgon serve [--dir book] [--port 4317]
 ```
 
+</details>
+
 Pass `--yes` to accept the defaults at every gate (useful for scripting), or `--record <dir>` / `--replay <dir>` to record model responses as test fixtures or replay them.
 
-## Architecture
+## 🏗️ Architecture
 
 ```
 apps/desktop/        Electron shell + React/Vite UI (talks to the server over HTTP + SSE)
+apps/site/           the website (https://quillgon.vercel.app)
 packages/core/       schemas, graph store, SQLite index, impact analyser, sync,
                      pipeline, ripple engine, quality checks, git
 packages/agents/     nine agents (prompt.md + schemas), model adapter, offline suite
@@ -118,6 +253,11 @@ packages/server/     local JSON API, background jobs, file watching
 packages/cli/        the `quillgon` command
 fixtures/novella/    "The Tidekeeper's Ledger": 12 scenes, 4 characters, 3 threads, 2 plot points
 ```
+
+<details>
+<summary><strong>Design principles and internals</strong></summary>
+
+<br>
 
 - **Only the graph store writes to the manuscript.** Agents return structured output, validated with Zod, and the store writes files, updates the index and commits.
 - **A book is a git repo of Markdown and YAML** (`book.yaml`, `intent.md`, `plot-points/`, `threads/`, `characters/<id>/{bio.md,voice.md,state.yaml}`, `scenes/<id>/{card.yaml,prose.md,facts.yaml}`, `obligations/`, `idea.yaml`, `structure.yaml`, `timeline.yaml`, `style/` (samples, banned patterns, `style.yaml`), `reports/`). You can edit any of it in another editor; the app reloads.
@@ -128,7 +268,11 @@ fixtures/novella/    "The Tidekeeper's Ledger": 12 scenes, 4 characters, 3 threa
 - **Judges never see one order only.** Any comparison (a line edit against the original, two candidates) is judged twice with the texts swapped; a split verdict is a tie and the original stays. An OpenAI-compatible backend is included for other vendors.
 - **Prompts are Markdown** (`packages/agents/src/agents/<name>/prompt.md`). Edit them in the app; overrides are saved to `prompts/<agent>.md` in the book. The intent and its hard rules are always in the system prompt.
 
-## Tests and acceptance
+</details>
+
+The UI design follows the research brief in [docs/design.md](docs/design.md); the quality systems are grounded in [docs/research.md](docs/research.md).
+
+## 🧪 Tests and roadmap
 
 ```bash
 pnpm test           # 94 unit/integration tests, no model calls
@@ -151,11 +295,34 @@ pnpm test:live      # live-model tests; needs QUILLGON_LIVE=1 and an API key
 | Research additions | ✅ Obligations ledger (fixture ledger complete; dangling, early and out-of-order payoffs flagged; obligation changes ripple), style sheet (enforced spans, deterministic fixes, repair rounds rejected when they add violations or lose a both-ways judge, rules learned from edits), both-ways judging removes position bias, predictability test, outline reader with two-sided twist verdicts, idea stage (personas, dedupe, cliché flags, Snowflake expansion). See [docs/research.md](docs/research.md) |
 | 9. Full novel | ⏳ Needs live models: generate 80k+ words, then tune context scoping, caps and prompts against what breaks |
 
-## Notes and deviations from the plan
+<details>
+<summary><strong>Notes and deviations from the plan</strong></summary>
+
+<br>
 
 - **OpenAI Responses API and Codex SDK.** Quillgon owns the story graph and review workflow; each writing agent requests a structured result through the official OpenAI SDK. A hosted Agents API execution environment is unnecessary for these calls. The local Codex SDK provides a separate path for users signing in with ChatGPT.
 - **Electron runs the core as a plain Node process.** This lets `better-sqlite3` load without an Electron rebuild. It needs `node` on your `PATH` (or set `QUILLGON_NODE`).
 - **Reader prediction matching is mechanical** (embedding similarity, synonym folding, and the prediction must name the right person). A cheap model judge would be more accurate and is an easy swap.
 - **Two small additions to the data model:** `scenes/<id>/facts.yaml` holds extracted facts, so the index can rebuild from files, and an optional `locations.yaml` / `facts.yaml` glossary gives ids human-readable names.
 
-The UI design follows the research brief in [docs/design.md](docs/design.md).
+</details>
+
+## 🤝 Contributing
+
+Quillgon is young and there's a lot of story left to write. Bug reports, ideas and pull requests are all welcome; start with [CONTRIBUTING.md](CONTRIBUTING.md) or [open an issue](https://github.com/JeremySNR/quillgon/issues).
+
+The most useful thing you can do right now: **run a real book through it with a live model and tell us what breaks.**
+
+## 📄 License
+
+[MIT](LICENSE). Your stories are yours; so is the code.
+
+<div align="center">
+
+<br>
+
+**If Quillgon helps you finish a book, give it a ⭐. It helps other writers find it.**
+
+<a href="https://quillgon.vercel.app">quillgon.vercel.app</a>
+
+</div>
