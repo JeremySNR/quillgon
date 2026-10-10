@@ -48,6 +48,7 @@ const NAV: { view: View; label: string; icon: typeof LayoutDashboard; shortcut: 
   { view: 'threads', label: 'Threads', icon: Spline, shortcut: '5' },
   { view: 'characters', label: 'Characters', icon: Users, shortcut: '6' },
   { view: 'reader', label: 'Reader report', icon: Activity, shortcut: '7' },
+  { view: 'covers', label: 'Book covers', icon: BookOpen, shortcut: '8' },
 ];
 
 export function Sidebar({ rail, onToggle }: { rail: boolean; onToggle: () => void }) {
@@ -122,6 +123,7 @@ const TITLES: Record<View, string> = {
   threads: 'Threads',
   characters: 'Characters',
   reader: 'Reader report',
+  covers: 'Book covers',
   history: 'History',
   settings: 'Settings',
 };
