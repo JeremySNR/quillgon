@@ -11,6 +11,7 @@ export * from './store.js';
 export * from './impact.js';
 export * from './agents/contracts.js';
 export * from './context.js';
+export * from './scope.js';
 export * from './engine/style-passes.js';
 export * from './engine/extraction.js';
 export * from './engine/pipeline.js';

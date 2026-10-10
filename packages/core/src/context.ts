@@ -4,6 +4,7 @@ import type { ProjectIndex } from './index-db.js';
 import type { WriterInput } from './agents/contracts.js';
 import { obligationsForScene } from './obligations.js';
 import { styleRules } from './style-sheet.js';
+import { BUDGET, clip, storySoFar, wordsPerScene } from './scope.js';
 
 /**
  * Writer context per scene. Deliberately scoped: full-manuscript context makes the
@@ -36,21 +37,21 @@ export function writerContext(p: Project, sceneId: string, index: ProjectIndex |
         .filter((s) => s?.prose)
         .map((s) => ({ id: s!.id, excerpt: excerpt(s!.prose!.body, 900) }))
     : [];
-  const scenesTotal = Math.max(order.length, 1);
   return {
     intent: p.intent,
     book: { title: p.book.title, pov_mode: p.book.pov_mode, tense: p.book.tense },
     card,
     previous_prose: prev?.prose?.body ?? null,
+    story_so_far: storySoFar(p, sceneId),
     recent_cards: recent,
     states,
     voices,
     threads,
     facts,
-    style_samples: p.style.samples,
+    style_samples: clip(p.style.samples, BUDGET.styleSamples),
     banned_patterns: p.style.banned.map((b) => b.source),
     similar_scenes: similar,
-    target_words: Math.round(p.book.target_words / scenesTotal / 50) * 50 || 1200,
+    target_words: wordsPerScene(p),
     obligations: obligationsForScene(p, sceneId, order),
     style_rules: styleRules(p),
   };

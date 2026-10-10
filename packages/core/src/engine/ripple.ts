@@ -1,15 +1,16 @@
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AgentSuite } from '../agents/contracts.js';
+import type { AgentSuite, ReviseCardInput } from '../agents/contracts.js';
 import { SceneCard } from '../schemas/index.js';
 import type { GraphStore } from '../store.js';
-import { paths, sceneOrder, stateBefore } from '../project.js';
+import { paths, sceneOrder, stateBefore, type Project } from '../project.js';
 import { analyseImpact, cardDiffSummary, changeFiles, partitionImpacts, type Change, type Impact } from '../impact.js';
 import { applyExtraction, runExtraction } from './extraction.js';
 import type { Progress } from './style-passes.js';
 import { cardHash } from '../sync.js';
 import { timestamp } from '../util.js';
+import { relevantFacts } from '../scope.js';
 
 export type ItemStatus = 'pending' | 'proposed' | 'accepted' | 'rejected' | 'no_change' | 'conflict' | 'resolved' | 'error';
 export type ProseStatus = 'none' | 'pending' | 'proposed' | 'accepted' | 'rejected' | 'locked';
@@ -208,15 +209,7 @@ export class Ripple {
       it.error = null;
       const card = this.store.scene(it.scene).card;
       try {
-        const out = await this.agents.reviseCard({
-          intent: p.intent,
-          change: this.data.description,
-          reasons: it.reasons,
-          card,
-          facts: p.factGlossary.facts,
-          characters: [...p.characters.values()].map((c) => ({ id: c.id, name: c.bio.name })),
-          states_before: card.characters.map((c) => ({ character: c, knows: stateBefore(p, c, it.scene)?.snapshot.knows ?? [] })),
-        });
+        const out = await this.agents.reviseCard(reviseCardInput(p, it.scene, this.data.description, it.reasons));
         if (out.action === 'no_change' || !out.card) {
           it.status = 'no_change';
           it.card = { before: card, after: null, justification: out.justification, needs_decision: out.needs_decision };
@@ -523,4 +516,22 @@ export class Ripple {
       },
     };
   }
+}
+
+/** What the card reviser sees for one scene: the card, who knows what, and the facts in play. */
+export function reviseCardInput(p: Project, sceneId: string, change: string, reasons: string[]): ReviseCardInput {
+  const card = p.scenes.get(sceneId)!.card;
+  const statesBefore = card.characters.map((c) => ({ character: c, knows: stateBefore(p, c, sceneId)?.snapshot.knows ?? [] }));
+  return {
+    intent: p.intent,
+    change,
+    reasons,
+    card,
+    facts: relevantFacts(p, {
+      must: [...card.reveals, ...card.mentions.map((m) => m.fact), ...statesBefore.flatMap((s) => s.knows)],
+      query: `${change} ${reasons.join(' ')} ${card.purpose} ${card.outcome}`,
+    }),
+    characters: [...p.characters.values()].map((c) => ({ id: c.id, name: c.bio.name })),
+    states_before: statesBefore,
+  };
 }

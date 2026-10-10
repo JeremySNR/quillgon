@@ -44,6 +44,7 @@ export const writer = defineAgent({
         .join('\n\n')}`,
     );
     if (i.threads.length) parts.push(`## Threads this scene touches\n${i.threads.map((t) => `- ${t.title || t.id} (${t.kind}): ${t.description}`).join('\n')}`);
+    if (i.story_so_far) parts.push(`## The story so far\n${i.story_so_far}`);
     if (i.recent_cards.length) parts.push(`## The scenes just before (cards)\n${i.recent_cards.map((r) => `- ${r.id} ${r.title}: ${r.outcome}`).join('\n')}`);
     if (i.previous_prose) parts.push(`## The previous scene, in full\n${i.previous_prose}`);
     const ob = i.obligations;

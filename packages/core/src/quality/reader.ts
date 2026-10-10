@@ -4,6 +4,7 @@ import { sceneOrder, scenePlaces } from '../project.js';
 import { cosine, LocalEmbedder } from '../embed.js';
 import { timestamp } from '../util.js';
 import { synopsis } from '../engine/critics.js';
+import { readerWindow } from '../scope.js';
 
 export interface PredictionHit {
   prediction: string;
@@ -97,11 +98,13 @@ export async function runReader(
     opts.progress?.('read', `Reading ${mode === 'outline' ? 'the outline of ' : ''}scene ${i + 1} of ${order.length}`);
     const text = mode === 'outline' ? synopsis(p, sid) : p.scenes.get(sid)!.prose!.body;
     const reveals = i > 0 ? revealsIn(sid) : [];
+    const { recent, earlier } = readerWindow(log);
     const out = await agents.read({
       scene: sid,
       scene_number: i + 1,
       prose: text,
-      log,
+      log: recent,
+      earlier,
       mode,
       fairness_question: reveals.length ? `This scene revealed: ${reveals.join('; ')}. Looking back at everything you read before it, how earned did that feel? 1 = out of nowhere, 5 = surprising but inevitable.` : null,
     });

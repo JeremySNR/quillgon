@@ -2,6 +2,8 @@ import { DEFAULT_AGENT_TIERS, DEFAULT_MODELS, type AgentName, type ModelTier } f
 import type { Project } from '../project.js';
 import { sceneOrder } from '../project.js';
 import type { GraphStore } from '../store.js';
+import { writerContext } from '../context.js';
+import { BUDGET } from '../scope.js';
 
 const TOKENS_PER_WORD = 1.35;
 
@@ -51,13 +53,19 @@ export function estimate(p: Project): Estimate {
     lines.push(line('scene cards (2 alternatives per chapter)', 'planner', n, 12000, 6000));
   }
   if (unwritten) {
-    const ctx = 6000 + sceneOut * 2 + 3000; // card, states, voices + previous scene + similar excerpts
+    // Measure the writer's real context on scenes that have cards; fall back to a formula.
+    const sample = order.filter((s) => !p.scenes.get(s)!.prose).slice(0, 5);
+    const measured = sample.map((s) => Math.round(JSON.stringify(writerContext(p, s, null)).length / 4) + 1500); // + prompts
+    const ctx = measured.length ? Math.round(measured.reduce((a, b) => a + b, 0) / measured.length) + sceneOut : 6000 + sceneOut * 2 + 3000;
+    const factsCtx = Math.min(p.factGlossary.facts.length, BUDGET.facts) * 25;
     lines.push(line('prose', 'writer', unwritten, ctx, sceneOut));
     lines.push(line('voice check', 'voice', unwritten, 2500, 600));
-    lines.push(line('humaniser', 'humaniser', unwritten, sceneOut + 2000, sceneOut));
-    lines.push(line('extraction', 'extractor', unwritten, sceneOut + 3500, 1500));
+    // Span-level line edits: the scene in, a list of edits out (not the scene rewritten).
+    lines.push(line('line edit', 'humaniser', unwritten, sceneOut + 2000, 800));
+    lines.push(line('extraction', 'extractor', unwritten, sceneOut + 3500 + factsCtx, 1500));
   }
-  lines.push(line('reader run', 'reader', unwritten || order.length, sceneOut + 2500, 500));
+  // The reader sees one scene plus a fixed window of its log, so this is linear in scenes.
+  lines.push(line('reader run', 'reader', unwritten || order.length, sceneOut + 400 * BUDGET.readerWindow + 1500, 500));
   const total = lines.reduce((n, l) => n + l.cost_usd, 0);
   return { lines, total_usd: Math.round(total * 100) / 100, scenes_to_write: unwritten, words_to_write: Math.round(unwritten * wordsPerScene) };
 }

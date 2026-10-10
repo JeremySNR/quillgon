@@ -23,7 +23,8 @@
     "test:ui-refresh": "pnpm build && tsx scripts/ui-refresh.ts",
     "site:build": "node apps/site/build.mjs",
     "site:check": "node apps/site/check.mjs",
-    "site:dev": "node apps/site/serve.mjs"
+    "site:dev": "node apps/site/serve.mjs",
+    "scale-check": "tsx scripts/scale-check.ts"
   },
   "devDependencies": {
     "@quillgon/agents": "workspace:*",

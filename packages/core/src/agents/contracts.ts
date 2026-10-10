@@ -142,6 +142,8 @@ export const WriterInput = z.object({
   book: z.object({ title: z.string(), pov_mode: z.string(), tense: z.string() }),
   card: SceneCard,
   previous_prose: z.string().nullable(),
+  /** The book before this scene, compressed (chapter summaries, earlier outcomes). */
+  story_so_far: z.string().default(''),
   recent_cards: z.array(SceneCard),
   states: z.array(z.object({ character: Id, name: z.string(), snapshot: StateSnapshot.nullable() })),
   voices: z.array(z.object({ character: Id, name: z.string(), voice: CharacterVoice })),
@@ -309,7 +311,13 @@ export const ReaderInput = z.object({
   scene: Id,
   scene_number: z.number().int(),
   prose: z.string(),
+  /** The latest entries of the reader's log, in full. */
   log: z.array(ReaderLogEntry),
+  /** What the reader still carries from older scenes, once the log is longer than the window. */
+  earlier: z
+    .object({ scenes_read: z.number().int(), predictions: z.array(z.string()), open_confusions: z.array(z.object({ id: z.string(), text: z.string() })) })
+    .nullable()
+    .default(null),
   /** Set when this scene reveals something: ask whether it was fair in hindsight. */
   fairness_question: z.string().nullable().default(null),
   /** 'prose' for the manuscript; 'outline' when reading scene synopses before anything is written. */
