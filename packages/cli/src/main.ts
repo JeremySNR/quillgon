@@ -272,6 +272,43 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
     },
   },
 
+  session: {
+    help: 'session [--minutes 30] [--speaker Name]   Life stories: an interview with your ghostwriter. Commands: /move, /forget, /off <answer>, /hard, /undo, /end',
+    async run() {
+      const e = openEngine();
+      const I = e.interviews;
+      if (e.store.book.kind === 'novel') return void say(yellow('Interviews are for life stories. Start one with quillgon init <dir> --life.'));
+      const s0 = await I.start({ minutes: Number(flags.minutes) || undefined, speaker: typeof flags.speaker === 'string' ? flags.speaker : undefined });
+      const show = (s: typeof s0) => {
+        const t = s.turns[s.turns.length - 1];
+        say(`\n${cyan('ghostwriter')} ${t.text}${t.technique ? dim(`  (${t.technique})`) : ''}`);
+        for (const ch of t.changes) say(dim(`  · ${ch.label}`));
+      };
+      say(bold(`\n${s0.title}`));
+      for (const a of s0.agenda) say(dim(`  ${a.done ? '✓' : '·'} ${a.topic}${a.why ? ` — ${a.why}` : ''}`));
+      show(s0);
+      say(dim('\nAnswer in your own words. /move to move on, /forget for "that\'s all I remember", /off <answer> to say something off the record, /hard if it is hard to talk about, /undo, /end (or a blank line) to finish.'));
+      let s = s0;
+      for (;;) {
+        const m = await ask(`\n${bold('you')}`);
+        if (!m || m === '/end') break;
+        if (m === '/undo') {
+          const turn = s.turns.findLastIndex((t) => t.role === 'ghostwriter' && !t.undone && t.changes.length);
+          if (turn < 0) say(dim('Nothing to undo.'));
+          else (s = I.undo(s.id, turn)), say(dim(`Undone: ${s.turns[turn].changes.map((c) => c.label).join('; ')}`));
+          continue;
+        }
+        const [, cmd, rest] = m.match(/^\/(move|forget|off|hard)\b\s*(.*)$/) ?? [];
+        const signal = cmd ? ({ move: 'move-on', forget: 'dont-remember', off: 'off-record', hard: 'hard' } as const)[cmd as 'move'] : null;
+        s = await I.answer(s.id, { text: cmd ? rest : m, signal });
+        show(s);
+      }
+      const done = await I.end(s.id);
+      say(`\n${bold(done.title)}\n${done.summary}`);
+      say(dim(`${e.store.project.stories.size} stories, ${e.store.project.questions.questions.filter((q) => q.status === 'queued').length} questions queued for next time.`));
+    },
+  },
+
   ledger: {
     help: 'ledger   Setups and payoffs: every clue, promise and question, and what is unpaid',
     run() {

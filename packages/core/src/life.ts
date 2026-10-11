@@ -64,3 +64,94 @@ export function ageAt(born: string, when: string): number | null {
   const w = yearOf(when);
   return b !== null && w !== null && w >= b ? w - b : null;
 }
+
+// ------------------------------------------------------------------ interviewing, without a model
+
+/** A safe, open question for each rung: the fallback when a proposed question is refused. */
+export const RUNG_QUESTION: Record<(typeof LADDER)[number], (title: string) => string> = {
+  happened: (t) => (t ? `Tell me about ${lowerFirst(t)}. What happened?` : 'Tell me what happened.'),
+  instance: () => 'Can you remember one particular time? Tell me about that one.',
+  people: () => 'Who was there?',
+  senses: () => 'Picture it for a moment. What could you see and hear?',
+  words: () => 'Do you remember anything anyone said?',
+  felt_then: () => 'How did you feel at the time?',
+  means_now: () => 'Looking back now, what do you make of it?',
+};
+
+const lowerFirst = (s: string) => (/^[A-Z][a-z]/.test(s) && !/^(I|I'm)\b/.test(s) ? s.charAt(0).toLowerCase() + s.slice(1) : s);
+
+const VAGUE = /\b(fine|normal|nothing much|not much|i don'?t know|the usual|ordinary|it was ok(ay)?|alright|can'?t say)\b/i;
+const HABITUAL = /\b(we|i|he|she|they) (always|used to|would always|never)\b|\bevery (day|week|summer|sunday|saturday|year|morning|night)\b/i;
+const FEELING = /\b(cried|crying|scared|terrified|ashamed|furious|angry|hated|loved|lonely|heartbroken|guilty|frightened|devastated|happiest|worst|best|proud)\b/i;
+const SURPRISE = /\b(never told|nobody knew|no one knew|secret|found out|turned out|didn'?t know (until|then)|but then|except|to this day|i still don'?t)\b/i;
+
+/**
+ * Follow-up triggers found in code, so the interviewer cannot skip them: studies of AI
+ * interviewers found the commonest failure was moving on after a vague, surprising or
+ * emotional answer.
+ */
+export function probesFor(answer: string): string[] {
+  const out: string[] = [];
+  const words = answer.trim().split(/\s+/).filter(Boolean).length;
+  if (words > 0 && (words < 8 || VAGUE.test(answer))) out.push('The answer was short or vague: ask for one particular time, gently.');
+  if (HABITUAL.test(answer)) out.push('They generalised ("always", "used to"): ask for one particular occasion.');
+  const surprise = answer.match(SURPRISE);
+  if (surprise) out.push(`Something surprising ("${surprise[0]}"): follow it before the agenda.`);
+  const feeling = answer.match(FEELING);
+  if (feeling) out.push(`They named a strong feeling ("${feeling[0]}"): stay with it; ask about that moment, without pushing.`);
+  return out;
+}
+
+const YES_NO = /^(was|were|did|is|are|do|does|had|have|has|could|would|wasn'?t|didn'?t|weren'?t|isn'?t|haven'?t|hadn'?t)\b/i;
+
+/**
+ * Does a question put words in the author's mouth? A yes/no question that brings in a name or
+ * detail the author never said invites them to confirm something they may not remember: a
+ * known route to false memories.
+ */
+export function leadingQuestion(question: string, said: string, known: string[] = []): string | null {
+  const saidLower = said.toLowerCase();
+  const knownLower = known.map((k) => k.toLowerCase());
+  for (const sentence of question.split(/(?<=[.?!])\s+/)) {
+    if (!sentence.trim().endsWith('?') || !YES_NO.test(sentence.trim())) continue;
+    const words = (sentence.match(/[\p{L}'’]+/gu) ?? [])
+      .slice(1)
+      .filter((w) => w.length >= 4)
+      .map((w) => w.toLowerCase());
+    const brought = words.filter((w) => !saidLower.includes(w) && !knownLower.some((k) => k.includes(w)) && !COMMON.has(w));
+    if (brought.length) return `"${sentence.trim()}" suggests a detail (${brought.slice(0, 3).join(', ')}) they have not given and asks them to confirm it. Ask an open question instead.`;
+  }
+  return null;
+}
+
+const COMMON = new Set(
+  'that this there then they them their what when where which while with were have about your yours after before still really remember think feel felt time back like just very much more some first last also ever same other else would could should those these thing things anything something someone anyone people place again been into from over only long well good know want went come came said tell talk sure maybe already right moment there\'s that\'s wasn\'t didn\'t weren\'t hadn\'t'.split(
+    ' ',
+  ),
+);
+
+/** Does a question touch a topic the author put off limits? Returns the topic. */
+export function touchesOffLimits(question: string, offLimits: string[]): string | null {
+  const q = question.toLowerCase();
+  for (const topic of offLimits) {
+    const words = (topic.toLowerCase().match(/[\p{L}']{4,}/gu) ?? []).filter((w) => !COMMON.has(w));
+    if (words.length && words.some((w) => q.includes(w.replace(/s$/, '')))) return topic;
+  }
+  return null;
+}
+
+/** Stretches of at least `min` years between birth (or the first event) and the last event with nothing in them. */
+export function lifeGaps(born: string, whens: string[], now = new Date().getFullYear(), min = 6): string[] {
+  const years = [...new Set(whens.map(yearOf).filter((y): y is number => y !== null))].sort((a, b) => a - b);
+  const start = yearOf(born) ?? years[0];
+  if (start === undefined || start === null) return [];
+  const marks = [start, ...years.filter((y) => y > start), now];
+  const out: string[] = [];
+  for (let i = 1; i < marks.length; i++) if (marks[i] - marks[i - 1] - 1 >= min) out.push(`${marks[i - 1] + 1} to ${marks[i] - 1}`);
+  return out;
+}
+
+/** Things the author reports someone said, in quotation marks. */
+export function quotedSpeech(text: string): string[] {
+  return [...text.matchAll(/["“]([^"”]{3,200})["”]|'([^']{6,200})'(?=[\s,.!?]|$)/g)].map((m) => (m[1] ?? m[2]).trim());
+}

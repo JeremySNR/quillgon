@@ -57,6 +57,11 @@ interface Job {
   started: number;
 }
 
+/** A non-JSON response body (a recording). */
+class Binary {
+  constructor(public type: string, public data: Buffer) {}
+}
+
 export class HttpError extends Error {
   constructor(public status: number, message: string, public data?: unknown) {
     super(message);
@@ -270,7 +275,7 @@ export class NovelServer {
     const given = req.headers[TOKEN_HEADER];
     // EventSource, <img> and download links cannot set headers, so the event stream and
     // cover images (read-only GETs) also accept ?token=.
-    const queryToken = req.method === 'GET' && (url.pathname === '/api/events' || /^\/api\/covers\/[^/]+\/image$/.test(url.pathname));
+    const queryToken = req.method === 'GET' && (url.pathname === '/api/events' || /^\/api\/covers\/[^/]+\/image$/.test(url.pathname) || /^\/api\/sessions\/[^/]+\/audio\/[^/]+$/.test(url.pathname));
     const token = typeof given === 'string' ? given : queryToken ? url.searchParams.get('token') : null;
     if (!this.tokenMatches(token)) return send(res, 401, { error: 'missing or invalid API token' });
 
@@ -301,6 +306,10 @@ export class NovelServer {
         if (Buffer.isBuffer(out)) {
           res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'no-store', ...(url.searchParams.has('download') ? { 'content-disposition': 'attachment; filename="book-cover.png"' } : {}) });
           return void res.end(out);
+        }
+        if (out instanceof Binary) {
+          res.writeHead(200, { 'content-type': out.type, 'cache-control': 'no-store' });
+          return void res.end(out.data);
         }
         return send(res, 200, out === undefined ? { ok: true } : out);
       } catch (e) {
@@ -417,12 +426,51 @@ export class NovelServer {
 
     // --- dictation
     r('GET', '/api/voice', ({ engine }) => voiceStatus(engine.store.project));
-    r('POST', '/api/dictate', ({ engine, body }) => {
+    r('POST', '/api/dictate', async ({ engine, body }) => {
       const parsed = DictateRequest.safeParse(body);
       if (!parsed.success) throw new HttpError(422, 'Invalid dictation request', parsed.error.issues);
-      // Not a queued job: it writes nothing, and the author is waiting with the cursor in place.
-      return dictate(engine.store.project, engine.agents, parsed.data);
+      // Not a queued job: the author is waiting with the cursor in place. It writes only a
+      // recording, and only for an interview session (git-ignored).
+      const keep = parsed.data.session;
+      if (keep && !engine.store.project.sessions.has(keep)) throw new HttpError(404, `no session "${keep}"`);
+      const out = await dictate(engine.store.project, engine.agents, parsed.data);
+      if (!keep || !out.raw) return out;
+      const file = engine.store.saveAudio(keep, `a-${Date.now()}.wav`, Buffer.from(parsed.data.audio, 'base64'));
+      return { ...out, audio: path.basename(file) };
     });
+
+    // --- interviews (life stories)
+    const iv = (e: Engine) => e.interviews;
+    r('GET', '/api/sessions/:id', ({ engine, params }) => iv(engine).session(params.id));
+    r('POST', '/api/sessions/start', ({ engine, body, server }) =>
+      server.job('interview', () => iv(engine).start({ minutes: Number(body.minutes) || undefined, speaker: typeof body.speaker === 'string' ? body.speaker : undefined })),
+    );
+    r('POST', '/api/sessions/:id/answer', ({ engine, params, body, server }) =>
+      server.job('interview', () =>
+        iv(engine).answer(params.id, {
+          text: String(body.text ?? ''),
+          raw: typeof body.raw === 'string' ? body.raw : null,
+          audio: Array.isArray(body.audio) ? body.audio.filter((a: unknown) => typeof a === 'string' && /^[a-z0-9-]+\.wav$/.test(a)) : [],
+          seconds: Number(body.seconds) || 0,
+          signal: ['dont-remember', 'move-on', 'off-record', 'hard'].includes(body.signal) ? body.signal : null,
+        }),
+      ),
+    );
+    r('POST', '/api/sessions/:id/undo', ({ engine, params, body }) => iv(engine).undo(params.id, Number(body.turn)));
+    r('POST', '/api/sessions/:id/end', ({ engine, params, server }) => server.job('interview', () => iv(engine).end(params.id)));
+    r('GET', '/api/sessions/:id/audio/:file', ({ engine, params }) => {
+      const data = engine.store.readAudio(params.id, params.file);
+      if (!data) throw new HttpError(404, 'recording not found');
+      return new Binary('audio/wav', data);
+    });
+    r('PUT', '/api/questions', async ({ engine, body }) => (engine.store.saveQuestions({ questions: body.questions }), await engine.store.commit('Edit questions'), engine.store.project.questions));
+    r('PUT', '/api/notebook', async ({ engine, body }) => (engine.store.saveNotebook({ ...engine.store.project.notebook, ...body.notebook }), await engine.store.commit('Edit the ghostwriter’s notebook'), engine.store.project.notebook));
+    r('PUT', '/api/stories/:id', async ({ engine, params, body }) => {
+      const st = engine.store.saveStory({ ...(engine.store.project.stories.get(params.id) ?? {}), ...body.story, id: params.id });
+      await engine.store.commit(`Story: ${st.title}`);
+      return st;
+    });
+    r('DELETE', '/api/stories/:id', async ({ engine, params }) => (engine.store.deleteStory(params.id), await engine.store.commit(`Remove story ${params.id}`), { ok: true }));
 
     // --- scenes
     r('GET', '/api/scenes/:id', ({ engine, params }) => sceneDetail(engine.store, params.id));

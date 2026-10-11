@@ -34,3 +34,4 @@ export * from './engine/critics.js';
 export * from './engine/ideation.js';
 export * from './dictation.js';
 export * from './life.js';
+export * from './engine/interview.js';

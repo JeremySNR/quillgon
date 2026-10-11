@@ -21,6 +21,8 @@ export interface DictateResponse {
   provider: 'openai' | 'local' | 'offline';
   seconds: number;
   flags: string[];
+  /** The recording's file name, when it was kept for an interview session. */
+  audio?: string;
 }
 
 export type DictationState = 'idle' | 'listening' | 'tidying';
@@ -58,7 +60,7 @@ export function fieldTarget(el: () => HTMLTextAreaElement | HTMLInputElement | n
  * dictation (`long`) is cut at pauses and each piece is transcribed and inserted while you keep
  * talking, in order.
  */
-export function useDictation({ target, scene = null, long = false, onText }: { target: DictationTarget | null; scene?: string | null; long?: boolean; onText?: (r: DictateResponse) => void }) {
+export function useDictation({ target, scene = null, long = false, session, onText }: { target: DictationTarget | null; scene?: string | null; long?: boolean; session?: string; onText?: (r: DictateResponse) => void }) {
   const { project, toast, fail } = useApp();
   const [state, setState] = useState<DictationState>('idle');
   const [level, setLevel] = useState(0);
@@ -81,7 +83,7 @@ export function useDictation({ target, scene = null, long = false, onText }: { t
           const t = targetRef.current;
           if (!t) return;
           const { before, after } = t.context();
-          const r = await post<DictateResponse>('/dictate', { audio: await audio, before, after, scene });
+          const r = await post<DictateResponse>('/dictate', { audio: await audio, before, after, scene, ...(session ? { session } : {}) });
           if (!r.text) return;
           const swap = t.insert(r.text);
           onTextRef.current?.(r);
@@ -96,7 +98,7 @@ export function useDictation({ target, scene = null, long = false, onText }: { t
         }
       });
     },
-    [scene, toast, fail],
+    [scene, session, toast, fail],
   );
 
   const start = useCallback(async () => {

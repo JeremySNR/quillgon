@@ -615,8 +615,8 @@ export const SessionTurn = z.object({
   technique: z.string().default(''),
   /** Ghostwriter turns: why it asked. */
   why: z.string().default(''),
-  /** Author turns: the recording (sessions/<id>/<file>) and what the recogniser heard. */
-  audio: z.string().nullable().default(null),
+  /** Author turns: the recordings (audio/<session>/<file>) and what the recogniser heard. */
+  audio: z.array(z.string()).default([]),
   raw: z.string().nullable().default(null),
   seconds: z.number().nonnegative().default(0),
   /** Author turns kept out of the book entirely. */
@@ -638,7 +638,7 @@ export const Session = z.object({
   minutes: z.number().int().min(5).max(180).default(30),
   /** Who is answering: the narrator, or someone else asked about the narrator's life. */
   speaker: z.string().default(''),
-  agenda: z.array(z.object({ topic: z.string(), why: z.string().default(''), question: z.string().default(''), story: Id.nullable().default(null), done: z.boolean().default(false) })).default([]),
+  agenda: z.array(z.object({ topic: z.string(), why: z.string().default(''), question: z.string().default(''), story: Id.nullable().default(null), question_id: Id.nullable().default(null), done: z.boolean().default(false) })).default([]),
   turns: z.array(SessionTurn).default([]),
   /** Filled in when the session ends. */
   summary: z.string().default(''),

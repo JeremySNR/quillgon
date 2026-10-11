@@ -64,4 +64,7 @@ export class ModelSuite implements AgentSuite {
   expand: AgentSuite['expand'] = (i) => this.run(A.museExpand, i);
   talk: AgentSuite['talk'] = (i) => this.run(A.museTalk, i);
   scribe: AgentSuite['scribe'] = (i) => this.run(A.scribe, i);
+  ghostPlan: AgentSuite['ghostPlan'] = (i) => this.run(A.ghostPlan, i);
+  ghostTurn: AgentSuite['ghostTurn'] = (i) => this.run(A.ghostTurn, i);
+  ghostWrap: AgentSuite['ghostWrap'] = (i) => this.run(A.ghostWrap, i);
 }

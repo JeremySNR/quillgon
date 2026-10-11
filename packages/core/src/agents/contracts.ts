@@ -9,6 +9,11 @@ import {
   IdeaBoard,
   IdeaItem,
   Intent,
+  KeyMoment,
+  DatePrecision,
+  Certainty,
+  Ladder,
+  Story,
   Obligation,
   PlotPoint,
   SceneCard,
@@ -532,6 +537,131 @@ export type ScribeInput = z.infer<typeof ScribeInput>;
 export const ScribeOutput = z.object({ text: z.string() });
 export type ScribeOutput = z.infer<typeof ScribeOutput>;
 
+// ------------------------------------------------------------------ ghostwriter (life stories)
+
+const PersonRef = z.object({ id: Id, name: z.string(), relationship: z.string().default('') });
+const StoryBrief = z.object({
+  id: Id,
+  title: z.string(),
+  when: z.string().default(''),
+  chapter: Id.nullable().default(null),
+  /** 0..1, how far it has been drawn out. */
+  depth: z.number(),
+  next: z.string().nullable().default(null),
+  status: Story.shape.status,
+  sensitive: z.boolean().default(false),
+});
+export type StoryBrief = z.infer<typeof StoryBrief>;
+
+export const GhostPlanInput = z.object({
+  minutes: z.number(),
+  /** Who is answering: empty for the narrator. */
+  speaker: z.string().default(''),
+  narrator: z.string(),
+  born: z.string().default(''),
+  about: z.string().default(''),
+  push: z.enum(['gentle', 'thorough']).default('thorough'),
+  chapters: z.array(z.object({ id: Id, title: z.string(), stage: z.string(), stories: z.array(Id) })).default([]),
+  stories: z.array(StoryBrief).default([]),
+  people: z.array(PersonRef).default([]),
+  /** Stretches of the life with nothing in them yet ("1984 to 1993"). */
+  gaps: z.array(z.string()).default([]),
+  questions: z.array(z.object({ id: Id, text: z.string(), why: z.string(), about: z.string(), priority: z.number() })).default([]),
+  promises: z.array(z.string()).default([]),
+  off_limits: z.array(z.string()).default([]),
+  recent: z.array(z.object({ title: z.string(), summary: z.string() })).default([]),
+});
+export type GhostPlanInput = z.infer<typeof GhostPlanInput>;
+
+export const GhostPlanOutput = z.object({
+  title: z.string(),
+  agenda: z.array(z.object({ topic: z.string(), why: z.string(), question: z.string(), story: Id.nullable().default(null), question_id: Id.nullable().default(null) })).min(1).max(5),
+  /** The first thing the ghostwriter says: a short warm opening and one question. */
+  opening: z.string().min(1),
+  technique: z.string().default(''),
+});
+export type GhostPlanOutput = z.infer<typeof GhostPlanOutput>;
+
+/** What the author pressed instead of (or as well as) answering. */
+export const AuthorSignal = z.enum(['dont-remember', 'move-on', 'off-record', 'hard']);
+export type AuthorSignal = z.infer<typeof AuthorSignal>;
+
+export const GhostTurnInput = z.object({
+  speaker: z.string().default(''),
+  narrator: z.string(),
+  born: z.string().default(''),
+  push: z.enum(['gentle', 'thorough']).default('thorough'),
+  agenda: z.array(z.object({ topic: z.string(), question: z.string(), done: z.boolean() })),
+  /** The story being drawn out, in full; null when the conversation is not on one yet. */
+  story: Story.nullable().default(null),
+  /** The ladder rung to climb next, worked out in code. */
+  next_rung: z.string().nullable().default(null),
+  stories: z.array(StoryBrief).default([]),
+  people: z.array(PersonRef).default([]),
+  history: z.array(z.object({ role: z.enum(['ghostwriter', 'author']), text: z.string() })).default([]),
+  answer: z.string(),
+  signal: AuthorSignal.nullable().default(null),
+  /** Follow-up triggers found in code ("vague answer: ask for one particular time"). */
+  probes: z.array(z.string()).default([]),
+  off_limits: z.array(z.string()).default([]),
+  /** Feedback when the last proposed question was refused (a leading question, an off-limits topic). */
+  retry: z.string().nullable().default(null),
+});
+export type GhostTurnInput = z.infer<typeof GhostTurnInput>;
+
+export const GhostTurnOutput = z.object({
+  /** The next thing to say: at most a short acknowledgement, then one open question (or a check-in). */
+  reply: z.string().min(1),
+  technique: z.string().default(''),
+  why: z.string().default(''),
+  /** Which story this exchange is about: an existing id, or a new one with a title. Null: none. */
+  story: z
+    .object({
+      id: Id,
+      title: z.string().default(''),
+      summary: z.string().nullable().default(null),
+      when: z.string().nullable().default(null),
+      precision: DatePrecision.nullable().default(null),
+      place: z.string().nullable().default(null),
+      key: KeyMoment.nullable().default(null),
+    })
+    .nullable()
+    .default(null),
+  /** Rungs the answer climbed. */
+  ladder: Ladder.partial().default({}),
+  details: z.array(z.object({ text: z.string().min(1), certainty: Certainty.default('sure') })).default([]),
+  quotes: z.array(z.object({ text: z.string().min(1), who: z.string().default('') })).default([]),
+  then: z.string().nullable().default(null),
+  now: z.string().nullable().default(null),
+  people: z.array(z.object({ id: Id, name: z.string().min(1), relationship: z.string().default('') })).default([]),
+  events: z.array(z.object({ when: z.string().min(1), description: z.string().min(1), precision: DatePrecision.nullable().default(null), key: KeyMoment.nullable().default(null) })).default([]),
+  /** For later: gaps, other stories mentioned in passing, people to ask. */
+  questions: z.array(z.object({ text: z.string().min(1), why: z.string().default(''), about: z.string().default('book'), ask: z.string().default(''), priority: z.number().int().min(1).max(3).default(2) })).default([]),
+  promises: z.array(z.string()).default([]),
+  /** How the author talks, if this answer showed something new. */
+  voice: z.array(z.string()).default([]),
+  /** Agenda items now covered (indexes). */
+  agenda_done: z.array(z.number().int().nonnegative()).default([]),
+});
+export type GhostTurnOutput = z.infer<typeof GhostTurnOutput>;
+
+export const GhostWrapInput = z.object({
+  narrator: z.string(),
+  agenda: z.array(z.object({ topic: z.string(), done: z.boolean() })),
+  history: z.array(z.object({ role: z.enum(['ghostwriter', 'author']), text: z.string() })),
+  stories: z.array(StoryBrief).default([]),
+});
+export type GhostWrapInput = z.infer<typeof GhostWrapInput>;
+
+export const GhostWrapOutput = z.object({
+  title: z.string(),
+  summary: z.string(),
+  questions: z.array(z.object({ text: z.string().min(1), why: z.string().default(''), about: z.string().default('book'), ask: z.string().default(''), priority: z.number().int().min(1).max(3).default(2) })).default([]),
+  promises: z.array(z.string()).default([]),
+  voice: z.array(z.string()).default([]),
+});
+export type GhostWrapOutput = z.infer<typeof GhostWrapOutput>;
+
 // ------------------------------------------------------------------ the suite the core calls
 
 export interface CallInfo {
@@ -567,6 +697,12 @@ export interface AgentSuite {
   talk(input: TalkInput): Promise<TalkOutput>;
   /** Tidy dictated speech into text: fillers and false starts out, nothing added. */
   scribe(input: ScribeInput): Promise<ScribeOutput>;
+  /** Life stories: plan an interview session from the gaps in the book. */
+  ghostPlan(input: GhostPlanInput): Promise<GhostPlanOutput>;
+  /** Life stories: one exchange of an interview: what to file, and the next question. */
+  ghostTurn(input: GhostTurnInput): Promise<GhostTurnOutput>;
+  /** Life stories: close a session: a summary, and what to ask next time. */
+  ghostWrap(input: GhostWrapInput): Promise<GhostWrapOutput>;
 }
 
 export const Contracts = {
@@ -592,4 +728,9 @@ export const Contracts = {
   reader: { input: ReaderInput, output: ReaderOutput },
   continuity: { input: ContinuityInput, output: ContinuityOutput },
   scribe: { input: ScribeInput, output: ScribeOutput },
+  ghostwriter: {
+    plan: { input: GhostPlanInput, output: GhostPlanOutput },
+    turn: { input: GhostTurnInput, output: GhostTurnOutput },
+    wrap: { input: GhostWrapInput, output: GhostWrapOutput },
+  },
 };

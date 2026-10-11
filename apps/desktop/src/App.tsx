@@ -13,6 +13,7 @@ import { ReaderReport } from './views/reader';
 import { HistoryView } from './views/history';
 import { SettingsView } from './views/settings';
 import { Covers } from './views/covers';
+import { Sessions } from './views/sessions';
 import { cx, isMac, loadPref } from './lib/util';
 
 function Shell() {
@@ -59,6 +60,8 @@ function Shell() {
         return <SettingsView tab={route.id} />;
       case 'covers':
         return <Covers key={project.dir} />;
+      case 'sessions':
+        return project.life ? <Sessions id={route.id} /> : <Dashboard />;
       default:
         return <Dashboard />;
     }

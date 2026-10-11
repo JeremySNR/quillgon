@@ -69,6 +69,8 @@ export const DictateRequest = z.object({
   after: z.string().max(1000).default(''),
   scene: z.string().nullable().default(null),
   level: z.enum(['book', 'verbatim', 'light', 'polished']).default('book'),
+  /** Keep the recording with this interview session (audio/<session>/). */
+  session: z.string().regex(/^[a-z0-9-]+$/).optional(),
   /** What the offline recogniser "hears" (tests and demos only). */
   offline_text: z.string().max(4000).optional(),
 });
