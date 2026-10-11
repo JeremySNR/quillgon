@@ -106,6 +106,7 @@ function BookSettings() {
           </Button>
         </div>
       </div>
+      {p!.book.kind === 'guide' && <GuideSettingsCard />}
       {p!.life && <LifeSettingsCard />}
       <div className="card stack">
         <div className="card-head">
@@ -388,6 +389,54 @@ function Appearance() {
 }
 
 /** A life story's own settings: whose life, when they were born, who the book is for, how long sessions run. */
+/** A guide: who it is for, what it promises, its method, and where its figures must hold. */
+function GuideSettingsCard() {
+  const { project: p } = useApp();
+  const save = useSaver();
+  const saved = p!.book.guide;
+  const [g, setG] = useState(saved);
+  const savedKey = JSON.stringify(saved);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setG(saved), [savedKey]);
+  return (
+    <div className="card stack">
+      <div className="card-head">
+        <h3>Guide</h3>
+      </div>
+      <Field label="Who it is for">
+        <input className="input" value={g.reader} onChange={(e) => setG({ ...g, reader: e.target.value })} placeholder="New B2B sales reps who freeze on the follow-up call" />
+      </Field>
+      <Field label="What it promises">
+        <input className="input" value={g.promise} onChange={(e) => setG({ ...g, promise: e.target.value })} placeholder="Book twice as many second meetings" />
+      </Field>
+      <Field label="Your method, if it has a name">
+        <input className="input" value={g.method} onChange={(e) => setG({ ...g, method: e.target.value })} placeholder="The three-call close" />
+      </Field>
+      <div className="grid-2">
+        <Field label="Kind of guide" hint={g.preset === 'finance' ? 'Checks figures that date, advice wording and sums.' : 'Checks figures have a source and sums add up.'}>
+          <select className="select" value={g.preset} onChange={(e) => setG({ ...g, preset: e.target.value as typeof g.preset })}>
+            <option value="coaching">Coaching or sales</option>
+            <option value="finance">Money</option>
+            <option value="self-help">Self-help</option>
+            <option value="general">Something else</option>
+          </select>
+        </Field>
+        <Field label="Figures hold for" hint="Country, and the date or tax year.">
+          <div className="row">
+            <input className="input" value={g.jurisdiction} onChange={(e) => setG({ ...g, jurisdiction: e.target.value })} placeholder="UK" />
+            <input className="input" value={g.as_of} onChange={(e) => setG({ ...g, as_of: e.target.value })} placeholder="2025/26" />
+          </div>
+        </Field>
+      </div>
+      <div>
+        <Button icon={<Check />} onClick={() => save(() => put('/guide/settings', { guide: g }))}>
+          Save
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function LifeSettingsCard() {
   const { project: p } = useApp();
   const save = useSaver();
@@ -399,12 +448,14 @@ function LifeSettingsCard() {
   return (
     <div className="card stack">
       <div className="card-head">
-        <h3>Life story</h3>
+        <h3>{p!.book.kind === 'guide' ? 'Interviews' : 'Life story'}</h3>
       </div>
       <div className="grid-2">
-        <Field label="Year of birth" hint="For ages on the timeline.">
-          <input className="input" value={l.born} placeholder="1948" onChange={(e) => setL({ ...l, born: e.target.value.trim() })} />
-        </Field>
+        {p!.book.kind !== 'guide' && (
+          <Field label="Year of birth" hint="For ages on the timeline.">
+            <input className="input" value={l.born} placeholder="1948" onChange={(e) => setL({ ...l, born: e.target.value.trim() })} />
+          </Field>
+        )}
         <Field label="Who it is for">
           <select className="select" value={l.audience} onChange={(e) => setL({ ...l, audience: e.target.value as typeof l.audience })}>
             <option value="family">Family and friends</option>

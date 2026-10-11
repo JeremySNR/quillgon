@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, BookOpenCheck, Check, CircleCheck, Download, FileQuestion, ShieldAlert, Users } from 'lucide-react';
+import { AlertTriangle, BookOpenCheck, Calculator, Check, CircleCheck, Download, FileQuestion, ShieldAlert, Users } from 'lucide-react';
 import { get, put } from '../lib/api';
 import { useApp } from '../lib/app';
 import { plural } from '../lib/util';
@@ -12,6 +12,7 @@ interface Review {
   people: { id: string; name: string; relationship: string; living: boolean | null; consent: string; naming: string; scenes: number; flag: 'high' | 'note' | null; why: string }[];
   sensitive: { story: string; title: string; scenes: string[] }[];
   unapproved: { id: string; title: string; stage: string }[];
+  claims: { scene: string; title: string; text: string; kind: 'evidence' | 'dated' | 'advice' | 'maths'; detail: string }[];
   authors_note: string;
   saved_note: string | null;
 }
@@ -32,15 +33,17 @@ export function ShareView() {
   if (!p?.life) return null;
   if (!r) return <div className="page"><div className="page-inner"><Working fallback="Checking the book" /></div></div>;
   const flagged = r.people.filter((x) => x.flag);
-  const issues = r.unsourced.length + r.gaps.length + r.open_notes.length + flagged.filter((x) => x.flag === 'high').length + r.sensitive.length + r.unapproved.length;
+  const guide = p.book.kind === 'guide';
+  const claimLabel = { evidence: 'No source for this figure', dated: 'Needs a date', advice: 'Reads as personal advice', maths: 'The sum does not add up' } as const;
+  const issues = r.claims.length + r.unsourced.length + r.gaps.length + r.open_notes.length + flagged.filter((x) => x.flag === 'high').length + r.sensitive.length + r.unapproved.length;
   const setConsent = (id: string, consent: string) => put(`/characters/${id}`, { bio: { consent } }).then(() => (load(), refresh()), fail('Not saved'));
   return (
     <div className="page">
       <div className="page-inner">
         <div className="page-head">
           <div>
-            <h1>Before you share</h1>
-            <p className="sub">What to settle before anyone reads it. {p.book.life.audience === 'public' ? 'You are publishing this book, so the people in it matter most.' : 'Family books are often shared further than planned.'}</p>
+            <h1>{guide ? 'Before you publish' : 'Before you share'}</h1>
+            <p className="sub">{guide ? 'What to settle before readers act on it: figures with no source, figures that date, advice wording, sums, and the clients in your cases.' : `What to settle before anyone reads it. ${p.book.life.audience === 'public' ? 'You are publishing this book, so the people in it matter most.' : 'Family books are often shared further than planned.'}`}</p>
           </div>
           <div className="actions">
             <Button icon={<Download />} onClick={() => get('/export?format=md').then((x) => toast({ kind: 'success', message: 'Exported', detail: x.file }), fail('Export failed'))}>
@@ -60,7 +63,22 @@ export function ShareView() {
           <p className="muted">{plural(issues, 'thing')} to look at.</p>
         )}
 
-        <Section icon={<FileQuestion />} title="Claims with no source" count={r.unsourced.length} empty="Every sentence comes from something you said.">
+        {guide && (
+          <Section icon={<Calculator />} title="Figures, advice and sums" count={r.claims.length} empty="Every figure has a source and a date where it needs one, and every worked example adds up.">
+            {r.claims.map((c, i) => (
+              <button key={i} className="list-item" onClick={() => go('scene', c.scene)}>
+                <span className="grow">
+                  <div className="primary-text serif">{c.text}</div>
+                  <div className="secondary-text">
+                    {c.title} · {claimLabel[c.kind]}
+                  </div>
+                </span>
+              </button>
+            ))}
+          </Section>
+        )}
+
+        <Section icon={<FileQuestion />} title={guide ? 'Quotes and scripts changed' : 'Claims with no source'} count={r.unsourced.length} empty="Every sentence comes from something you said.">
           {r.unsourced.map((u, i) => (
             <button key={i} className="list-item" onClick={() => go('scene', u.scene)}>
               <span className="grow">
@@ -92,7 +110,7 @@ export function ShareView() {
           ))}
         </Section>
 
-        <Section icon={<Users />} title="The people in the book" count={flagged.filter((x) => x.flag === 'high').length} empty="Nobody else appears in the drafted chapters yet.">
+        <Section icon={<Users />} title={guide ? 'The people in your cases' : 'The people in the book'} count={flagged.filter((x) => x.flag === 'high').length} empty="Nobody else appears in the drafted chapters yet.">
           <table className="people-table">
             <thead>
               <tr>
@@ -153,9 +171,9 @@ export function ShareView() {
           ))}
         </Section>
 
-        <h3 className="section-title">A note from the author</h3>
+        <h3 className="section-title">{guide ? 'A note to the reader' : 'A note from the author'}</h3>
         <div className="card stack">
-          <p className="muted small">Written from the choices you made: changed names, reconstructed conversations, other people’s versions. It opens the exported book. Edit it freely.</p>
+          <p className="muted small">{guide ? 'Written from your choices: where the knowledge comes from, how clients are disguised, and, for money and wellbeing, what the book is not. It opens the exported book. Edit it freely.' : 'Written from the choices you made: changed names, reconstructed conversations, other people’s versions. It opens the exported book. Edit it freely.'}</p>
           <textarea className="textarea serif" rows={5} value={note} onChange={(e) => setNote(e.target.value)} aria-label="Author's note" />
           <div className="btn-row">
             <Button variant="primary" icon={<Check />} onClick={() => put('/life/authors-note', { text: note }).then(() => (load(), toast({ kind: 'success', message: 'Saved; it opens the exported book' })), fail('Not saved'))}>

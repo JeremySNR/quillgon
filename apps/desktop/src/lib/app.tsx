@@ -4,7 +4,7 @@ import type { Job, Snapshot } from './types';
 import { allowUnload, describeUnsaved, flushUnsaved, installUnloadGuard, unsavedChanges } from './unsaved';
 import { useConfirm } from '../components/confirm';
 
-export type View = 'dashboard' | 'build' | 'outline' | 'scene' | 'ripple' | 'threads' | 'characters' | 'reader' | 'covers' | 'history' | 'settings' | 'sessions' | 'timeline' | 'notebook' | 'share' | 'revision';
+export type View = 'dashboard' | 'build' | 'outline' | 'scene' | 'ripple' | 'threads' | 'characters' | 'reader' | 'covers' | 'history' | 'settings' | 'sessions' | 'timeline' | 'notebook' | 'share' | 'revision' | 'research';
 export interface Route {
   view: View;
   id?: string;

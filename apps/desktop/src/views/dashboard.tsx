@@ -151,7 +151,7 @@ export function Dashboard() {
             <h1>{p.book.title}</h1>
             {p.intent.premise && <p className="book-premise">{p.intent.premise}</p>}
             {p.life ? (
-              <div className="book-metadata"><span>{plural(chapters.length, 'chapter')}</span><span>{plural(p.life.stories.length, 'story', 'stories')} gathered</span><span>{plural(p.life.sessions.length, 'session')}</span>{lifeYears(p) && <span>{lifeYears(p)}</span>}</div>
+              <div className="book-metadata"><span>{plural(chapters.length, 'chapter')}</span><span>{p.book.kind === 'guide' ? plural(p.life.stories.length, 'lesson') : plural(p.life.stories.length, 'story', 'stories')} gathered</span><span>{plural(p.life.sessions.length, 'session')}</span>{p.book.kind !== 'guide' && lifeYears(p) && <span>{lifeYears(p)}</span>}</div>
             ) : (
               <div className="book-metadata"><span>{plural(chapters.length, 'chapter')}</span><span>{plural(t.scenes, 'scene')}</span><span>{p.book.pov_mode.replaceAll('-', ' ')} · {p.book.tense} tense</span></div>
             )}
@@ -165,7 +165,7 @@ export function Dashboard() {
           <div><strong>{t.words.toLocaleString('en')}</strong><span> of {p.book.target_words.toLocaleString('en')} words</span></div>
           <div className="progress-track" role="progressbar" aria-label="Manuscript word target" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${progress}%` }} /></div>
           <span>{progress}% of your goal</span>
-          <span className="progress-scenes">{p.life ? `${p.life.stories.filter((s) => s.status === 'enough').length} of ${p.life.stories.length} stories ready to write` : `${written} of ${t.scenes} scenes written`}</span>
+          <span className="progress-scenes">{p.life ? `${p.life.stories.filter((s) => s.status === 'enough').length} of ${p.life.stories.length} ${p.book.kind === 'guide' ? 'lessons' : 'stories'} ready to write` : `${written} of ${t.scenes} scenes written`}</span>
         </div>
         <div className="desk-columns">
           <section className="desk-manuscript">

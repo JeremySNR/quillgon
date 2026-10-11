@@ -7,6 +7,7 @@ import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import {
   AgentName,
+  GuideSettings,
   analyseImpact,
   Engine,
   GraphStore,
@@ -369,7 +370,8 @@ export class NovelServer {
       '/api/init',
       async ({ body, server }) => {
         const dir = path.resolve(expandHome(body.dir));
-        const kind = ['novel', 'life-story', 'memoir'].includes(body.kind) ? body.kind : 'novel';
+        const kind = ['novel', 'life-story', 'memoir', 'guide'].includes(body.kind) ? body.kind : 'novel';
+        const g = body.guide && typeof body.guide === 'object' ? body.guide : {};
         const store = await initProject(dir, {
           title: body.title,
           genre: body.genre,
@@ -383,6 +385,7 @@ export class NovelServer {
             ...(body.audience === 'family' || body.audience === 'public' ? { audience: body.audience } : {}),
             ...(typeof body.born === 'string' ? { born: body.born } : {}),
           },
+          ...(kind === 'guide' ? { guide: GuideSettings.partial().parse(pick(g, ['preset', 'reader', 'promise', 'method', 'jurisdiction', 'as_of'])) } : {}),
         });
         store.close();
         server.open(dir);
@@ -508,6 +511,12 @@ export class NovelServer {
       const note = lb(engine).answerNote(params.id, params.note, { answer: typeof body.answer === 'string' ? body.answer : undefined, status: body.status });
       await engine.store.commit(`Answer a note on ${params.id}`);
       return note;
+    });
+    r('PUT', '/api/guide/settings', async ({ engine, body }) => {
+      const guide = { ...engine.store.project.book.guide, ...GuideSettings.partial().parse(pick(body.guide ?? {}, ['preset', 'reader', 'promise', 'method', 'jurisdiction', 'as_of', 'shape'])) };
+      engine.store.updateBook({ guide });
+      await engine.store.commit('Edit guide settings');
+      return engine.store.project.book.guide;
     });
     r('PUT', '/api/life/settings', async ({ engine, body }) => {
       const life = engine.store.project.book.life;

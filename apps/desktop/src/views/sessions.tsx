@@ -6,7 +6,7 @@ import type { Question, Session, Story } from '../lib/types';
 import { cx, plural } from '../lib/util';
 import { Badge, Button, Field, Segmented, Working } from '../components/ui';
 import { fieldTarget, MicButton, useDictation, type DictateResponse } from '../components/dictate';
-import { LADDER } from '@quillgon/core/schemas';
+import { isGuideLadder, rungsOf } from '@quillgon/core/schemas';
 import { RUNG_LABEL, enoughForScene } from '@quillgon/core/life';
 
 /**
@@ -51,7 +51,7 @@ export function Sessions({ id }: { id?: string }) {
                 ))}
               </div>
             ) : (
-              <p className="muted">None yet. The first session starts with the shape of the life: its chapters, and who the book is for.</p>
+              <p className="muted">{p.book.kind === 'guide' ? 'None yet. The first session starts with your reader, what the book promises them, and how you actually do what you teach.' : 'None yet. The first session starts with the shape of the life: its chapters, and who the book is for.'}</p>
             )}
           </div>
         </div>
@@ -386,6 +386,7 @@ const SIGNALS = [
 /** How far a story has been drawn out: a gist is not a scene. */
 export function StoryLadder({ story, name }: { story: Story; name: (id: string) => string }) {
   const enough = enoughForScene(story);
+  const lesson = isGuideLadder(story.ladder);
   return (
     <div className="card stack ladder-card">
       <div>
@@ -393,14 +394,14 @@ export function StoryLadder({ story, name }: { story: Story; name: (id: string) 
         <div className="faint small">{[story.when, story.place, story.people.map(name).join(', ')].filter(Boolean).join(' · ')}</div>
       </div>
       <ul className="ladder">
-        {LADDER.map((r) => (
-          <li key={r} className={story.ladder[r]}>
+        {rungsOf(story.ladder).map((r) => (
+          <li key={r} className={story.ladder[r] ?? 'no'}>
             {story.ladder[r] === 'yes' ? <CheckCircle2 size={14} /> : story.ladder[r] === 'some' ? <CircleDot size={14} /> : <Circle size={14} />}
             {RUNG_LABEL[r]}
           </li>
         ))}
       </ul>
-      {enough && <Badge kind="success">Enough for a scene</Badge>}
+      {enough && <Badge kind="success">{lesson ? 'Enough to teach it' : 'Enough for a scene'}</Badge>}
       {story.sensitive && <Badge kind="warning">Sensitive: kept out of drafts until you say</Badge>}
       {story.quotes.length > 0 && (
         <div className="stack">

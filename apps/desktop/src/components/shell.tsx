@@ -37,6 +37,7 @@ import {
   Mic,
   CalendarDays,
   NotebookPen,
+  Library,
 } from 'lucide-react';
 import { useApp, type View } from '../lib/app';
 import { get, post } from '../lib/api';
@@ -55,6 +56,7 @@ const NAV: NavEntry[] = [
   { view: 'characters', label: 'Characters', icon: Users, shortcut: '6' },
   { view: 'reader', label: 'Reader report', icon: Activity, shortcut: '7' },
   { view: 'covers', label: 'Book covers', icon: BookOpen, shortcut: '8' },
+  { view: 'research', label: 'Research', icon: Library, shortcut: '' },
 ];
 
 /** A life story's sidebar: the same shell, with sessions, a timeline, people and a pre-publication check. */
@@ -69,11 +71,27 @@ const LIFE_NAV: NavEntry[] = [
   { view: 'share', label: 'Before you share', icon: ShieldCheck, shortcut: '8' },
   { view: 'ripple', label: 'Ripple review', icon: Waves, shortcut: '' },
   { view: 'notebook', label: 'Ghostwriter’s notebook', icon: NotebookPen, shortcut: '' },
+  { view: 'research', label: 'Research', icon: Library, shortcut: '' },
+  { view: 'covers', label: 'Book covers', icon: BookOpen, shortcut: '' },
+];
+
+/** A guide's sidebar: sessions and drafting as for a life story, with research in the workspace and no timeline. */
+const GUIDE_NAV: NavEntry[] = [
+  { view: 'dashboard', label: 'Writing desk', icon: LayoutDashboard, shortcut: '1' },
+  { view: 'sessions', label: 'Sessions', icon: Mic, shortcut: '2' },
+  { view: 'research', label: 'Research', icon: Library, shortcut: '3' },
+  { view: 'build', label: 'Shaping the book', icon: Hammer, shortcut: '4' },
+  { view: 'outline', label: 'Manuscript', icon: ListTree, shortcut: '5' },
+  { view: 'characters', label: 'People', icon: Users, shortcut: '6' },
+  { view: 'share', label: 'Before you publish', icon: ShieldCheck, shortcut: '7' },
+  { view: 'ripple', label: 'Ripple review', icon: Waves, shortcut: '' },
+  { view: 'notebook', label: 'Ghostwriter’s notebook', icon: NotebookPen, shortcut: '' },
   { view: 'covers', label: 'Book covers', icon: BookOpen, shortcut: '' },
 ];
 
 /** The sidebar for this kind of book, split into the workspace and review groups. */
 export function navFor(kind: string | undefined): { all: NavEntry[]; workspace: NavEntry[]; review: NavEntry[]; reviewLabel: string } {
+  if (kind === 'guide') return { all: GUIDE_NAV, workspace: GUIDE_NAV.slice(0, 5), review: GUIDE_NAV.slice(5), reviewLabel: 'Book & review' };
   if (kind && kind !== 'novel') return { all: LIFE_NAV, workspace: LIFE_NAV.slice(0, 4), review: LIFE_NAV.slice(4), reviewLabel: 'Life & review' };
   return { all: NAV, workspace: NAV.slice(0, 3), review: NAV.slice(3), reviewLabel: 'Story & review' };
 }
@@ -86,6 +104,7 @@ export function Sidebar({ rail, onToggle }: { rail: boolean; onToggle: () => voi
     ripple: project.ripple ? { n: (project.ripple.counts.pending ?? 0) + (project.ripple.counts.conflicts ?? 0), alert: true } : undefined,
     threads: { n: project.threads.length },
     characters: { n: project.characters.length },
+    research: project.research.open_gaps ? { n: project.research.open_gaps } : undefined,
     ...(project.life
       ? {
           sessions: project.life.sessions.some((x) => !x.ended) ? { n: 1, alert: true } : { n: project.life.questions.filter((q) => q.status === 'queued' && !q.ask).length },
@@ -149,6 +168,7 @@ function NavItem({ label, icon: Icon, current, count, onClick }: { view: View; l
 }
 
 const LIFE_TITLES: Partial<Record<View, string>> = { build: 'Shaping the book', characters: 'People', threads: 'Themes' };
+const GUIDE_TITLES: Partial<Record<View, string>> = { ...LIFE_TITLES, share: 'Before you publish' };
 
 const TITLES: Record<View, string> = {
   dashboard: 'Writing desk',
@@ -167,6 +187,7 @@ const TITLES: Record<View, string> = {
   notebook: 'Ghostwriter’s notebook',
   share: 'Before you share',
   revision: 'Revision',
+  research: 'Research',
 };
 
 export function TopBar() {
@@ -239,7 +260,7 @@ export function TopBar() {
   return (
     <header className="topbar">
       <div className="crumbs">
-        <button className="crumb-book" onClick={() => go('dashboard')}>{project.book.title}</button><span className="sep">/</span><span className="muted">{(project.life && LIFE_TITLES[route.view]) || TITLES[route.view]}</span>
+        <button className="crumb-book" onClick={() => go('dashboard')}>{project.book.title}</button><span className="sep">/</span><span className="muted">{(project.life && (project.book.kind === 'guide' ? GUIDE_TITLES : LIFE_TITLES)[route.view]) || TITLES[route.view]}</span>
         {scene && (
           <>
             <span className="sep">/</span>

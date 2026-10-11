@@ -2,6 +2,12 @@ import type {
   Book,
   Chapter,
   Notebook,
+  ResearchLibrary,
+  ResearchRun,
+  Evidence,
+  CompTitle,
+  ResearchGap,
+  ResearchSource,
   Question,
   Story,
   Session,
@@ -157,6 +163,8 @@ export interface LifeSnapshot {
 export interface Snapshot {
   dir: string;
   life: LifeSnapshot | null;
+  /** Counts for the sidebar; the Research view loads the library itself. */
+  research: { comps: number; evidence: number; open_gaps: number };
   mode: 'offline' | 'live';
   dictation: DictationStatus;
   book: Book;
@@ -216,3 +224,12 @@ export interface Commit {
   message: string;
   body: string;
 }
+
+/** GET /api/research (packages/server/src/index.ts). */
+export interface ResearchView {
+  library: ResearchLibrary;
+  runs: Pick<ResearchRun, 'id' | 'brief' | 'depth' | 'started' | 'ended' | 'status' | 'searches' | 'cost_usd' | 'found'>[];
+  can: { ok: boolean; reason: string };
+  estimate: Record<'quick' | 'deep', { searches: number; calls: number; comps: number; cost_usd: number; subscription: boolean; model: string }>;
+}
+export type { Evidence, CompTitle, ResearchGap, ResearchSource, ResearchRun };

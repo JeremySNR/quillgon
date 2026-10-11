@@ -19,6 +19,7 @@ import { RevisionReview } from './views/revision';
 import { TimelineView } from './views/timeline';
 import { NotebookView } from './views/notebook';
 import { ShareView } from './views/share';
+import { ResearchView } from './views/research';
 import { cx, isMac, loadPref } from './lib/util';
 
 function Shell() {
@@ -71,6 +72,8 @@ function Shell() {
         return project.life ? <NotebookView /> : <Dashboard />;
       case 'share':
         return project.life ? <ShareView /> : <Dashboard />;
+      case 'research':
+        return <ResearchView />;
       case 'revision':
         return project.life && route.id ? <RevisionReview key={route.id} chapter={route.id} /> : <Dashboard />;
       case 'sessions':

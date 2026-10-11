@@ -148,3 +148,24 @@
 .people-table td { padding: var(--s-2); border-bottom: 1px solid var(--border); vertical-align: top; }
 .people-table .select { min-width: 140px; }
 @media (max-width: 1100px) { .timeline-lower, .notebook-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------------------------------------------------------------- research */
+.research-run { margin-bottom: var(--s-4); }
+.research-tabs { margin: var(--s-2) 0 var(--s-4); overflow-x: auto; }
+.comp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--s-4); }
+.comp-card { gap: var(--s-2); }
+.comp-card.dismissed, .list-item.dismissed { opacity: .55; }
+.comp-title { font-size: var(--fs-section); font-weight: 600; line-height: 1.25; }
+.comp-line { margin: 0; line-height: 1.45; }
+.comp-line .eyebrow { margin-right: var(--s-1); }
+.comp-says { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-label); }
+.comp-says .plus { color: var(--text-2); }
+.comp-says .minus { color: var(--text); font-weight: 500; }
+.list-item.evidence { align-items: flex-start; cursor: default; }
+.stack.sm { gap: 4px; }
+.source-link { display: inline-flex; align-items: center; gap: 4px; }
+.research-material { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--s-5); align-items: start; }
+.file-btn { align-self: flex-start; cursor: pointer; }
+.run-log { margin: 0; padding-left: var(--s-5); display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-label); }
+.run-log li.error { color: var(--danger, #b42318); }
+@media (max-width: 1100px) { .research-material { grid-template-columns: minmax(0, 1fr); } }

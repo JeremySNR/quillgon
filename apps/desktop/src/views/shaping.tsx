@@ -29,10 +29,19 @@ const SHAPES: { value: string; label: string; desc: string }[] = [
   { value: 'one-season', label: 'One season', desc: 'One period or change; the rest as memory' },
 ];
 
+/** A guide's shapes: how the method is taught. */
+const GUIDE_SHAPES: { value: string; label: string; desc: string }[] = [
+  { value: 'framework', label: 'Framework', desc: 'A chapter per part of your method, in order' },
+  { value: 'problem-led', label: 'Problem by problem', desc: 'A chapter per problem the reader has' },
+  { value: 'programme', label: 'Programme', desc: 'Step by step: week one, week two…' },
+  { value: 'principles', label: 'Principles', desc: 'Standalone principles, each with its cases' },
+  { value: 'q-and-a', label: 'Questions', desc: 'What readers ask, answered in turn' },
+];
+
 const PENS = [
   { value: 'interviewer', label: 'Interviewer', desc: 'You write every word. The ghostwriter asks, files and checks.' },
   { value: 'co-writer', label: 'Co-writer', desc: 'You write, and hand it chapters to draft when you want.' },
-  { value: 'ghostwriter', label: 'Ghostwriter', desc: 'It drafts each chapter from your memories; you answer, react and approve.' },
+  { value: 'ghostwriter', label: 'Ghostwriter', desc: 'It drafts each chapter from what you tell it; you answer, react and approve.' },
 ] as const;
 
 const COLUMNS: { stage: Stage; label: string }[] = [
@@ -57,6 +66,10 @@ export function Shaping() {
   useEffect(() => setAbout(premise), [premise]);
   if (!p?.life) return null;
   const life = p.book.life;
+  const guide = p.book.kind === 'guide';
+  const shapes = guide ? GUIDE_SHAPES : SHAPES;
+  const shape = guide ? (p.book.guide.shape ?? 'framework') : (life.shape ?? 'chronological');
+  const saveShape = (value: string) => (guide ? put('/guide/settings', { guide: { shape: value } }).then(refresh, fail('Not saved')) : saveLife({ shape: value as typeof life.shape }));
   const stories = p.life.stories;
   const title = (id: string) => stories.find((s) => s.id === id)?.title ?? id;
   const unplaced = stories.filter((s) => s.status !== 'cut' && !rows?.some((c) => c.stories.includes(s.id)));
@@ -79,9 +92,9 @@ export function Shaping() {
       <div className="page-inner wide">
         <div className="page-head">
           <div>
-            <span className="eyebrow">FROM MEMORIES TO A BOOK</span>
+            <span className="eyebrow">{guide ? 'FROM WHAT YOU KNOW TO A BOOK' : 'FROM MEMORIES TO A BOOK'}</span>
             <h1>Shaping the book</h1>
-            <p className="sub">Decide what the book is about and how it is told. Each chapter then moves through its own cycle: gathered, drafted, your notes, revised, signed off.</p>
+            <p className="sub">{guide ? 'Decide what the book promises and how it teaches. Each chapter then moves through its own cycle: gathered, drafted, your notes, revised, signed off.' : 'Decide what the book is about and how it is told. Each chapter then moves through its own cycle: gathered, drafted, your notes, revised, signed off.'}</p>
           </div>
         </div>
 
@@ -90,8 +103,8 @@ export function Shaping() {
             <div className="card-head">
               <h3 className="grow">What it is really about</h3>
             </div>
-            <p className="muted small">Not what happened, but what you came to understand. It decides what goes in and what stays out.</p>
-            <textarea className="textarea" rows={3} value={about} onChange={(e) => setAbout(e.target.value)} placeholder="How a girl from a two-up two-down learned she was allowed to want things." aria-label="What the book is about" />
+            <p className="muted small">{guide ? 'The idea underneath the method: what you believe that the usual advice gets wrong. It decides what goes in and what stays out.' : 'Not what happened, but what you came to understand. It decides what goes in and what stays out.'}</p>
+            <textarea className="textarea" rows={3} value={about} onChange={(e) => setAbout(e.target.value)} placeholder={guide ? 'Follow-up wins deals because buyers are busy, not uninterested.' : 'How a girl from a two-up two-down learned she was allowed to want things.'} aria-label="What the book is about" />
             <div>
               <Button size="sm" icon={<Check />} disabled={about === premise} onClick={() => put('/intent', { intent: { premise: about } }).then(() => (refresh(), toast({ kind: 'success', message: 'Saved' })), fail('Not saved'))}>
                 Save
@@ -119,15 +132,15 @@ export function Shaping() {
 
         <h3 className="section-title">The shape</h3>
         <div className="shapes" role="radiogroup" aria-label="Shape">
-          {SHAPES.map((x) => (
-            <button key={x.value} type="button" role="radio" aria-checked={(life.shape ?? 'chronological') === x.value} className="kind" onClick={() => saveLife({ shape: x.value as typeof life.shape })}>
+          {shapes.map((x) => (
+            <button key={x.value} type="button" role="radio" aria-checked={shape === x.value} className="kind" onClick={() => saveShape(x.value)}>
               <span className="kind-name">{x.label}</span>
               <span className="kind-desc">{x.desc}</span>
             </button>
           ))}
         </div>
         <div className="row" style={{ marginTop: 12 }}>
-          <Button icon={<Sparkles />} disabled={!stories.length || !!busy} onClick={() => run('propose', () => job<Proposal>('/life/shape/propose', { shape: life.shape }, 'Proposing chapters').then(setProposal))}>
+          <Button icon={<Sparkles />} disabled={!stories.length || !!busy} onClick={() => run('propose', () => job<Proposal>('/life/shape/propose', { shape }, 'Proposing chapters').then(setProposal))}>
             {rows?.length ? 'Propose chapters again' : 'Propose chapters'}
           </Button>
           {!stories.length && <span className="muted small">Chapters come from stories. Start with a session.</span>}
@@ -136,7 +149,7 @@ export function Shaping() {
         {proposal && (
           <div className="card stack proposal" style={{ marginTop: 12 }}>
             <div className="card-head">
-              <h3 className="grow">Proposed: {SHAPES.find((s) => s.value === proposal.shape)?.label ?? proposal.shape}</h3>
+              <h3 className="grow">Proposed: {shapes.find((s) => s.value === proposal.shape)?.label ?? proposal.shape}</h3>
               <Button size="sm" variant="ghost" icon={<X />} onClick={() => post('/life/shape/discard').then(() => setProposal(null))}>
                 Discard
               </Button>

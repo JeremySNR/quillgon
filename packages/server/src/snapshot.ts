@@ -85,6 +85,12 @@ export async function projectSnapshot(engine: Engine) {
             questions: p.questions.questions,
             notebook: p.notebook,
           },
+    // Research counts for the sidebar; the library itself is fetched by the Research view.
+    research: {
+      comps: p.research.comps.filter((c) => c.status !== 'dismissed').length,
+      evidence: p.research.evidence.filter((e) => e.status !== 'dismissed').length,
+      open_gaps: p.research.gaps.filter((g) => g.status === 'open').length,
+    },
     characters: [...p.characters.values()].map((c) => ({ id: c.id, bio: c.bio, voice: c.voice, state: c.state })),
     timeline: p.timeline,
     locations: p.locations.locations,

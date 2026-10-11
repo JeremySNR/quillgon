@@ -5,11 +5,19 @@ import { useApp } from '../lib/app';
 import { ago } from '../lib/util';
 import { Badge, Button, Field, Segmented } from '../components/ui';
 
-type Kind = 'novel' | 'life-story' | 'memoir';
+type Kind = 'novel' | 'life-story' | 'memoir' | 'guide';
 const KINDS: { value: Kind; label: string; desc: string }[] = [
   { value: 'novel', label: 'A novel', desc: 'Plan, draft and revise fiction' },
   { value: 'life-story', label: 'A life story', desc: 'A whole life, gathered by interview' },
   { value: 'memoir', label: 'A memoir', desc: 'One part of a life, told with hindsight' },
+  { value: 'guide', label: 'A guide', desc: 'Teach what you know: coaching, money, self-help' },
+];
+type Preset = 'general' | 'coaching' | 'finance' | 'self-help';
+const PRESETS: { value: Preset; label: string }[] = [
+  { value: 'coaching', label: 'Coaching or sales' },
+  { value: 'finance', label: 'Money' },
+  { value: 'self-help', label: 'Self-help' },
+  { value: 'general', label: 'Something else' },
 ];
 
 export function Welcome() {
@@ -20,6 +28,11 @@ export function Welcome() {
   const [subjectName, setSubjectName] = useState('');
   const [audience, setAudience] = useState<'family' | 'public'>('family');
   const [born, setBorn] = useState('');
+  const [preset, setPreset] = useState<Preset>('coaching');
+  const [reader, setReader] = useState('');
+  const [promise, setPromise] = useState('');
+  const [where, setWhere] = useState('UK');
+  const [authorName, setAuthorName] = useState('');
   const [title, setTitle] = useState('');
   const [dir, setDir] = useState('');
   const [words, setWords] = useState(12000);
@@ -56,7 +69,11 @@ export function Welcome() {
         offline: provider === 'offline',
         codex: provider === 'codex',
         kind,
-        ...(life ? { subject, subject_name: subject === 'other' ? subjectName.trim() : '', audience, born: born.trim() } : {}),
+        ...(kind === 'guide'
+          ? { subject_name: authorName.trim(), guide: { preset, reader: reader.trim(), promise: promise.trim(), ...(preset === 'finance' ? { jurisdiction: where.trim() } : {}) } }
+          : life
+            ? { subject, subject_name: subject === 'other' ? subjectName.trim() : '', audience, born: born.trim() }
+            : {}),
       });
       go(life ? 'sessions' : 'build');
       await refresh();
@@ -107,7 +124,30 @@ export function Welcome() {
                   ))}
                 </div>
               </Field>
-              {kind !== 'novel' && (
+              {kind === 'guide' && (
+                <>
+                  <Field label="What kind of guide?" hint={preset === 'finance' ? 'Adds checks for figures that date, advice wording and the sums in worked examples.' : 'Every guide checks that its figures have a source and its examples add up.'}>
+                    <Segmented value={preset} options={PRESETS} onChange={setPreset} />
+                  </Field>
+                  <Field label="Who is it for?" hint="One real kind of person, and where they are stuck.">
+                    <input className="input" value={reader} onChange={(e) => setReader(e.target.value)} placeholder="New B2B sales reps who freeze on the follow-up call" />
+                  </Field>
+                  <Field label="What will they be able to do after reading it?">
+                    <input className="input" value={promise} onChange={(e) => setPromise(e.target.value)} placeholder="Book twice as many second meetings" />
+                  </Field>
+                  <div className="grid-2">
+                    <Field label="Your name" hint="Optional; the book is in your voice.">
+                      <input className="input" value={authorName} onChange={(e) => setAuthorName(e.target.value)} placeholder="Sam Reed" />
+                    </Field>
+                    {preset === 'finance' && (
+                      <Field label="Where must the figures hold?">
+                        <input className="input" value={where} onChange={(e) => setWhere(e.target.value)} placeholder="UK" />
+                      </Field>
+                    )}
+                  </div>
+                </>
+              )}
+              {kind !== 'novel' && kind !== 'guide' && (
                 <>
                   <Field label="Whose story is it?" hint={subject === 'other' ? 'The ghostwriter will interview them, and write in their voice.' : 'The ghostwriter will interview you, and write in your voice.'}>
                     <Segmented value={subject} options={[{ value: 'self', label: 'Mine' }, { value: 'other', label: 'Someone else’s' }]} onChange={setSubject} />
@@ -138,6 +178,14 @@ export function Welcome() {
                       <option value={40000}>Short novel · 40k</option>
                       <option value={80000}>Novel · 80k</option>
                       <option value={110000}>Long novel · 110k</option>
+                    </select>
+                  </Field>
+                ) : kind === 'guide' ? (
+                  <Field label="Length">
+                    <select className="select" value={lifeWords} onChange={(e) => setLifeWords(Number(e.target.value))}>
+                      <option value={25000}>A short guide · 25k words</option>
+                      <option value={50000}>A full book · 50k</option>
+                      <option value={70000}>A big book · 70k</option>
                     </select>
                   </Field>
                 ) : (
@@ -178,7 +226,7 @@ export function Welcome() {
                         <div className="primary-text serif">{r.title}</div>
                         <div className="secondary-text">{r.dir}</div>
                       </span>
-                      {r.kind && r.kind !== 'novel' && <Badge kind="accent">{r.kind === 'memoir' ? 'Memoir' : 'Life story'}</Badge>}
+                      {r.kind && r.kind !== 'novel' && <Badge kind="accent">{r.kind === 'memoir' ? 'Memoir' : r.kind === 'guide' ? 'Guide' : 'Life story'}</Badge>}
                       <span className="end faint">{ago(r.opened)}</span>
                     </button>
                   ))}

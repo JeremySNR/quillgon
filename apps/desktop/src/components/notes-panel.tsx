@@ -13,6 +13,12 @@ export const NOTE_KIND: Record<MarginNote['kind'], { label: string; badge: 'acce
   thin: { label: 'Thin', badge: 'warning' },
   voice: { label: 'Voice', badge: 'outline' },
   source: { label: 'No source', badge: 'danger' },
+  steps: { label: 'Steps', badge: 'warning' },
+  example: { label: 'No example', badge: 'warning' },
+  evidence: { label: 'Needs a source', badge: 'danger' },
+  dated: { label: 'Dates', badge: 'info' },
+  advice: { label: 'Advice wording', badge: 'danger' },
+  maths: { label: 'Sum', badge: 'danger' },
 };
 
 /**

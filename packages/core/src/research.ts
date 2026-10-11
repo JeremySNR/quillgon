@@ -82,7 +82,7 @@ export function normaliseText(s: string): string {
     .replace(/[‘’‚′]/g, "'")
     .replace(/[“”„″]/g, '"')
     .replace(/[‐-―−]/g, '-')
-    .replace(/ /g, ' ')
+    .replace(/\u00a0/g, ' ')
     .replace(/[^\p{L}\p{N}%£$€'".,\- ]+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
