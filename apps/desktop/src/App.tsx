@@ -15,6 +15,7 @@ import { SettingsView } from './views/settings';
 import { Covers } from './views/covers';
 import { Sessions } from './views/sessions';
 import { Shaping } from './views/shaping';
+import { RevisionReview } from './views/revision';
 import { cx, isMac, loadPref } from './lib/util';
 
 function Shell() {
@@ -61,6 +62,8 @@ function Shell() {
         return <SettingsView tab={route.id} />;
       case 'covers':
         return <Covers key={project.dir} />;
+      case 'revision':
+        return project.life && route.id ? <RevisionReview key={route.id} chapter={route.id} /> : <Dashboard />;
       case 'sessions':
         return project.life ? <Sessions id={route.id} /> : <Dashboard />;
       default:

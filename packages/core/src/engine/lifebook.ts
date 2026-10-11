@@ -1,4 +1,4 @@
-import type { AgentSuite, GhostShapeOutput } from '../agents/contracts.js';
+import type { AgentSuite, GhostReviseOutput, GhostShapeOutput } from '../agents/contracts.js';
 import type { GraphStore } from '../store.js';
 import type { Chapter, ChapterStage, LifeShape, MarginNote, Story, Structure } from '../schemas/index.js';
 import { enoughForScene, gapMarkers, ladderScore, touchesOffLimits, unsourced } from '../life.js';
@@ -17,6 +17,35 @@ export const STAGES: ChapterStage[] = ['gathering', 'ready', 'draft', 'notes', '
 
 export interface ShapeProposal extends GhostShapeOutput {
   shape: LifeShape;
+}
+
+/** One proposed change in a revision round, reviewed passage by passage like a ripple. */
+export interface RevisionItem {
+  id: string;
+  scene: string;
+  find: string;
+  replace: string;
+  reason: string;
+  plan: number[];
+  status: 'proposed' | 'accepted' | 'rejected';
+  /** Set when the code check found something the author should know (a new claim with no source). */
+  warning: string | null;
+}
+
+/** A revision round: what the author said, the plan the ghostwriter read back, and the edits. */
+export interface Revision {
+  chapter: string;
+  round: number;
+  feedback: string;
+  created: string;
+  plan: GhostReviseOutput['plan'];
+  items: RevisionItem[];
+  /** Edits the code refused (they would change the author's exact words, or did not match the text). */
+  refused: { scene: string; find: string; why: string }[];
+  resolved: string[];
+  notes: GhostReviseOutput['notes'];
+  /** Plan steps (pushbacks) the author overruled: recorded as decisions. */
+  overruled: number[];
 }
 
 export class LifeBook {
@@ -293,6 +322,153 @@ export class LifeBook {
 
   openNotes(chapterId: string): { scene: string; note: MarginNote }[] {
     return this.chapter(chapterId).scenes.flatMap((s) => (this.p.scenes.get(s)?.notes?.notes ?? []).filter((n) => n.status === 'open').map((note) => ({ scene: s, note })));
+  }
+
+  // ---------------------------------------------------------------- revision rounds
+
+  /**
+   * Start a revision round from the author's feedback (and their answers to the notes). The
+   * ghostwriter reads back a numbered plan and proposes span edits; the code refuses any edit
+   * that would change words the author said word for word, and flags new claims with no source.
+   */
+  async revise(id: string, feedback = '', progress: (stage: string, detail?: string) => void = () => {}): Promise<Revision> {
+    if (this.p.book.life.pen === 'interviewer') throw new Error('you are holding the pen: revise the text yourself, and the ghostwriter will check it.');
+    const ch = this.chapter(id);
+    if (ch.stage === 'approved') throw new Error('this chapter is signed off; reopen it first');
+    if (!ch.scenes.length) throw new Error('there is no draft to revise yet');
+    const stories = this.storiesOf(id).filter((s) => !s.sensitive);
+    const verbatim = stories.flatMap((s) => s.quotes.map((q) => q.text));
+    const scenes = ch.scenes.map((sid) => {
+      const sc = this.p.scenes.get(sid)!;
+      return {
+        id: sid,
+        title: sc.card.title,
+        prose: sc.prose?.body ?? '',
+        notes: (sc.notes?.notes ?? []).filter((n) => n.status !== 'resolved').map((n) => ({ id: n.id, kind: n.kind, quote: n.quote, text: n.text, answer: n.answer, status: n.status })),
+      };
+    });
+    this.setStage(id, 'revising');
+    progress('revising', `Reading your notes on “${ch.title}”`);
+    const narrator = this.p.characters.get(this.p.book.life.narrator ?? '')?.bio.name ?? 'the narrator';
+    const out = await this.agents.ghostRevise({
+      narrator,
+      chapter: { id, title: ch.title, round: ch.round ?? 1 },
+      scenes,
+      feedback,
+      stories,
+      voice_notes: this.p.notebook.voice,
+      verbatim,
+      decisions: this.p.notebook.decisions,
+      style_rules: styleRules(this.p),
+      hard_rules: [...this.p.intent.hard_rules, ...this.p.notebook.off_limits.map((t) => `Never mention: ${t}`)],
+    });
+    const material = this.material(stories.map((s) => s.id));
+    const items: RevisionItem[] = [];
+    const refused: Revision['refused'] = [];
+    for (const [k, e] of out.edits.entries()) {
+      const prose = scenes.find((x) => x.id === e.scene)?.prose;
+      if (prose === undefined) {
+        refused.push({ scene: e.scene, find: e.find, why: 'no such scene in this chapter' });
+        continue;
+      }
+      const at = prose.indexOf(e.find);
+      if (at < 0 || prose.indexOf(e.find, at + 1) >= 0) {
+        refused.push({ scene: e.scene, find: e.find, why: at < 0 ? 'the text it would change is not in the scene' : 'the text it would change occurs more than once' });
+        continue;
+      }
+      // Words said word for word survive every revision.
+      const broken = verbatim.find((q) => {
+        const qa = prose.indexOf(q);
+        return qa >= 0 && qa < at + e.find.length && at < qa + q.length && !e.replace.includes(q);
+      });
+      if (broken) {
+        refused.push({ scene: e.scene, find: e.find, why: `it would change your exact words: “${broken}”` });
+        continue;
+      }
+      const fresh = unsourced(e.replace, [...material.text, feedback, ...scenes.flatMap((x) => x.notes.map((n) => n.answer))], verbatim, 3);
+      items.push({ id: `e${k + 1}`, scene: e.scene, find: e.find, replace: e.replace, reason: e.reason, plan: e.plan, status: 'proposed', warning: fresh.length ? `Nothing you said covers “${fresh[0].text.slice(0, 80)}”` : null });
+    }
+    const revision: Revision = { chapter: id, round: (ch.round ?? 1) + 1, feedback, created: new Date().toISOString(), plan: out.plan, items, refused, resolved: out.resolved, notes: out.notes, overruled: [] };
+    this.proposals.set(`revision-${id}`, revision);
+    return revision;
+  }
+
+  revision(id: string): Revision | null {
+    return this.proposals.get<Revision>(`revision-${id}`);
+  }
+
+  /** Accept or reject one proposed edit; or overrule (or reinstate) a pushback step. */
+  decide(id: string, patch: { item?: string; decision?: 'accepted' | 'rejected' | 'proposed'; overrule?: number; keep?: boolean }): Revision {
+    const r = this.revision(id);
+    if (!r) throw new Error('no revision in progress for this chapter');
+    if (patch.item) {
+      const it = r.items.find((x) => x.id === patch.item);
+      if (!it) throw new Error(`no edit "${patch.item}"`);
+      it.status = patch.decision ?? 'accepted';
+    }
+    if (patch.overrule !== undefined) r.overruled = patch.keep === false ? r.overruled.filter((n) => n !== patch.overrule) : uniq([...r.overruled, patch.overrule]);
+    this.proposals.set(`revision-${id}`, r);
+    return r;
+  }
+
+  /**
+   * Apply the round as one commit: accepted edits into the prose, rules into the style sheet,
+   * questions into the queue, overruled pushbacks into the notebook's decisions. Edits still
+   * pending count as accepted (the author applied the round); rejected ones are dropped.
+   */
+  async applyRevision(id: string): Promise<{ applied: number; rules: number; questions: number }> {
+    const r = this.revision(id);
+    if (!r) throw new Error('no revision in progress for this chapter');
+    const ch = this.chapter(id);
+    let applied = 0;
+    for (const sid of ch.scenes) {
+      const sc = this.p.scenes.get(sid);
+      if (!sc?.prose) continue;
+      let prose = sc.prose.body;
+      for (const it of r.items.filter((x) => x.scene === sid && x.status !== 'rejected')) {
+        const at = prose.indexOf(it.find);
+        if (at < 0) continue;
+        prose = prose.slice(0, at) + it.replace + prose.slice(at + it.find.length);
+        applied++;
+      }
+      if (prose !== sc.prose.body) {
+        this.store.saveProse(sid, prose.replace(/\n{3,}/g, '\n\n').replace(/ {2,}/g, ' '), 'generated');
+        this.store.markInSync(sid);
+      }
+      // Notes the round dealt with are resolved; new notes join the rest.
+      const notes = (sc.notes?.notes ?? []).map((n) => (r.resolved.includes(n.id) || (n.status === 'answered' && r.items.some((it) => it.scene === sid && it.status !== 'rejected' && n.quote && it.find.includes(n.quote))) ? { ...n, status: 'resolved' as const } : n));
+      const fresh = r.notes.filter((n) => n.scene === sid).map((n, k) => ({ id: `r${r.round}-${k + 1}`, kind: n.kind, quote: n.quote, text: n.text, options: n.options, status: 'open' as const, answer: '', round: r.round }));
+      this.store.saveNotes(sid, { notes: [...notes, ...fresh] });
+    }
+    // Standing preferences become the book's rules, checked on every word from now on.
+    const rules = r.plan.filter((p, n) => p.kind === 'rule' && !r.overruled.includes(n));
+    if (rules.length) {
+      const sheet = this.p.style.sheet;
+      this.store.saveStyleSheet({
+        ...sheet,
+        never: uniq([...sheet.never, ...rules.flatMap((x) => x.never)]),
+        prefer: [...sheet.prefer, ...rules.flatMap((x) => x.prefer).filter((x) => !sheet.prefer.some((y) => y.avoid === x.avoid))],
+        guidance: uniq([...sheet.guidance, ...rules.flatMap((x) => x.guidance)]),
+      });
+    }
+    const questions = r.plan.filter((p) => p.kind === 'question' && p.question);
+    if (questions.length) {
+      const qs = structuredClone(this.p.questions.questions);
+      for (const q of questions) if (!qs.some((x) => x.text === q.question) && !touchesOffLimits(q.question, this.p.notebook.off_limits)) qs.push({ id: `q-${slugify(q.question).slice(0, 36)}-${r.round}`, text: q.question, why: q.text, technique: '', about: `chapter:${id}`, ask: '', priority: 1, status: 'queued', asked_in: null });
+      this.store.saveQuestions({ questions: qs });
+    }
+    const overruled = r.overruled.map((n) => r.plan[n]).filter((p) => p?.kind === 'pushback');
+    if (overruled.length) this.store.saveNotebook({ ...this.p.notebook, decisions: uniq([...this.p.notebook.decisions, ...overruled.map((p) => `Kept as I wrote it: ${p.text}`)]) });
+    this.saveChapter(id, { stage: 'notes', round: r.round });
+    this.proposals.delete(`revision-${id}`);
+    await this.store.commit(`Revision ${r.round}: ${ch.title}`);
+    return { applied, rules: rules.length, questions: questions.length };
+  }
+
+  discardRevision(id: string) {
+    this.proposals.delete(`revision-${id}`);
+    const ch = this.chapter(id);
+    if (ch.stage === 'revising') this.setStage(id, 'notes');
   }
 
   // ---------------------------------------------------------------- sign-off

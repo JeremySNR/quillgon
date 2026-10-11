@@ -5,6 +5,8 @@
  *     recording), a story filed with its ladder, "That's all I remember", undo, end.
  *  C. Shaping the book: chapters proposed from the stories and adopted; a chapter drafted from
  *     its stories with margin notes; a gap answered in the editor.
+ *  D. A revision round: feedback in the author's words, the plan read back, a change reviewed
+ *     and applied; the gap filled, "whilst" a rule for the whole book; the chapter approved.
  *
  *   pnpm build && pnpm tsx scripts/e2e-life.ts [screenshot-dir]
  */
@@ -119,6 +121,28 @@ try {
   await gap.getByRole('button', { name: 'Answer' }).click();
   await page.locator('.note-card', { hasText: 'Where did this happen?' }).waitFor({ state: 'detached' });
   step('answered the gap');
+
+  console.log('D. A revision round');
+  await page.getByLabel('What to change').fill("I'd never say whilst.");
+  await page.getByRole('button', { name: 'Revise' }).click();
+  await page.getByRole('heading', { name: /what I’ll change/ }).waitFor();
+  await page.getByText('Rule for the book').waitFor();
+  step('the ghostwriter read back a plan: an edit and a rule for the book');
+  await shot('revision');
+  await page.locator('.change-block').first().getByRole('button', { name: 'Accept' }).click();
+  await page.getByRole('button', { name: 'Apply the round' }).click();
+  await page.locator('.notes-pane').waitFor();
+  await page.waitForFunction(() => !document.querySelector('.cm-content')?.textContent?.includes('[TK:'));
+  step('applied: the gap is filled with the answer');
+  const sheet = fs.readFileSync(path.join(bookDir, 'style', 'style.yaml'), 'utf8');
+  if (!/whilst/.test(sheet)) throw new Error('rule not in the style sheet');
+  step('"whilst" is now a never-word for the whole book');
+  await page.locator('nav .nav-item', { hasText: 'Shaping the book' }).click();
+  const r1950 = page.locator('.trow', { hasText: 'The 1950s' });
+  await r1950.getByRole('button', { name: 'Approve' }).click();
+  await r1950.getByText('Signed off').waitFor();
+  step('the chapter is signed off');
+  await shot('shaping-approved');
 
   if (errors.length) throw new Error(`page errors:\n${errors.join('\n')}`);
   console.log('\nLife story e2e passed.');

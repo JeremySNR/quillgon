@@ -166,6 +166,7 @@ const TITLES: Record<View, string> = {
   timeline: 'Timeline',
   notebook: 'Ghostwriter’s notebook',
   share: 'Before you share',
+  revision: 'Revision',
 };
 
 export function TopBar() {

@@ -485,6 +485,18 @@ export class NovelServer {
     r('POST', '/api/life/chapters/:id/draft', ({ engine, params, server }) => server.job('draft', (progress) => lb(engine).draftChapter(params.id, progress)));
     r('POST', '/api/life/chapters/:id/approve', async ({ engine, params }) => (await lb(engine).approve(params.id), { chapters: chapterView(engine) }));
     r('POST', '/api/life/chapters/:id/reopen', async ({ engine, params }) => (await lb(engine).reopen(params.id), { chapters: chapterView(engine) }));
+    r('POST', '/api/life/chapters/:id/revise', ({ engine, params, body, server }) => server.job('revise', (progress) => lb(engine).revise(params.id, String(body.feedback ?? ''), progress)));
+    r('GET', '/api/life/chapters/:id/revision', ({ engine, params }) => lb(engine).revision(params.id));
+    r('POST', '/api/life/chapters/:id/revision/decide', ({ engine, params, body }) =>
+      lb(engine).decide(params.id, {
+        item: typeof body.item === 'string' ? body.item : undefined,
+        decision: ['accepted', 'rejected', 'proposed'].includes(body.decision) ? body.decision : undefined,
+        overrule: Number.isInteger(body.overrule) ? body.overrule : undefined,
+        keep: typeof body.keep === 'boolean' ? body.keep : undefined,
+      }),
+    );
+    r('POST', '/api/life/chapters/:id/revision/apply', ({ engine, params, server }) => server.job('revise', () => lb(engine).applyRevision(params.id)));
+    r('POST', '/api/life/chapters/:id/revision/discard', ({ engine, params }) => (lb(engine).discardRevision(params.id), { ok: true }));
     r('POST', '/api/scenes/:id/notes/:note', async ({ engine, params, body }) => {
       const note = lb(engine).answerNote(params.id, params.note, { answer: typeof body.answer === 'string' ? body.answer : undefined, status: body.status });
       await engine.store.commit(`Answer a note on ${params.id}`);

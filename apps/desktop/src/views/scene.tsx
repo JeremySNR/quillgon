@@ -37,7 +37,7 @@ import { factLabel, firstName, keys, loadPref, plural, savePref } from '../lib/u
 import { Avatar, Badge, Button, Chip, Dialog, Empty, Field, ListEditor, StatusBadge, SyncBadge, TagSelect, Working } from '../components/ui';
 import { ProseEditor, bannedRegexes, type EditorApi, type StyleMark } from '../components/prose-editor';
 import { MicButton, useDictation, useHoldToTalk, type DictationTarget } from '../components/dictate';
-import { NotesPanel, NOTE_KIND } from '../components/notes-panel';
+import { NotesPanel, NOTE_KIND, ReviseBox } from '../components/notes-panel';
 import { PredictabilityCheck } from './critique';
 import { OBLIGATION_KIND } from './ledger';
 import { CardDiff, ProseDiff, ProseSideBySide } from '../components/diff';
@@ -303,7 +303,7 @@ export function SceneEditor({ id }: { id: string }) {
   const pov = chars.find((c) => c.id === card.pov);
 
   return (
-    <div className={`editor ${focus ? 'focus' : ''} ${inspector ? 'inspector-open' : ''} ${p.life && notes.length && notesOpen && !focus ? 'notes-open' : ''}`}>
+    <div className={`editor ${focus ? 'focus' : ''} ${inspector ? 'inspector-open' : ''} ${p.life && detail.prose && notesOpen && !focus ? 'notes-open' : ''}`}>
       {/* ---------------- card */}
       <aside className="card-pane" id="scene-inspector" aria-label="Scene card" hidden={!inspector || focus}>
         <div className="inspector-title"><span>Scene details</span><Button size="sm" variant="ghost" iconOnly icon={<X />} tip="Close scene details" onClick={() => { setInspector(false); savePref('sceneInspector', false); }} /></div>
@@ -472,7 +472,7 @@ export function SceneEditor({ id }: { id: string }) {
             {card.status === 'approved' ? 'Approved' : 'Approve'}
           </Button>
           <Button size="sm" variant="ghost" iconOnly icon={card.lock === 'none' ? <LockOpen /> : <Lock />} tip={card.lock === 'none' ? 'Lock card and prose' : 'Unlock'} onClick={() => setLock(card.lock === 'none' ? 'both' : 'none')} disabled={!!busy} />
-          {p.life && notes.length > 0 && (
+          {p.life && detail.prose && (
             <Button size="sm" variant="ghost" icon={<MessageSquareText />} aria-expanded={notesOpen && !focus} onClick={() => setNotesOpen(!notesOpen)}>
               Notes{notes.some((n) => n.status === 'open') ? ` (${notes.filter((n) => n.status === 'open').length})` : ''}
             </Button>
@@ -557,7 +557,7 @@ export function SceneEditor({ id }: { id: string }) {
           </div>
         </div>
       </section>
-      {p.life && notes.length > 0 && notesOpen && !focus && <NotesPanel scene={id} notes={notes} onJump={jumpTo} onChanged={() => (load(), refresh())} />}
+      {p.life && detail.prose && notesOpen && !focus && <NotesPanel scene={id} notes={notes} onJump={jumpTo} onChanged={() => (load(), refresh())} footer={!proseLocked && <ReviseBox scene={id} />} />}
 
       {impact && (
         <Dialog

@@ -150,3 +150,85 @@ describe('chapters of a life story', () => {
     expect(ids.map((x) => store.project.scenes.get(x)!.card.stories)).toEqual([['the-belt']]);
   });
 });
+
+describe('revision rounds', () => {
+  const prose = "Whilst the other girls talked, I sat alone. The belt came off the big machine with a crack like a gun. Jean leaned over. “Don't you dare cry in front of him, love.” And I didn't.";
+  async function drafted(revise: AgentSuite['ghostRevise']) {
+    const { store, engine } = await bookWithStories({
+      ghostDraft: async () => ({ scenes: [{ title: 'The belt', stories: ['the-belt'], when: '1962', place: "Burton's", people: ['jean-pickles'], then: '', now: '', prose, notes: [] }], needs_decision: [] }),
+      ghostRevise: revise,
+    });
+    await engine.life.proposeShape();
+    await engine.life.acceptShape();
+    const [id] = await engine.life.draftChapter('the-1960s');
+    return { store, engine, id };
+  }
+
+  it('reads back a plan, guards the author’s exact words, and applies the round as one commit', async () => {
+    const { store, engine, id } = await drafted(async () => ({
+      plan: [
+        { text: 'Use “while” instead of “whilst”, here and in every chapter.', kind: 'rule', never: ['whilst'], prefer: [{ avoid: 'whilst', use: 'while' }], guidance: [], question: '' },
+        { text: 'Make Jean’s line gentler.', kind: 'edit', never: [], prefer: [], guidance: [], question: '' },
+        { text: 'I would keep the last line short; it lands harder.', kind: 'pushback', never: [], prefer: [], guidance: [], question: '' },
+        { text: 'Ask for a moment that shows what Dad was like then.', kind: 'question', never: [], prefer: [], guidance: [], question: 'Can you tell me about a moment that shows what Dad was like then?' },
+      ],
+      edits: [
+        { scene: id, find: 'Whilst the other girls talked', replace: 'While the other girls talked', reason: 'Your word.', plan: [0] },
+        { scene: id, find: "“Don't you dare cry in front of him, love.”", replace: '“Chin up, pet.”', reason: 'Gentler.', plan: [1] },
+        { scene: id, find: 'not in the text', replace: 'x', reason: '', plan: [] },
+        { scene: id, find: 'And I didn\'t.', replace: 'And I didn\'t. The foreman glared at the whole row of trembling apprentices.', reason: '', plan: [] },
+      ],
+      resolved: [],
+      notes: [],
+    }));
+    const r = await engine.life.revise('the-1960s', "It's too posh. I'd never say whilst.");
+    expect(store.project.structure.acts[0].chapters.find((c) => c.id === 'the-1960s')?.stage).toBe('revising');
+    expect(r.items.map((x) => x.find)).toEqual(['Whilst the other girls talked', "And I didn't."]);
+    expect(r.refused.map((x) => x.why)).toEqual([expect.stringContaining('your exact words'), expect.stringContaining('not in the scene')]);
+    expect(r.items[1].warning).toMatch(/Nothing you said covers/);
+
+    engine.life.decide('the-1960s', { item: r.items[1].id, decision: 'rejected' });
+    engine.life.decide('the-1960s', { overrule: 2 });
+    const before = (await store.repo.log(1))[0];
+    const out = await engine.life.applyRevision('the-1960s');
+    expect(out).toEqual({ applied: 1, rules: 1, questions: 1 });
+    const body = store.project.scenes.get(id)!.prose!.body;
+    expect(body).toContain('While the other girls talked');
+    expect(body).toContain("Don't you dare cry in front of him, love.");
+    expect(body).not.toContain('foreman glared');
+    expect(store.project.style.sheet.never).toContain('whilst');
+    expect(store.project.style.sheet.prefer).toContainEqual({ avoid: 'whilst', use: 'while' });
+    expect(store.project.questions.questions.some((q) => q.about === 'chapter:the-1960s')).toBe(true);
+    expect(store.project.notebook.decisions[0]).toMatch(/Kept as I wrote it/);
+    expect(store.project.structure.acts[0].chapters.find((c) => c.id === 'the-1960s')).toMatchObject({ stage: 'notes', round: 2 });
+    const after = (await store.repo.log(1))[0];
+    expect(after.hash).not.toBe(before.hash);
+    expect(after.message).toBe('Revision 2: The 1960s');
+    expect(engine.life.revision('the-1960s')).toBeNull();
+  });
+
+  it('revises with the answers to the notes, offline', async () => {
+    const { store, engine } = await bookWithStories();
+    await engine.life.proposeShape();
+    await engine.life.acceptShape();
+    const [id] = await engine.life.draftChapter('the-1950s');
+    const gap = store.project.scenes.get(id)!.notes!.notes.find((n) => n.kind === 'gap')!;
+    engine.life.answerNote(id, gap.id, { answer: 'the station at Leeds' });
+    const r = await engine.life.revise('the-1950s', 'I would never say whilst');
+    expect(r.plan.map((p) => p.kind)).toEqual(['edit', 'rule']);
+    await engine.life.applyRevision('the-1950s');
+    const scene = store.project.scenes.get(id)!;
+    expect(scene.prose!.body).toContain('at the station at Leeds');
+    expect(scene.prose!.body).not.toContain('[TK:');
+    expect(scene.notes!.notes.find((n) => n.id === gap.id)?.status).toBe('resolved');
+  });
+
+  it('refuses to revise a signed-off chapter or when the author holds the pen', async () => {
+    const { store, engine } = await drafted(async () => ({ plan: [{ text: 'x', kind: 'edit', never: [], prefer: [], guidance: [], question: '' }], edits: [], resolved: [], notes: [] }));
+    await engine.life.approve('the-1960s');
+    await expect(engine.life.revise('the-1960s', 'x')).rejects.toThrow(/reopen/);
+    await engine.life.reopen('the-1960s');
+    store.updateBook({ life: { ...store.project.book.life, pen: 'interviewer' } });
+    await expect(engine.life.revise('the-1960s', 'x')).rejects.toThrow(/holding the pen/);
+  });
+});

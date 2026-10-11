@@ -732,6 +732,56 @@ export const GhostDraftOutput = z.object({
 });
 export type GhostDraftOutput = z.infer<typeof GhostDraftOutput>;
 
+export const GhostReviseInput = z.object({
+  narrator: z.string(),
+  chapter: z.object({ id: Id, title: z.string(), round: z.number().int() }),
+  scenes: z.array(
+    z.object({
+      id: Id,
+      title: z.string(),
+      prose: z.string(),
+      /** Notes with the author's answers, and ones still open. */
+      notes: z.array(z.object({ id: z.string(), kind: z.string(), quote: z.string(), text: z.string(), answer: z.string(), status: z.string() })),
+    }),
+  ),
+  /** What the author said about the draft, in their words. Empty: revise with the answers to the notes. */
+  feedback: z.string().default(''),
+  stories: z.array(Story),
+  voice_notes: z.array(z.string()).default([]),
+  /** Words that were said, kept word for word: never change these. */
+  verbatim: z.array(z.string()).default([]),
+  /** Arguments the author has already settled ("keep the last line"): do not reopen them. */
+  decisions: z.array(z.string()).default([]),
+  style_rules: z.array(z.string()).default([]),
+  hard_rules: z.array(z.string()).default([]),
+});
+export type GhostReviseInput = z.infer<typeof GhostReviseInput>;
+
+export const GhostReviseOutput = z.object({
+  /** What the ghostwriter understood, as a numbered plan the author can check. */
+  plan: z
+    .array(
+      z.object({
+        text: z.string().min(1),
+        kind: z.enum(['edit', 'rule', 'question', 'pushback']).default('edit'),
+        /** kind rule: a standing preference for the whole book. */
+        never: z.array(z.string()).default([]),
+        prefer: z.array(z.object({ avoid: z.string(), use: z.string() })).default([]),
+        guidance: z.array(z.string()).default([]),
+        /** kind question: something to ask in the next session. */
+        question: z.string().default(''),
+      }),
+    )
+    .min(1),
+  /** Span edits: exact text from one scene's prose, and what replaces it. */
+  edits: z.array(z.object({ scene: Id, find: z.string().min(1), replace: z.string(), reason: z.string().default(''), plan: z.array(z.number().int().nonnegative()).default([]) })).max(80).default([]),
+  /** Notes the answers resolved. */
+  resolved: z.array(z.string()).default([]),
+  /** New notes where the revision still needs the author. */
+  notes: z.array(NoteDraft.extend({ scene: Id })).default([]),
+});
+export type GhostReviseOutput = z.infer<typeof GhostReviseOutput>;
+
 // ------------------------------------------------------------------ the suite the core calls
 
 export interface CallInfo {
@@ -777,6 +827,8 @@ export interface AgentSuite {
   ghostShape(input: GhostShapeInput): Promise<GhostShapeOutput>;
   /** Life stories: draft a chapter from its stories only, with margin notes where it is thin. */
   ghostDraft(input: GhostDraftInput): Promise<GhostDraftOutput>;
+  /** Life stories: a revision round: the author's feedback and answers, as a plan and span edits. */
+  ghostRevise(input: GhostReviseInput): Promise<GhostReviseOutput>;
 }
 
 export const Contracts = {
@@ -808,5 +860,6 @@ export const Contracts = {
     wrap: { input: GhostWrapInput, output: GhostWrapOutput },
     shape: { input: GhostShapeInput, output: GhostShapeOutput },
     draft: { input: GhostDraftInput, output: GhostDraftOutput },
+    revise: { input: GhostReviseInput, output: GhostReviseOutput },
   },
 };

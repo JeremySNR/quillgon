@@ -274,12 +274,20 @@ function ChapterToken({ row, pen, busy, onRun, go, job, refresh }: { row: Chapte
         </span>
       );
     case 'draft':
-    case 'revising':
       return (
         <span className="tok gw">
-          <b>{row.stage === 'draft' ? 'Drafting' : 'Revising'}</b>
+          <b>Drafting</b>
           <button className="link small" onClick={open}>
             Open
+          </button>
+        </span>
+      );
+    case 'revising':
+      return (
+        <span className="tok you">
+          <b>Changes to review</b>
+          <button className="link small" onClick={() => go('revision', row.id)}>
+            Review
           </button>
         </span>
       );

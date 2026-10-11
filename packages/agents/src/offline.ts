@@ -16,7 +16,7 @@ import type {
   StructureAlternative,
   StructureOutput,
 } from '@quillgon/core';
-import { cleanDictation, EMPTY_LADDER, enoughForScene, LADDER, nextRung, quotedSpeech, RUNG_QUESTION, slugify, touchesOffLimits, yearOf, type GhostDraftOutput, type GhostPlanOutput, type GhostShapeOutput, type GhostTurnOutput, type GhostWrapOutput, type Ladder } from '@quillgon/core';
+import { cleanDictation, joinToCursor, EMPTY_LADDER, enoughForScene, LADDER, nextRung, quotedSpeech, RUNG_QUESTION, slugify, touchesOffLimits, yearOf, type GhostDraftOutput, type GhostPlanOutput, type GhostReviseOutput, type GhostShapeOutput, type GhostTurnOutput, type GhostWrapOutput, type Ladder } from '@quillgon/core';
 
 /**
  * A deterministic, model-free stand-in for every agent. It makes the whole app usable
@@ -131,6 +131,43 @@ export class OfflineSuite implements AgentSuite {
       return { title: st.title, stories: [st.id], when: st.when, place: st.place, people: st.people, then: st.then, now: st.now, prose: paras.join('\n\n'), notes };
     });
     return { scenes, needs_decision: [] };
+  }
+
+  async ghostRevise(i: Parameters<AgentSuite['ghostRevise']>[0]): Promise<GhostReviseOutput> {
+    // Acts on the answers to the notes, and turns "never say X" in the feedback into a rule.
+    const plan: GhostReviseOutput['plan'] = [];
+    const edits: GhostReviseOutput['edits'] = [];
+    const resolved: string[] = [];
+    const step = (text: string, extra: Partial<GhostReviseOutput['plan'][number]> = {}) => plan.push({ text, kind: 'edit', never: [], prefer: [], guidance: [], question: '', ...extra }) - 1;
+    for (const sc of i.scenes) {
+      for (const n of sc.notes) {
+        if (n.status !== 'answered' || !n.answer) continue;
+        const answer = n.answer.trim().replace(/[.!?]+$/, '');
+        if (n.kind === 'gap' && n.quote && sc.prose.includes(n.quote)) {
+          const before = sc.prose.slice(0, sc.prose.indexOf(n.quote));
+          edits.push({ scene: sc.id, find: n.quote, replace: joinToCursor(answer, before), reason: 'Your answer fills the gap.', plan: [step(`Fill the gap with what you told me: “${answer}”.`)] });
+          resolved.push(n.id);
+        } else if (n.kind === 'source' && /take it out/i.test(answer) && n.quote && sc.prose.includes(n.quote)) {
+          edits.push({ scene: sc.id, find: n.quote, replace: '', reason: 'You said it should go.', plan: [step('Take out the sentence you said was not right.')] });
+          resolved.push(n.id);
+        } else if (n.kind === 'thin') {
+          const paras = sc.prose.split(/\n\n/);
+          const last = paras.find((x) => x.trim()) ?? '';
+          if (last && sc.prose.indexOf(last) === sc.prose.lastIndexOf(last)) {
+            edits.push({ scene: sc.id, find: last, replace: `${last}\n\n${answer}.`, reason: 'The moment you gave me.', plan: [step('Add the moment you described.')] });
+            resolved.push(n.id);
+          }
+        } else resolved.push(n.id);
+      }
+    }
+    for (const m of i.feedback.matchAll(/(?:never|wouldn'?t ever|would never|i'?d never) (?:say|use|write) ['"‘“]?([\w'’-]+)['"’”]?/gi)) {
+      const word = m[1].toLowerCase();
+      step(`Never use “${word}”, here or in any chapter.`, { kind: 'rule', never: [word] });
+    }
+    if (i.feedback.trim() && !plan.some((p) => p.kind === 'rule'))
+      step(`Ask you next time for a moment that shows what you meant: “${i.feedback.trim().slice(0, 80)}”.`, { kind: 'question', question: `You said: “${i.feedback.trim().slice(0, 120)}”. Can you tell me about a moment that shows it?` });
+    if (!plan.length) step('Nothing to change: the answers so far need no edits.');
+    return { plan, edits, resolved, notes: [] };
   }
 
   async ghostWrap(i: Parameters<AgentSuite['ghostWrap']>[0]): Promise<GhostWrapOutput> {
@@ -621,7 +658,7 @@ export class ScriptedSuite extends OfflineSuite {
   constructor(overrides: Partial<AgentSuite> = {}) {
     super();
     const self = this as unknown as Record<string, (i: unknown) => Promise<unknown>>;
-    for (const m of ['interview', 'plotPoints', 'structures', 'cards', 'write', 'voice', 'reviseLines', 'humanise', 'extract', 'reviseCard', 'reviseProse', 'read', 'continuity', 'judge', 'critique', 'sampleTurns', 'diverge', 'expand', 'talk', 'scribe', 'ghostPlan', 'ghostTurn', 'ghostWrap', 'ghostShape', 'ghostDraft'] as const) {
+    for (const m of ['interview', 'plotPoints', 'structures', 'cards', 'write', 'voice', 'reviseLines', 'humanise', 'extract', 'reviseCard', 'reviseProse', 'read', 'continuity', 'judge', 'critique', 'sampleTurns', 'diverge', 'expand', 'talk', 'scribe', 'ghostPlan', 'ghostTurn', 'ghostWrap', 'ghostShape', 'ghostDraft', 'ghostRevise'] as const) {
       const base = (overrides[m] as ((i: unknown) => Promise<unknown>) | undefined) ?? self[m].bind(this);
       self[m] = (i: unknown) => {
         this.calls.push({ method: m, input: i });

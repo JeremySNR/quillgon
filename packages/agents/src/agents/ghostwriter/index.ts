@@ -1,4 +1,4 @@
-import { GhostDraftInput, GhostDraftOutput, GhostPlanInput, GhostPlanOutput, GhostShapeInput, GhostShapeOutput, GhostTurnInput, GhostTurnOutput, GhostWrapInput, GhostWrapOutput, LADDER } from '@quillgon/core';
+import { GhostDraftInput, GhostDraftOutput, GhostReviseInput, GhostReviseOutput, GhostPlanInput, GhostPlanOutput, GhostShapeInput, GhostShapeOutput, GhostTurnInput, GhostTurnOutput, GhostWrapInput, GhostWrapOutput, LADDER } from '@quillgon/core';
 import { defineAgent, json } from '../define.js';
 
 const said = (h: { role: string; text: string }[]) => h.map((t) => `**${t.role === 'author' ? 'Author' : 'You'}:** ${t.text}`).join('\n\n');
@@ -108,6 +108,29 @@ export const ghostDraft = defineAgent({
       i.voice_samples ? `## The author's own words, as spoken in interviews\n${i.voice_samples}` : '',
       i.voice_chapter ? `## The chapter that set the voice (match it)\n${i.voice_chapter}` : '',
       i.previous_ending ? `## How the previous chapter ended\n${i.previous_ending}` : '',
+      i.style_rules.length ? json('House style', i.style_rules) : '',
+      i.hard_rules.length ? json('Never', i.hard_rules) : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
+});
+
+export const ghostRevise = defineAgent({
+  name: 'ghostwriter',
+  task: 'revise',
+  input: GhostReviseInput,
+  output: GhostReviseOutput,
+  maxTokens: 24000,
+  render: (i) =>
+    [
+      `# Revise chapter: ${i.chapter.title} (round ${i.chapter.round + 1})`,
+      `Narrator: ${i.narrator}.`,
+      i.feedback ? `## What the author said about the draft\n${i.feedback}` : '## What the author said about the draft\n(nothing beyond the answers to your notes)',
+      ...i.scenes.map((sc) => [`## Scene ${sc.id}: ${sc.title}`, sc.prose, sc.notes.length ? json(`Notes on ${sc.id}`, sc.notes) : ''].filter(Boolean).join('\n\n')),
+      json('The stories', i.stories),
+      i.verbatim.length ? json('Keep these word for word', i.verbatim) : '',
+      i.voice_notes.length ? json('How the author talks', i.voice_notes) : '',
+      i.decisions.length ? json('Already settled (do not reopen)', i.decisions) : '',
       i.style_rules.length ? json('House style', i.style_rules) : '',
       i.hard_rules.length ? json('Never', i.hard_rules) : '',
     ]

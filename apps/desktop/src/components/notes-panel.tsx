@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Check, Clock, MessageSquareText, X } from 'lucide-react';
+import { Check, Clock, MessageSquareText, Wand2, X } from 'lucide-react';
 import { post } from '../lib/api';
 import { useApp } from '../lib/app';
 import type { MarginNote } from '../lib/types';
@@ -110,5 +110,45 @@ function NoteCard({ scene, note, onJump, onChanged }: { scene: string; note: Mar
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Say what is wrong in your own words ("too posh", "Dad wasn't like that"); the ghostwriter reads
+ * back a plan and proposes changes passage by passage, using your answers to the notes too.
+ */
+export function ReviseBox({ scene }: { scene: string }) {
+  const { project: p, job, go, refresh } = useApp();
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const textRef = useRef(text);
+  textRef.current = text;
+  const dictation = useDictation({ target: useMemo(() => fieldTarget(() => ref.current, () => textRef.current, setText), []), long: true });
+  const chapter = p?.structure.acts.flatMap((a) => a.chapters).find((c) => c.scenes.includes(scene));
+  if (!chapter || p?.book.life.pen === 'interviewer') return null;
+  const revise = async () => {
+    setBusy(true);
+    try {
+      await job(`/life/chapters/${chapter.id}/revise`, { feedback: text }, 'Revising');
+      await refresh();
+      go('revision', chapter.id);
+    } catch {
+      // reported by job()
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <div className="eyebrow">Anything else about this chapter?</div>
+      <textarea ref={ref} className="textarea" rows={2} value={text} onChange={(e) => setText(e.target.value)} placeholder="It’s too posh. Dad wasn’t like that…" aria-label="What to change" />
+      <div className="btn-row">
+        <MicButton dictation={dictation} label="Talk" compact />
+        <Button size="sm" variant="primary" icon={<Wand2 />} disabled={busy} onClick={revise}>
+          {busy ? 'Revising…' : text.trim() ? 'Revise' : 'Revise with my answers'}
+        </Button>
+      </div>
+    </>
   );
 }
