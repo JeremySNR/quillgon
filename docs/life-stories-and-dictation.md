@@ -384,6 +384,51 @@ renderer: getUserMedia → AudioWorklet (16 kHz mono) → Silero VAD
 - dictionary-term hit rate;
 - for memoir, the share of drafted sentences that trace back to a memory.
 
+## Part 3: Where it sits in the UI
+
+**Recommendation:** life stories are a core part of Quillgon, chosen per book when the book is created. They are not a top-level mode switch, and not a separate product.
+
+**Why not a mode tab in the top bar:**
+- A book is never both a novel and a memoir, so a switch you can flip mid-book has nothing sensible to show.
+- It would also mean two navigation trees to keep in sync, test and screenshot.
+
+**Why not a separate area:**
+- It would duplicate the parts that carry the value: the editor, sync, ripples and history.
+
+**How it works:**
+- The welcome screen asks three things:
+  - **What are you writing?** A novel, a life story or a memoir.
+  - **Whose story is it?** Mine, or someone else's.
+  - **Who is it for?** Family, or publishing.
+- The kind is shown beside each book under "Open a book".
+- The shell stays as it is: top bar, search, command palette, status bar, branches and focus mode.
+- The sidebar adapts to the kind:
+
+| Novel | Life story | |
+| --- | --- | --- |
+| Writing desk | Writing desk | Adapted: counts memories and years covered; the next step is often the biographer's question |
+| | **Memories** | New: recordings, transcripts and photos, with the biographer, voice first |
+| Story planning | Shaping the book | Adapted: same stepper, with steps Purpose, Gather, Timeline, Shape, Chapters, Prose, Review |
+| Manuscript | Manuscript | Same |
+| | **Timeline** | New: years along the axis with age beneath, fuzzy dates as bars, gaps shaded and turned into questions |
+| Characters | People | Adapted: relationship, living, real name or pseudonym, consent |
+| Threads | Themes | Adapted: the same horizontal chart |
+| Ripple review | Ripple review | Same |
+| Reader report | Before you share | Adapted and new: reader report without twists, plus unsourced claims, consent and the author's note |
+
+**What is hidden in a life-story book:**
+- the idea board's personas;
+- the "how predictable is this turn?" check;
+- twist verdicts;
+- the setups ledger.
+
+**The scene editor changes least.** It gains three things:
+- a microphone (hold a key to dictate at the cursor);
+- a source marker per paragraph that plays the recording behind it;
+- a wavy underline on claims no memory supports. This reuses the style-check decorations in `prose-editor.tsx`.
+
+**Dictation belongs to every kind of book.** It works the same everywhere: in the editor, the thinking partner, card fields and Memories. Its settings are a new Voice tab in Settings.
+
 ## Suggested order
 
 1. **Dictation into the existing app**, novel mode, bursts only:
