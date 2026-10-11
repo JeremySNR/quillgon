@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Loader2, Mic, Square } from 'lucide-react';
 import { post } from '../lib/api';
 import { useApp } from '../lib/app';
@@ -41,14 +42,15 @@ export function fieldTarget(el: () => HTMLTextAreaElement | HTMLInputElement | n
       const v = value();
       const start = node?.selectionStart ?? v.length;
       const end = node?.selectionEnd ?? start;
-      set(v.slice(0, start) + text + v.slice(end));
-      requestAnimationFrame(() => node?.setSelectionRange(start + text.length, start + text.length));
+      // Commit before the next chained segment reads context(), matching CodeMirror's sync path.
+      flushSync(() => set(v.slice(0, start) + text + v.slice(end)));
+      node?.setSelectionRange(start + text.length, start + text.length);
       let current = text;
       return (replacement) => {
         const now = value();
         const at = now.indexOf(current, Math.max(0, start - 2));
         if (at < 0) return;
-        set(now.slice(0, at) + replacement + now.slice(at + current.length));
+        flushSync(() => set(now.slice(0, at) + replacement + now.slice(at + current.length)));
         current = replacement;
       };
     },
@@ -102,7 +104,7 @@ export function useDictation({ target, scene = null, long = false, session, onTe
   );
 
   const start = useCallback(async () => {
-    if (rec.current || !ready) return;
+    if (rec.current || pending.current || !ready) return;
     if (!Recorder.supported()) return fail('Dictation unavailable')(new Error('This window cannot use a microphone.'));
     const r = new Recorder({ onLevel: setLevel, ...(long ? { onSegment: (wav) => send(wav) } : {}) });
     rec.current = r;
@@ -118,16 +120,23 @@ export function useDictation({ target, scene = null, long = false, session, onTe
 
   const stop = useCallback(async () => {
     const r = rec.current;
-    if (!r) return;
-    rec.current = null;
-    const last = await r.stop();
-    if (last) {
+    if (r) {
+      rec.current = null;
+      // Leave listening immediately so a second click cannot start another capture mid-flush.
       setState('tidying');
-      send(last.wav);
-    } else if (!pending.current) setState('idle');
+      const last = await r.stop();
+      if (last) send(last.wav);
+      else if (!pending.current) setState('idle');
+    }
+    // Wait for every queued segment to land (or fail) before callers snapshot the field.
+    await chain.current;
   }, [send]);
 
-  const toggle = useCallback(() => (rec.current ? stop() : start()), [start, stop]);
+  const toggle = useCallback(() => {
+    if (rec.current) return stop();
+    if (pending.current) return;
+    return start();
+  }, [start, stop]);
   useEffect(() => () => void rec.current?.stop(), []);
   return { state, level, start, stop, toggle, ready, reason: project?.dictation?.reason, local: !!project?.dictation?.local };
 }

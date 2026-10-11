@@ -174,30 +174,43 @@ function SessionView({ id }: { id: string }) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const textRef = useRef(text);
   textRef.current = text;
+  const heardRef = useRef(heard);
+  heardRef.current = heard;
   const log = useRef<HTMLDivElement>(null);
 
   const load = useCallback(() => get<Session>(`/sessions/${id}`).then(setS, fail('Could not load the session')), [id, fail]);
   useEffect(() => void load(), [load]);
   useEffect(() => log.current?.scrollTo({ top: log.current.scrollHeight, behavior: 'smooth' }), [s?.turns.length, pending]);
 
-  const onText = useCallback((r: DictateResponse) => setHeard((h) => ({ raw: [...h.raw, r.raw], audio: r.audio ? [...h.audio, r.audio] : h.audio, seconds: h.seconds + r.seconds })), []);
+  const onText = useCallback((r: DictateResponse) => {
+    const h = heardRef.current;
+    const next = { raw: [...h.raw, r.raw], audio: r.audio ? [...h.audio, r.audio] : h.audio, seconds: h.seconds + r.seconds };
+    heardRef.current = next;
+    setHeard(next);
+  }, []);
   const ended = !!s?.ended;
   const target = useMemo(() => fieldTarget(() => inputRef.current, () => textRef.current, setText), []);
   const dictation = useDictation({ target: ended ? null : target, long: true, session: id, onText });
 
   const send = async (signal: string | null = null) => {
-    const message = text.trim();
-    if ((!message && !signal) || pending || !s) return;
-    if (dictation.state === 'listening') await dictation.stop();
+    if (pending || !s) return;
+    // Finish the mic and wait for every in-flight segment so text/heard include the latest words.
+    if (dictation.state !== 'idle') await dictation.stop();
+    const message = textRef.current.trim();
+    if (!message && !signal) return;
     setPending(message || SIGNALS.find((x) => x.signal === signal)?.label || '');
     setText('');
-    const h = heard;
+    textRef.current = '';
+    const h = heardRef.current;
     setHeard({ raw: [], audio: [], seconds: 0 });
+    heardRef.current = { raw: [], audio: [], seconds: 0 };
     try {
       setS(await job<Session>(`/sessions/${id}/answer`, { text: message, signal, raw: h.raw.join(' ') || null, audio: h.audio, seconds: h.seconds }, 'The ghostwriter'));
     } catch {
       setText(message); // nothing said is lost to a failed call
+      textRef.current = message;
       setHeard(h);
+      heardRef.current = h;
     } finally {
       setPending(null);
       inputRef.current?.focus();
@@ -205,7 +218,7 @@ function SessionView({ id }: { id: string }) {
   };
   const undo = (turn: number) => post<Session>(`/sessions/${id}/undo`, { turn }).then((x) => (setS(x), refresh()), fail('Could not undo'));
   const end = async () => {
-    if (dictation.state === 'listening') await dictation.stop();
+    if (dictation.state !== 'idle') await dictation.stop();
     setS(await job<Session>(`/sessions/${id}/end`, {}, 'Closing the session'));
   };
 
@@ -260,7 +273,9 @@ function SessionView({ id }: { id: string }) {
               </div>
             ) : (
               <div key={i} className={cx('author-turn', t.off_record && 'off')}>
-                {t.audio.length > 0 && <audio controls preload="none" src={audioUrl(s.id, t.audio[0])} aria-label="Your recording" />}
+                {t.audio.map((file, j) => (
+                  <audio key={file} controls preload="none" src={audioUrl(s.id, file)} aria-label={t.audio.length > 1 ? `Your recording, part ${j + 1}` : 'Your recording'} />
+                ))}
                 <div>{t.off_record ? <em className="faint">Off the record.</em> : t.text}</div>
                 {t.seconds > 0 && <div className="faint small">{Math.round(t.seconds)} s recorded</div>}
               </div>
