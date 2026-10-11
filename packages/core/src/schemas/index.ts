@@ -59,6 +59,7 @@ export const AgentName = z.enum([
   'judge',
   'scribe',
   'ghostwriter',
+  'interviewee',
 ]);
 export type AgentName = z.infer<typeof AgentName>;
 
@@ -89,6 +90,8 @@ export const DEFAULT_AGENT_TIERS: Record<AgentName, ModelTier> = {
   continuity: 'small',
   scribe: 'small',
   ghostwriter: 'frontier',
+  // The eval's simulated interviewee: ideally another vendor than the ghostwriter, like the reader.
+  interviewee: 'reader',
 };
 
 export const PipelineStage = z.enum(['idea', 'intent', 'plot-points', 'structure', 'cards', 'prose', 'complete']);

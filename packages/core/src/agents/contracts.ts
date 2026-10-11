@@ -782,6 +782,39 @@ export const GhostReviseOutput = z.object({
 });
 export type GhostReviseOutput = z.infer<typeof GhostReviseOutput>;
 
+// ------------------------------------------------------------------ simulated interviewee (evals)
+
+export const LifeFact = z.object({
+  id: Id,
+  /** In the person's own words. */
+  text: z.string(),
+  /** What it is about, for the interviewer's first broad questions ("work", "childhood"). */
+  topic: z.string(),
+  /** How deep it sits: the gist comes out first; the rest only to a good follow-up. */
+  tier: z.enum(['gist', 'instance', 'people', 'senses', 'words', 'feeling', 'meaning']),
+  /** Words that show the fact was drawn out (any half of them in what was filed). */
+  keywords: z.array(z.string()).min(1),
+  when: z.string().default(''),
+  /** Said in passing: a good interviewer follows it up. */
+  surprising: z.boolean().default(false),
+});
+export type LifeFact = z.infer<typeof LifeFact>;
+
+export const IntervieweeInput = z.object({
+  narrator: z.string(),
+  born: z.string().default(''),
+  /** The hidden life. The person reveals facts only when asked about them. */
+  facts: z.array(LifeFact),
+  /** Facts already told. */
+  told: z.array(Id).default([]),
+  history: z.array(z.object({ role: z.enum(['ghostwriter', 'author']), text: z.string() })).default([]),
+  question: z.string(),
+});
+export type IntervieweeInput = z.infer<typeof IntervieweeInput>;
+
+export const IntervieweeOutput = z.object({ answer: z.string().min(1), told: z.array(Id).default([]) });
+export type IntervieweeOutput = z.infer<typeof IntervieweeOutput>;
+
 // ------------------------------------------------------------------ the suite the core calls
 
 export interface CallInfo {
@@ -829,6 +862,8 @@ export interface AgentSuite {
   ghostDraft(input: GhostDraftInput): Promise<GhostDraftOutput>;
   /** Life stories: a revision round: the author's feedback and answers, as a plan and span edits. */
   ghostRevise(input: GhostReviseInput): Promise<GhostReviseOutput>;
+  /** Evals: a simulated person answering the ghostwriter from a hidden life. */
+  interviewee(input: IntervieweeInput): Promise<IntervieweeOutput>;
 }
 
 export const Contracts = {
@@ -854,6 +889,7 @@ export const Contracts = {
   reader: { input: ReaderInput, output: ReaderOutput },
   continuity: { input: ContinuityInput, output: ContinuityOutput },
   scribe: { input: ScribeInput, output: ScribeOutput },
+  interviewee: { input: IntervieweeInput, output: IntervieweeOutput },
   ghostwriter: {
     plan: { input: GhostPlanInput, output: GhostPlanOutput },
     turn: { input: GhostTurnInput, output: GhostTurnOutput },

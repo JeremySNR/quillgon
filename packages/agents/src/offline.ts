@@ -16,7 +16,7 @@ import type {
   StructureAlternative,
   StructureOutput,
 } from '@quillgon/core';
-import { cleanDictation, joinToCursor, EMPTY_LADDER, enoughForScene, LADDER, nextRung, quotedSpeech, RUNG_QUESTION, slugify, touchesOffLimits, yearOf, type GhostDraftOutput, type GhostPlanOutput, type GhostReviseOutput, type GhostShapeOutput, type GhostTurnOutput, type GhostWrapOutput, type Ladder } from '@quillgon/core';
+import { cleanDictation, joinToCursor, EMPTY_LADDER, enoughForScene, LADDER, nextRung, quotedSpeech, RUNG_QUESTION, slugify, touchesOffLimits, yearOf, type GhostDraftOutput, type GhostPlanOutput, type GhostReviseOutput, type GhostShapeOutput, type GhostTurnOutput, type GhostWrapOutput, type IntervieweeOutput, type Ladder } from '@quillgon/core';
 
 /**
  * A deterministic, model-free stand-in for every agent. It makes the whole app usable
@@ -168,6 +168,36 @@ export class OfflineSuite implements AgentSuite {
       step(`Ask you next time for a moment that shows what you meant: “${i.feedback.trim().slice(0, 80)}”.`, { kind: 'question', question: `You said: “${i.feedback.trim().slice(0, 120)}”. Can you tell me about a moment that shows it?` });
     if (!plan.length) step('Nothing to change: the answers so far need no edits.');
     return { plan, edits, resolved, notes: [] };
+  }
+
+  /**
+   * A deterministic person with a hidden life: a broad question gets the gist of the nearest
+   * topic; a follow-up that names the right kind of detail (one time, who, what you heard, what
+   * was said, how it felt, what it means) gets that detail, if it exists.
+   */
+  async interviewee(i: Parameters<AgentSuite['interviewee']>[0]): Promise<IntervieweeOutput> {
+    const q = i.question.toLowerCase();
+    const told = new Set(i.told);
+    const want: (typeof i.facts)[number]['tier'][] = [];
+    if (/one particular|one time|one day|remember one|a particular|in particular/.test(q)) want.push('instance');
+    if (/who was there|who else|who were/.test(q)) want.push('people');
+    if (/see and hear|hear|smell|picture it|what could you see|weather/.test(q)) want.push('senses');
+    if (/said|say to you|words/.test(q)) want.push('words');
+    if (/feel|felt/.test(q)) want.push('feeling');
+    if (/looking back|make of it|mean|understand now|why do you think/.test(q)) want.push('meaning');
+    const words = new Set(q.match(/[a-z]{4,}/g) ?? []);
+    const recent = i.history.filter((t) => t.role === 'author').slice(-2).map((t) => t.text.toLowerCase()).join(' ');
+    const topicOf = (f: (typeof i.facts)[number]) => f.topic.toLowerCase();
+    // The topic in play: named in the question, or the one the last answers were about.
+    const inPlay = i.facts.filter((f) => words.has(topicOf(f)) || f.keywords.some((k) => words.has(k.toLowerCase())) || (want.length && f.keywords.some((k) => recent.includes(k.toLowerCase()))));
+    let pick = inPlay.filter((f) => !told.has(f.id) && (want.length ? want.includes(f.tier) : f.tier === 'gist'));
+    if (!pick.length && !want.length) pick = i.facts.filter((f) => !told.has(f.id) && f.tier === 'gist' && (words.has(topicOf(f)) || !inPlay.length)).slice(0, 1);
+    pick = pick.slice(0, 2);
+    // Something surprising on the same topic slips out once, in passing.
+    const aside = i.facts.find((f) => f.surprising && !told.has(f.id) && pick.some((x) => x.topic === f.topic) && !pick.includes(f));
+    const out = aside ? [...pick, aside] : pick;
+    if (!out.length) return { answer: /was it|did it|were you|was he|was she/.test(q) ? "I don't remember that. I couldn't say." : "I don't really remember, to be honest.", told: [] };
+    return { answer: out.map((f) => f.text).join(' '), told: out.map((f) => f.id) };
   }
 
   async ghostWrap(i: Parameters<AgentSuite['ghostWrap']>[0]): Promise<GhostWrapOutput> {
@@ -658,7 +688,7 @@ export class ScriptedSuite extends OfflineSuite {
   constructor(overrides: Partial<AgentSuite> = {}) {
     super();
     const self = this as unknown as Record<string, (i: unknown) => Promise<unknown>>;
-    for (const m of ['interview', 'plotPoints', 'structures', 'cards', 'write', 'voice', 'reviseLines', 'humanise', 'extract', 'reviseCard', 'reviseProse', 'read', 'continuity', 'judge', 'critique', 'sampleTurns', 'diverge', 'expand', 'talk', 'scribe', 'ghostPlan', 'ghostTurn', 'ghostWrap', 'ghostShape', 'ghostDraft', 'ghostRevise'] as const) {
+    for (const m of ['interview', 'plotPoints', 'structures', 'cards', 'write', 'voice', 'reviseLines', 'humanise', 'extract', 'reviseCard', 'reviseProse', 'read', 'continuity', 'judge', 'critique', 'sampleTurns', 'diverge', 'expand', 'talk', 'scribe', 'ghostPlan', 'ghostTurn', 'ghostWrap', 'ghostShape', 'ghostDraft', 'ghostRevise', 'interviewee'] as const) {
       const base = (overrides[m] as ((i: unknown) => Promise<unknown>) | undefined) ?? self[m].bind(this);
       self[m] = (i: unknown) => {
         this.calls.push({ method: m, input: i });

@@ -133,6 +133,7 @@ A command palette for every scene, character and thread, focus mode, and **keybo
 | Your manuscript lives in plain files you own, under version control | ❌ | ✅ |
 | Generates a cover from the story itself | ❌ | ✅ |
 | Judges compare both orderings to cancel position bias | ❌ | ✅ |
+| Interviews you and ghostwrites your life story, without inventing it | ❌ | ✅ |
 
 ## 📸 Take the tour
 
@@ -263,6 +264,33 @@ flowchart LR
 
 The **what-if** menu in the top bar creates, compares and merges git branches, so you can try a different ending without losing the one you have.
 
+## 📖 Life stories and memoirs
+
+Quillgon also writes true stories. Choose **A life story** or **A memoir** when you create a book (or `quillgon init --life`), and it works like a professional ghostwriter: it interviews you, drafts the chapters itself, and goes back and forth with you on revisions. The left-hand menu changes to suit (Sessions, Shaping the book, Timeline, People, Themes, Ghostwriter’s notebook, Before you share), and the novel tools that have no meaning for a true story (twists, plot points) step aside. Everything still lives in the same git repo of plain files.
+
+- **Interview sessions.** Each session opens with an agenda and a reason for each item (a gap in the years, a story with no particular moment yet, a promise to come back). You answer by talking or typing. The ghostwriter asks one open question at a time and labels the technique it is using. It moves each story up a ladder (what happened, one particular time, who was there, what it looked and sounded like, what was said, how it felt then, what it means now) and chases surprising or vague answers. What you say is filed as you go (people, stories, dates, questions for later), every change is listed under the reply, and **Undo** takes it back.
+- **What it will not do.** Code checks every question before you see it. A question that suggests a detail you never gave (“Was it raining?”) is refused, because suggesting details and asking you to confirm them can create false memories. So is anything on your off-limits list. “I don't remember” is a full answer, and it moves on. Answers marked off the record are never sent to the model. Other people's versions are kept as theirs and never merged into yours.
+- **Chapters with margin notes.** Each chapter has its own stage: Gathering, Ready, Draft, Your notes, Revising, Approved. Chapter 1 is the voice sample. Where the material runs out, the draft leaves a `[TK: …]` gap instead of guessing. Margin notes mark gaps, two tellings that disagree, thin passages and voice choices. Every sentence is checked against what you actually said, and anything nothing supports is underlined. Answer a note by holding the mic.
+- **Revision rounds.** Say what is wrong in your own words (“it's too posh”, “Dad wasn't like that”). The ghostwriter reads back a numbered plan, then proposes changes passage by passage for you to accept or reject. It may push back once; you decide. Feedback that applies to the whole book becomes a style rule, and each applied round is one git commit. Approving a chapter locks it.
+- **Ghostwriter's notebook.** What it has learned about you (how you talk, what is off limits, what it promised to come back to, what you have settled) is an editable page, not a hidden prompt.
+- **Timeline and Before you share.** The timeline shows your life by year with your age beneath, and shades empty stretches so you can ask to be asked about them. Changing a date carries it into the stories and scenes told from it. Before you share lists claims with no source, open gaps, real people who have not agreed to appear, and sensitive stories, then writes an author's note from your choices. That list is information, not legal advice.
+
+Session recordings stay in the book folder under `audio/` and are kept out of git.
+
+### 🎙️ Dictation
+
+Every prose editor, note and answer box has a microphone: click it, or hold `Alt D` to talk. Speech is recorded in the app, split at pauses, transcribed, and then tidied by a small model that removes fillers and false starts without changing your words. If the tidy-up adds a name or rewrites a sentence, the raw transcript is kept instead. Names from your book (people, places) are passed to the recogniser so it spells them right. Choose the speech model under **Settings → Voice**:
+
+| Speech model | Setup |
+| --- | --- |
+| OpenAI (`gpt-4o-mini-transcribe`) | `OPENAI_API_KEY`, as for writing |
+| Local whisper.cpp, nothing leaves your machine | Set `QUILLGON_WHISPER_CMD` to the `whisper-cli` binary and `QUILLGON_WHISPER_MODEL` to a ggml model file |
+| Offline | A placeholder transcript (`QUILLGON_OFFLINE_TRANSCRIPT` sets its text), for trying the workflow |
+
+In the desktop app, only the app's own pages can use the microphone. On macOS the system asks for permission the first time.
+
+The research behind this mode, covering how memoirs are structured, how ghostwriters work, and how Wispr Flow-style dictation is built, is in [docs/life-stories-and-dictation.md](docs/life-stories-and-dictation.md).
+
 ## 💻 CLI
 
 The same engine, headless. `quillgon` lives at `packages/cli/bin/quillgon.mjs`; `pnpm quillgon <command>` also works.
@@ -272,6 +300,8 @@ The same engine, headless. `quillgon` lives at `packages/cli/bin/quillgon.mjs`; 
 
 ```
 quillgon init <dir> [--title T] [--words 12000] [--offline]
+        [--life | --memoir] [--about "Name"] [--born 1948]   a true story; --about for someone else's life
+quillgon session [--minutes 30] [--speaker Name]   life stories: an interview with your ghostwriter
 quillgon validate [dir]                 schema + reference check with file/field-precise errors
 quillgon status | sync | log | costs
 quillgon spark ["seed"] [--genre G]     idea → premise: diverge, keep/bin, logline → synopsis → cast
@@ -291,6 +321,7 @@ quillgon branch [name | switch <b> | merge <b> | delete <b>]
 quillgon serve [--dir book] [--port 4317]
 quillgon eval [--offline|--codex] [--limit N] [--only a,b] [--all-scenes]   score the frozen premise set
 quillgon eval compare <runA> <runB>     judge run B's key scenes against run A's, both ways
+quillgon eval-life [--offline|--codex] [--limit N] [--sessions N] [--turns N]   score the ghostwriter on simulated lives
 ```
 
 </details>
@@ -334,6 +365,7 @@ The UI design follows the research brief in [docs/design.md](docs/design.md); th
 ```bash
 pnpm test           # unit, integration, CLI and UI tests, no model calls
 pnpm e2e            # drives the real UI in Chromium (offline models)
+pnpm e2e:life       # the life-story workflow in Chromium, with a fake microphone
 pnpm scale-check    # prompt sizes and write latency on a 96-scene book
 pnpm quillgon eval --offline --limit 2   # the eval harness, offline (see below)
 pnpm screenshots    # regenerates docs/screenshots
@@ -355,6 +387,18 @@ pnpm test:live      # live-model tests; needs QUILLGON_LIVE=1 and an API key
 
 Results and a report go to `evals/runs/<id>/`, with the generated books. To test a change, run the set before and after it, then `quillgon eval compare <before> <after>`: every key scene is judged against its counterpart in both orders, a split verdict counts as a tie, and the result is a win rate and the Elo difference it implies. A live run calls the model for every gate, so start with `--limit`. Pass `--record <dir>` to keep the model responses and `--replay <dir>` to re-score them without new calls.
 
+`quillgon eval-life` does the same for the ghostwriter. Each life in `evals/lives.yaml` is a simulated person with hidden facts, revealed only to questions that earn them. The ghostwriter interviews each person (two sessions of ten turns by default), shapes the book and drafts every chapter. The run is scored on:
+
+| Measure | Better |
+| --- | --- |
+| Hidden facts drawn out, and deeper facts beyond the gist | higher |
+| Follow-up on surprising answers | higher |
+| Questions refused by the code checks | lower |
+| Leading or off-limits questions that reached the person | always 0 (the run fails otherwise) |
+| Drafted sentences with no source in what was said | lower |
+
+An offline run checks the plumbing only; the scores mean something with live models.
+
 | Phase | Status |
 | --- | --- |
 | 1. Schemas and store | ✅ Fixture validates; 12 kinds of corruption reported with exact file and field; index rebuild matches its snapshot |
@@ -374,7 +418,7 @@ Results and a report go to `evals/runs/<id>/`, with the generated books. To test
 <br>
 
 - **OpenAI Responses API and Codex SDK.** Quillgon owns the story graph and review workflow; each writing agent requests a structured result through the official OpenAI SDK. A hosted Agents API execution environment is unnecessary for these calls. The local Codex SDK provides a separate path for users signing in with ChatGPT.
-- **Electron runs the core as a separate process.** From a checkout (`pnpm desktop`) it is a plain Node process running the CLI through tsx, so `better-sqlite3` needs no Electron rebuild; it needs `node` on your `PATH` (or set `QUILLGON_NODE`). An installed app runs the bundled server with Electron's own Node (`ELECTRON_RUN_AS_NODE`) and a `better-sqlite3` rebuilt for it. Either way the window only shows the server's own pages: other navigation is blocked, web and mail links open in your browser, permission requests are denied, and if the server stops the app offers to restart it.
+- **Electron runs the core as a separate process.** From a checkout (`pnpm desktop`) it is a plain Node process running the CLI through tsx, so `better-sqlite3` needs no Electron rebuild; it needs `node` on your `PATH` (or set `QUILLGON_NODE`). An installed app runs the bundled server with Electron's own Node (`ELECTRON_RUN_AS_NODE`) and a `better-sqlite3` rebuilt for it. Either way the window only shows the server's own pages: other navigation is blocked, web and mail links open in your browser, permission requests are denied (except the microphone, for the app's own pages), and if the server stops the app offers to restart it.
 - **Reader prediction matching is mechanical** (embedding similarity, synonym folding, and the prediction must name the right person). A cheap model judge would be more accurate and is an easy swap.
 - **Two small additions to the data model:** `scenes/<id>/facts.yaml` holds extracted facts, so the index can rebuild from files, and an optional `locations.yaml` / `facts.yaml` glossary gives ids human-readable names.
 

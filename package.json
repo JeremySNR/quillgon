@@ -21,6 +21,7 @@
     "fixture": "tsx scripts/build-fixture.ts",
     "e2e": "pnpm build && tsx scripts/e2e-ui.ts",
     "e2e:covers": "pnpm build && tsx scripts/e2e-covers.ts",
+    "e2e:life": "pnpm build && tsx scripts/e2e-life.ts",
     "screenshots": "pnpm build && tsx scripts/screenshots.ts",
     "test:ui-refresh": "pnpm build && tsx scripts/ui-refresh.ts",
     "site:build": "node apps/site/build.mjs",

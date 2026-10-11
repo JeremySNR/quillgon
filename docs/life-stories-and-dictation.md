@@ -614,6 +614,32 @@ Extend `quillgon eval` with **simulated interviewees**. Each is a model given a 
    - living-people review;
    - family and published editions as branches.
 
+## What was built
+
+Steps 1 to 5 of the suggested order are in the code, with these differences and gaps.
+
+| Step | Built | Where |
+| --- | --- | --- |
+| 1. Dictation | Mic in every prose editor, note and answer box; hold `Alt D`; pause-split 16 kHz recording; OpenAI `gpt-4o-mini-transcribe`, local whisper.cpp or an offline placeholder; a dictionary from the book's names; a scribe agent for tidy-up, with `checkCleanup` keeping the raw words when the tidy-up adds a name or rewrites; Settings → Voice; macOS microphone entitlement | `packages/core/src/dictation.ts`, `packages/server/src/dictation.ts`, `apps/desktop/src/components/dictate.tsx`, `apps/desktop/src/lib/recorder.ts` |
+| 2. Sessions | `Book.kind` (novel, life story, memoir) and the life settings; a separate shared prompt for true stories; agendas with reasons; the story ladder; probe triggers; the leading-question and off-limits checks (one retry, then a safe open question); "I don't remember", "Move on", "Off the record" and "This is hard"; filing into people, stories, timeline, questions and notebook as undoable changes; other people's versions kept separate; `quillgon session` | `packages/core/src/engine/interview.ts`, `packages/core/src/life.ts`, `packages/agents/src/agents/ghostwriter/`, `apps/desktop/src/views/sessions.tsx` |
+| 2. Eval | Simulated interviewees with hidden facts; `quillgon eval-life` scores facts drawn out, depth, follow-up on surprises, refused, leading and off-limits questions, and unsourced sentences | `evals/lives.yaml`, `packages/core/src/eval-life.ts`, `packages/agents/src/agents/interviewee/` |
+| 3. Drafting | Shapes proposed by the ghostwriter (by decade offline); per-chapter stages; Chapter 1 as the voice sample; drafts from the stories only, with `[TK: …]` gaps instead of guesses; margin notes (gap, two versions, thin, voice, no source) anchored in the text; the source check | `packages/core/src/engine/lifebook.ts`, `apps/desktop/src/views/shaping.tsx`, `apps/desktop/src/components/notes-panel.tsx` |
+| 4. Revision | Free-form feedback, then a numbered plan, then per-passage changes to accept or reject; one pushback per point, which the author can overrule (recorded in the notebook as settled); book-wide feedback becomes style rules; edits that would change a quote are refused; one commit per round; approval locks the chapter | `lifebook.ts` `revise` / `applyRevision`, `apps/desktop/src/views/revision.tsx` |
+| 5. Sharing | Claims with no source, open gaps and notes, people with no consent decision, sensitive stories in the text, unapproved chapters; an author's note written from the author's choices, put at the front of the export | `lifebook.ts` `shareReview` / `authorsNote`, `apps/desktop/src/views/share.tsx` |
+
+Also built: the timeline view (by year and age, shaded gaps, "Ask me about these years"; moving a date carries it into stories and scenes and leaves a note), and the editable ghostwriter's notebook.
+
+**Changed from the plan.** Session audio is kept in the book folder under `audio/` but is **not** committed: recordings are large and personal, and a book repo is easy to push somewhere by accident. The transcripts in `sessions/` are versioned.
+
+**Not built yet:**
+- Parakeet and other local models beyond whisper.cpp, and streaming transcription (dictation is transcribed per pause).
+- Speaker diarisation. Another speaker is named by hand.
+- Family and published editions as branches. The what-if branches work, but there is no edition-specific flow.
+- Phone or companion-page interviews, and photos as prompts (see Open questions).
+- A live-model run of `eval-life`. Offline runs check the plumbing only.
+
+**Verification.** Unit and integration tests cover the dictation clean-up and guardrails, the life checks, interviews (filing, undo, refusal and retry, off the record, other speakers), drafting, notes, revision, the timeline and the eval. `scripts/e2e-life.ts` (`pnpm e2e:life`) drives the whole workflow in Chromium with a fake microphone, and the novel e2e still passes.
+
 ## Open questions
 
 - **Who is speaking?** Should one book allow several narrators? Family members recording their own memories (Meminto does this) means speaker labels, and possibly diarisation; Sortformer comes with transcribe.cpp.

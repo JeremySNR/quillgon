@@ -702,6 +702,37 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
     },
   },
 
+  'eval-life': {
+    help: 'eval-life [--offline|--codex] [--limit N] [--only a,b] [--sessions N] [--turns N]   Interview the frozen lives (evals/lives.yaml) and score the ghostwriter',
+    async run() {
+      const { runLifeEvals } = await import('./eval-life.js');
+      const { loadLives } = await import('@quillgon/core');
+      const here = path.dirname(fileURLToPath(import.meta.url));
+      const models = flags.offline ? 'offline' : flags.codex ? 'codex' : 'openai';
+      const lives = (flags.lives as string) ?? path.resolve(here, '../../../evals/lives.yaml');
+      const only = flags.only ? String(flags.only).split(',') : undefined;
+      const n = Math.min(Number(flags.limit) || Infinity, loadLives(lives).filter((l) => !only || only.includes(l.id)).length);
+      if (models !== 'offline' && !yes && !(await confirm(`Interview ${n} simulated life/lives with live models (${models})? Each one runs sessions, then drafts every chapter.`, false))) return;
+      const { dir, run } = await runLifeEvals({
+        lives,
+        out: (flags.out as string) ?? path.resolve(here, '../../../evals/runs'),
+        models,
+        only,
+        limit: Number(flags.limit) || undefined,
+        sessions: Number(flags.sessions) || undefined,
+        turns: Number(flags.turns) || undefined,
+        progress: (l) => say(dim(l)),
+      });
+      const s = run.summary;
+      say(bold(`\nEval ${run.id}: ${s.lives} of ${run.lives.length} lives`));
+      say(`  drawn out ${s.elicited ?? '—'}  depth ${s.depth ?? '—'}  follow-up ${s.followup_rate ?? '—'}  refused/turn ${s.refused_rate ?? '—'}`);
+      say(`  leading asked ${s.leading_asked}  off limits asked ${s.off_limits_asked}  unsourced sentences ${s.invented_rate ?? '—'}`);
+      if (models === 'offline') say(yellow('  Offline runs check the plumbing; use live models to score the ghostwriter.'));
+      say(dim(`  ${path.join(dir, 'report.md')}`));
+      if (run.lives.some((l) => l.error) || s.leading_asked || s.off_limits_asked) process.exitCode = 1;
+    },
+  },
+
   serve: {
     help: 'serve [--port 4317]   Run the local API (and the UI if built)',
     async run() {
