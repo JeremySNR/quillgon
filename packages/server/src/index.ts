@@ -463,6 +463,40 @@ export class NovelServer {
       if (!data) throw new HttpError(404, 'recording not found');
       return new Binary('audio/wav', data);
     });
+    // --- a life story's chapters
+    const lb = (e: Engine) => e.life;
+    const chapterView = (e: Engine) =>
+      lb(e).chapters().map((c) => ({
+        ...c,
+        stage: lb(e).stageOf(c.id),
+        stories: lb(e).storiesOf(c.id).map((st) => st.id),
+        open_notes: lb(e).openNotes(c.id).length,
+        words: c.scenes.reduce((n, sid) => n + (e.store.project.scenes.get(sid)?.prose?.meta.word_count ?? 0), 0),
+      }));
+    r('GET', '/api/life/chapters', ({ engine }) => ({ chapters: chapterView(engine), proposal: lb(engine).proposals.get('shape') }));
+    r('POST', '/api/life/shape/propose', ({ engine, body, server }) => server.job('shape', () => lb(engine).proposeShape(body.shape || undefined)));
+    r('POST', '/api/life/shape/accept', async ({ engine }) => (await lb(engine).acceptShape(), { chapters: chapterView(engine) }));
+    r('POST', '/api/life/shape/discard', ({ engine }) => (lb(engine).proposals.delete('shape'), { ok: true }));
+    r('POST', '/api/life/stories/:id/assign', async ({ engine, params, body }) => {
+      lb(engine).assignStory(params.id, body.chapter || null);
+      await engine.store.commit(`Move story ${params.id}`);
+      return { chapters: chapterView(engine) };
+    });
+    r('POST', '/api/life/chapters/:id/draft', ({ engine, params, server }) => server.job('draft', (progress) => lb(engine).draftChapter(params.id, progress)));
+    r('POST', '/api/life/chapters/:id/approve', async ({ engine, params }) => (await lb(engine).approve(params.id), { chapters: chapterView(engine) }));
+    r('POST', '/api/life/chapters/:id/reopen', async ({ engine, params }) => (await lb(engine).reopen(params.id), { chapters: chapterView(engine) }));
+    r('POST', '/api/scenes/:id/notes/:note', async ({ engine, params, body }) => {
+      const note = lb(engine).answerNote(params.id, params.note, { answer: typeof body.answer === 'string' ? body.answer : undefined, status: body.status });
+      await engine.store.commit(`Answer a note on ${params.id}`);
+      return note;
+    });
+    r('PUT', '/api/life/settings', async ({ engine, body }) => {
+      const life = engine.store.project.book.life;
+      engine.store.updateBook({ life: { ...life, ...body.life, narrator: life.narrator } });
+      await engine.store.commit('Edit life-story settings');
+      return engine.store.project.book.life;
+    });
+
     r('PUT', '/api/questions', async ({ engine, body }) => (engine.store.saveQuestions({ questions: body.questions }), await engine.store.commit('Edit questions'), engine.store.project.questions));
     r('PUT', '/api/notebook', async ({ engine, body }) => (engine.store.saveNotebook({ ...engine.store.project.notebook, ...body.notebook }), await engine.store.commit('Edit the ghostwriter’s notebook'), engine.store.project.notebook));
     r('PUT', '/api/stories/:id', async ({ engine, params, body }) => {

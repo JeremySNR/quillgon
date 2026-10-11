@@ -35,3 +35,4 @@ export * from './engine/ideation.js';
 export * from './dictation.js';
 export * from './life.js';
 export * from './engine/interview.js';
+export * from './engine/lifebook.js';

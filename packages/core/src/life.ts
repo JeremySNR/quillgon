@@ -155,3 +155,60 @@ export function lifeGaps(born: string, whens: string[], now = new Date().getFull
 export function quotedSpeech(text: string): string[] {
   return [...text.matchAll(/["“]([^"”]{3,200})["”]|'([^']{6,200})'(?=[\s,.!?]|$)/g)].map((m) => (m[1] ?? m[2]).trim());
 }
+
+// ------------------------------------------------------------------ truth: does the prose come from the material?
+
+const STOPWORDS = new Set(
+  'about above after again against also although always among another around because been before being below between both came cannot come could didn does doing done down during each even ever every from further gave give going gone got have having here hers herself himself into itself just know knew last like little made make many more most much must myself never next once only other ought ours over own quite rather really said same seem seemed shall should since some still such than that their them then there these they thing things think this those though through till together took toward under until upon very want went were what when where which while whom whose will with within without would year years your yours'.split(
+    ' ',
+  ),
+);
+
+/** A crude stem, enough to match "machines" with "machine" and "walked" with "walk". */
+export function stem(w: string): string {
+  return w
+    .toLowerCase()
+    .replace(/['’]s$/, '')
+    .replace(/(ies)$/, 'y')
+    .replace(/(ing|ed|es|s|ly)$/, '')
+    .replace(/(.)\1$/, '$1');
+}
+
+const contentStems = (t: string) => (t.match(/[\p{L}'’]{4,}/gu) ?? []).filter((w) => !STOPWORDS.has(w.toLowerCase())).map(stem);
+
+export interface Unsourced {
+  /** The sentence (or quotation) as it appears in the prose. */
+  text: string;
+  reason: 'no-source' | 'quote-changed';
+}
+
+/**
+ * Sentences of a draft that nothing the author said supports, and quotations that are not word
+ * for word what was said. Conservative: a sentence is flagged only when most of its content words
+ * appear nowhere in the material, so connective prose ("The next morning I went back") passes.
+ */
+export function unsourced(prose: string, material: string[], quotes: string[], max = 6): Unsourced[] {
+  const vocab = new Set(material.flatMap(contentStems));
+  const norm = (q: string) => q.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const known = quotes.map(norm);
+  const out: Unsourced[] = [];
+  for (const m of prose.matchAll(/["“]([^"”]{8,400})["”]/g)) {
+    const q = norm(m[1]);
+    if (known.some((k) => k === q || k.includes(q) || q.includes(k))) continue;
+    const words = contentStems(m[1]);
+    if (words.length >= 3) out.push({ text: m[0], reason: 'quote-changed' });
+  }
+  const plain = prose.replace(/\[TK:[^\]]*\]/g, ' ').replace(/["“][^"”]*["”]/g, ' ');
+  for (const sentence of plain.split(/(?<=[.!?])\s+/)) {
+    const words = contentStems(sentence);
+    if (words.length < 4) continue;
+    const found = words.filter((w) => vocab.has(w)).length / words.length;
+    if (found < 0.4) out.push({ text: sentence.trim(), reason: 'no-source' });
+  }
+  return out.slice(0, max);
+}
+
+/** The gap markers a draft left for the author ("[TK: the street]"). */
+export function gapMarkers(prose: string): string[] {
+  return [...prose.matchAll(/\[TK:[^\]]*\]/g)].map((m) => m[0]);
+}

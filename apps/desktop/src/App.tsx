@@ -14,6 +14,7 @@ import { HistoryView } from './views/history';
 import { SettingsView } from './views/settings';
 import { Covers } from './views/covers';
 import { Sessions } from './views/sessions';
+import { Shaping } from './views/shaping';
 import { cx, isMac, loadPref } from './lib/util';
 
 function Shell() {
@@ -41,7 +42,7 @@ function Shell() {
   const view = (() => {
     switch (route.view) {
       case 'build':
-        return <Build step={route.id} />;
+        return project.life ? <Shaping /> : <Build step={route.id} />;
       case 'outline':
         return <Outline />;
       case 'scene':

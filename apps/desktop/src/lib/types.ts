@@ -1,5 +1,6 @@
 import type {
   Book,
+  Chapter,
   Notebook,
   Question,
   Story,
@@ -98,6 +99,7 @@ export type {
   Story,
   Session,
   MarginNote,
+  Chapter,
 };
 
 export interface SceneSummary {
@@ -194,6 +196,8 @@ export interface SceneDetail {
   prev: string | null;
   next: string | null;
   states: { character: string; before: StateSnapshot | null; after: StateSnapshot | null }[];
+  /** The ghostwriter's margin notes (life stories). */
+  notes: MarginNote[];
 }
 
 export interface Job {

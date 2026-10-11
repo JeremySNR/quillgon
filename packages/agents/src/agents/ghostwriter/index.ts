@@ -1,4 +1,4 @@
-import { GhostPlanInput, GhostPlanOutput, GhostTurnInput, GhostTurnOutput, GhostWrapInput, GhostWrapOutput, LADDER } from '@quillgon/core';
+import { GhostDraftInput, GhostDraftOutput, GhostPlanInput, GhostPlanOutput, GhostShapeInput, GhostShapeOutput, GhostTurnInput, GhostTurnOutput, GhostWrapInput, GhostWrapOutput, LADDER } from '@quillgon/core';
 import { defineAgent, json } from '../define.js';
 
 const said = (h: { role: string; text: string }[]) => h.map((t) => `**${t.role === 'author' ? 'Author' : 'You'}:** ${t.text}`).join('\n\n');
@@ -67,6 +67,49 @@ export const ghostWrap = defineAgent({
       json('Agenda', i.agenda),
       i.stories.length ? json('Stories (depth 0..1)', i.stories) : '',
       `## The session\n${said(i.history)}`,
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
+});
+
+export const ghostShape = defineAgent({
+  name: 'ghostwriter',
+  task: 'shape',
+  input: GhostShapeInput,
+  output: GhostShapeOutput,
+  maxTokens: 10000,
+  render: (i) =>
+    [
+      '# Shape the book',
+      `Narrator: ${i.narrator}${i.born ? `, born ${i.born}` : ''}. About ${i.target_words.toLocaleString('en')} words.`,
+      i.about ? `What the book is about: ${i.about}` : 'What the book is about: not settled; shape it around the life itself.',
+      `Shape: ${i.shape ?? 'chronological (the author has not chosen)'}`,
+      json('Stories (depth 0..1: how far each has been drawn out)', i.stories),
+      i.chapters.length ? json('Chapters the author already has (keep these ids)', i.chapters) : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
+});
+
+export const ghostDraft = defineAgent({
+  name: 'ghostwriter',
+  task: 'draft',
+  input: GhostDraftInput,
+  output: GhostDraftOutput,
+  maxTokens: 32000,
+  render: (i) =>
+    [
+      `# Draft chapter ${i.chapter.number}: ${i.chapter.title}`,
+      `Narrator: ${i.narrator}${i.born ? `, born ${i.born}` : ''}. About ${i.words.toLocaleString('en')} words.`,
+      i.chapter.summary ? `What this chapter does: ${i.chapter.summary}` : '',
+      json('The stories (the only material you may use)', i.stories),
+      json('People', i.people),
+      i.voice_notes.length ? json('How the author talks', i.voice_notes) : '',
+      i.voice_samples ? `## The author's own words, as spoken in interviews\n${i.voice_samples}` : '',
+      i.voice_chapter ? `## The chapter that set the voice (match it)\n${i.voice_chapter}` : '',
+      i.previous_ending ? `## How the previous chapter ended\n${i.previous_ending}` : '',
+      i.style_rules.length ? json('House style', i.style_rules) : '',
+      i.hard_rules.length ? json('Never', i.hard_rules) : '',
     ]
       .filter(Boolean)
       .join('\n\n'),

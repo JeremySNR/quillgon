@@ -148,6 +148,8 @@ function NavItem({ label, icon: Icon, current, count, onClick }: { view: View; l
   );
 }
 
+const LIFE_TITLES: Partial<Record<View, string>> = { build: 'Shaping the book', characters: 'People', threads: 'Themes' };
+
 const TITLES: Record<View, string> = {
   dashboard: 'Writing desk',
   build: 'Story planning',
@@ -236,7 +238,7 @@ export function TopBar() {
   return (
     <header className="topbar">
       <div className="crumbs">
-        <button className="crumb-book" onClick={() => go('dashboard')}>{project.book.title}</button><span className="sep">/</span><span className="muted">{TITLES[route.view]}</span>
+        <button className="crumb-book" onClick={() => go('dashboard')}>{project.book.title}</button><span className="sep">/</span><span className="muted">{(project.life && LIFE_TITLES[route.view]) || TITLES[route.view]}</span>
         {scene && (
           <>
             <span className="sep">/</span>

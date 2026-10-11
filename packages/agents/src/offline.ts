@@ -16,7 +16,7 @@ import type {
   StructureAlternative,
   StructureOutput,
 } from '@quillgon/core';
-import { cleanDictation, EMPTY_LADDER, enoughForScene, LADDER, nextRung, quotedSpeech, RUNG_QUESTION, slugify, touchesOffLimits, yearOf, type GhostPlanOutput, type GhostTurnOutput, type GhostWrapOutput, type Ladder } from '@quillgon/core';
+import { cleanDictation, EMPTY_LADDER, enoughForScene, LADDER, nextRung, quotedSpeech, RUNG_QUESTION, slugify, touchesOffLimits, yearOf, type GhostDraftOutput, type GhostPlanOutput, type GhostShapeOutput, type GhostTurnOutput, type GhostWrapOutput, type Ladder } from '@quillgon/core';
 
 /**
  * A deterministic, model-free stand-in for every agent. It makes the whole app usable
@@ -95,6 +95,42 @@ export class OfflineSuite implements AgentSuite {
     };
     if (enough || !rung) return { ...base, ...moveOn('Thank you. That is enough to write it.'), story, ladder, details: base.details, quotes, then: felt, now, people: base.people, events: base.events };
     return { ...base, reply: RUNG_QUESTION[rung](story.title), technique: RUNG_TECHNIQUE[rung], why: `Climbing the ladder: ${rung.replace('_', ' ')}.` };
+  }
+
+  async ghostShape(i: Parameters<AgentSuite['ghostShape']>[0]): Promise<GhostShapeOutput> {
+    // Chronological by decade; undated stories go with the chapter before them. Existing chapters keep their stories.
+    const placed = new Set(i.chapters.flatMap((c) => c.stories));
+    const chapters = i.chapters.map((c) => ({ id: c.id, title: c.title, summary: '', stories: [...c.stories] }));
+    const free = i.stories.filter((s) => !placed.has(s.id)).sort((a, b) => (yearOf(a.when) ?? 9999) - (yearOf(b.when) ?? 9999));
+    for (const st of free) {
+      const y = yearOf(st.when);
+      const title = y ? `The ${Math.floor(y / 10) * 10}s` : chapters.at(-1)?.title ?? 'Early days';
+      let ch = chapters.find((c) => c.title === title);
+      if (!ch) chapters.push((ch = { id: slugify(title), title, summary: '', stories: [] }));
+      ch.stories.push(st.id);
+    }
+    return { rationale: `Told in the order it was lived (${i.shape ?? 'chronological'}), a chapter for each decade with stories in it.`, chapters, left_out: [] };
+  }
+
+  async ghostDraft(i: Parameters<AgentSuite['ghostDraft']>[0]): Promise<GhostDraftOutput> {
+    // One scene per story, built only from what was filed: details as sentences, quotes as dialogue,
+    // the narrator-now at the end. Gaps become [TK] markers with notes.
+    const scenes = i.stories.slice(0, 4).map((st) => {
+      const notes: GhostDraftOutput['scenes'][number]['notes'] = [];
+      const paras: string[] = [];
+      const open = st.place ? `${st.when ? `In ${st.when}` : 'Then'}, at ${st.place}.` : `${st.when ? `In ${st.when}` : 'Then'}, at [TK: where this happened].`;
+      if (!st.place) notes.push({ kind: 'gap', quote: '[TK: where this happened]', text: 'Where did this happen? I left it blank rather than guess.', options: [] });
+      paras.push([open, st.summary].filter(Boolean).join(' '));
+      const details = st.details.map((d) => d.text.replace(/[.!?]*$/, '.')).filter((d) => !st.summary.includes(d.replace(/\.$/, '')));
+      if (details.length) paras.push(details.join(' '));
+      for (const q of st.quotes) paras.push(`“${q.text}”`);
+      if (st.then) paras.push(st.then);
+      if (st.now) paras.push(st.now);
+      if (st.ladder.senses === 'no') notes.push({ kind: 'thin', quote: '', text: 'This tells me what happened but not what it was like. What could you see and hear?', options: [] });
+      for (const v of st.versions) notes.push({ kind: 'versions', quote: '', text: `${v.by || 'Another telling'} remembers it differently: “${v.text}”. Which is right?`, options: ['Mine', v.by || 'Theirs', 'Both, as they are'] });
+      return { title: st.title, stories: [st.id], when: st.when, place: st.place, people: st.people, then: st.then, now: st.now, prose: paras.join('\n\n'), notes };
+    });
+    return { scenes, needs_decision: [] };
   }
 
   async ghostWrap(i: Parameters<AgentSuite['ghostWrap']>[0]): Promise<GhostWrapOutput> {
@@ -585,7 +621,7 @@ export class ScriptedSuite extends OfflineSuite {
   constructor(overrides: Partial<AgentSuite> = {}) {
     super();
     const self = this as unknown as Record<string, (i: unknown) => Promise<unknown>>;
-    for (const m of ['interview', 'plotPoints', 'structures', 'cards', 'write', 'voice', 'reviseLines', 'humanise', 'extract', 'reviseCard', 'reviseProse', 'read', 'continuity', 'judge', 'critique', 'sampleTurns', 'diverge', 'expand', 'talk', 'scribe', 'ghostPlan', 'ghostTurn', 'ghostWrap'] as const) {
+    for (const m of ['interview', 'plotPoints', 'structures', 'cards', 'write', 'voice', 'reviseLines', 'humanise', 'extract', 'reviseCard', 'reviseProse', 'read', 'continuity', 'judge', 'critique', 'sampleTurns', 'diverge', 'expand', 'talk', 'scribe', 'ghostPlan', 'ghostTurn', 'ghostWrap', 'ghostShape', 'ghostDraft'] as const) {
       const base = (overrides[m] as ((i: unknown) => Promise<unknown>) | undefined) ?? self[m].bind(this);
       self[m] = (i: unknown) => {
         this.calls.push({ method: m, input: i });

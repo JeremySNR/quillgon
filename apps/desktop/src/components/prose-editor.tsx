@@ -5,9 +5,11 @@ import { Decoration, EditorView, MatchDecorator, ViewPlugin, keymap, placeholder
 export interface StyleMark {
   from: number;
   to: number;
-  kind: 'enforced' | 'guided';
+  kind: 'enforced' | 'guided' | 'note' | 'gap' | 'source';
   message: string;
 }
+
+const MARK_CLASS: Record<StyleMark['kind'], string> = { enforced: 'cm-style-enforced', guided: 'cm-style-guided', note: 'cm-note', gap: 'cm-gap', source: 'cm-source' };
 
 /** Style-sheet marks from the server's checker, mapped through edits until the next check. */
 const setMarks = StateEffect.define<StyleMark[]>();
@@ -22,7 +24,7 @@ const marksField = StateField.define<DecorationSet>({
           e.value
             .filter((m) => m.to > m.from && m.to <= len)
             .sort((a, b) => a.from - b.from)
-            .map((m) => Decoration.mark({ class: m.kind === 'enforced' ? 'cm-style-enforced' : 'cm-style-guided', attributes: { title: m.message } }).range(m.from, m.to)),
+            .map((m) => Decoration.mark({ class: MARK_CLASS[m.kind], attributes: { title: m.message } }).range(m.from, m.to)),
           true,
         );
       }

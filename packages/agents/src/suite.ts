@@ -67,4 +67,6 @@ export class ModelSuite implements AgentSuite {
   ghostPlan: AgentSuite['ghostPlan'] = (i) => this.run(A.ghostPlan, i);
   ghostTurn: AgentSuite['ghostTurn'] = (i) => this.run(A.ghostTurn, i);
   ghostWrap: AgentSuite['ghostWrap'] = (i) => this.run(A.ghostWrap, i);
+  ghostShape: AgentSuite['ghostShape'] = (i) => this.run(A.ghostShape, i);
+  ghostDraft: AgentSuite['ghostDraft'] = (i) => this.run(A.ghostDraft, i);
 }

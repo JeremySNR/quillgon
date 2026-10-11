@@ -662,6 +662,76 @@ export const GhostWrapOutput = z.object({
 });
 export type GhostWrapOutput = z.infer<typeof GhostWrapOutput>;
 
+export const GhostShapeInput = z.object({
+  narrator: z.string(),
+  born: z.string().default(''),
+  about: z.string().default(''),
+  shape: z.string().nullable().default(null),
+  target_words: z.number(),
+  stories: z.array(z.object({ id: Id, title: z.string(), summary: z.string(), when: z.string(), key: z.string().nullable(), depth: z.number(), sensitive: z.boolean() })),
+  /** Chapters the author already has; keep their ids. */
+  chapters: z.array(z.object({ id: Id, title: z.string(), stories: z.array(Id) })).default([]),
+});
+export type GhostShapeInput = z.infer<typeof GhostShapeInput>;
+
+export const GhostShapeOutput = z.object({
+  rationale: z.string(),
+  chapters: z.array(z.object({ id: Id, title: z.string().min(1), summary: z.string().default(''), stories: z.array(Id).default([]) })).min(1).max(40),
+  /** Stories the shape leaves out: kept, not cut (a family edition may want them). */
+  left_out: z.array(z.object({ id: Id, why: z.string() })).default([]),
+});
+export type GhostShapeOutput = z.infer<typeof GhostShapeOutput>;
+
+export const NoteDraft = z.object({
+  kind: z.enum(['gap', 'versions', 'thin', 'voice']),
+  /** Exact text in the scene's prose the note is about ("[TK: the street]"). Empty: the whole scene. */
+  quote: z.string().default(''),
+  text: z.string().min(1),
+  options: z.array(z.string()).default([]),
+});
+export type NoteDraft = z.infer<typeof NoteDraft>;
+
+export const GhostDraftInput = z.object({
+  narrator: z.string(),
+  born: z.string().default(''),
+  pen: z.string(),
+  chapter: z.object({ id: Id, title: z.string(), summary: z.string(), number: z.number().int() }),
+  /** Everything the chapter may draw on: the stories, as filed from the interviews. */
+  stories: z.array(Story),
+  people: z.array(z.object({ id: Id, name: z.string(), relationship: z.string(), naming: z.string() })),
+  /** How the author talks: the notebook, and passages of their own spoken words. */
+  voice_notes: z.array(z.string()).default([]),
+  voice_samples: z.string().default(''),
+  /** The chapter that set the voice, when this is not it. */
+  voice_chapter: z.string().default(''),
+  previous_ending: z.string().default(''),
+  style_rules: z.array(z.string()).default([]),
+  words: z.number(),
+  hard_rules: z.array(z.string()).default([]),
+});
+export type GhostDraftInput = z.infer<typeof GhostDraftInput>;
+
+export const GhostDraftOutput = z.object({
+  scenes: z
+    .array(
+      z.object({
+        title: z.string().min(1),
+        stories: z.array(Id).default([]),
+        when: z.string().default(''),
+        place: z.string().default(''),
+        people: z.array(Id).default([]),
+        then: z.string().default(''),
+        now: z.string().default(''),
+        prose: z.string().min(1),
+        notes: z.array(NoteDraft).default([]),
+      }),
+    )
+    .min(1)
+    .max(8),
+  needs_decision: NeedsDecision,
+});
+export type GhostDraftOutput = z.infer<typeof GhostDraftOutput>;
+
 // ------------------------------------------------------------------ the suite the core calls
 
 export interface CallInfo {
@@ -703,6 +773,10 @@ export interface AgentSuite {
   ghostTurn(input: GhostTurnInput): Promise<GhostTurnOutput>;
   /** Life stories: close a session: a summary, and what to ask next time. */
   ghostWrap(input: GhostWrapInput): Promise<GhostWrapOutput>;
+  /** Life stories: propose chapters for a shape, from the stories gathered. */
+  ghostShape(input: GhostShapeInput): Promise<GhostShapeOutput>;
+  /** Life stories: draft a chapter from its stories only, with margin notes where it is thin. */
+  ghostDraft(input: GhostDraftInput): Promise<GhostDraftOutput>;
 }
 
 export const Contracts = {
@@ -732,5 +806,7 @@ export const Contracts = {
     plan: { input: GhostPlanInput, output: GhostPlanOutput },
     turn: { input: GhostTurnInput, output: GhostTurnOutput },
     wrap: { input: GhostWrapInput, output: GhostWrapOutput },
+    shape: { input: GhostShapeInput, output: GhostShapeOutput },
+    draft: { input: GhostDraftInput, output: GhostDraftOutput },
   },
 };

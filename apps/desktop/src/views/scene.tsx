@@ -23,6 +23,7 @@ import {
   Link2,
   SpellCheck,
   PanelRight,
+  MessageSquareText,
 } from 'lucide-react';
 import { del, post, put, runJob } from '../lib/api';
 import { errorMessage, useApp } from '../lib/app';
@@ -36,6 +37,7 @@ import { factLabel, firstName, keys, loadPref, plural, savePref } from '../lib/u
 import { Avatar, Badge, Button, Chip, Dialog, Empty, Field, ListEditor, StatusBadge, SyncBadge, TagSelect, Working } from '../components/ui';
 import { ProseEditor, bannedRegexes, type EditorApi, type StyleMark } from '../components/prose-editor';
 import { MicButton, useDictation, useHoldToTalk, type DictationTarget } from '../components/dictate';
+import { NotesPanel, NOTE_KIND } from '../components/notes-panel';
 import { PredictabilityCheck } from './critique';
 import { OBLIGATION_KIND } from './ledger';
 import { CardDiff, ProseDiff, ProseSideBySide } from '../components/diff';
@@ -97,7 +99,26 @@ export function SceneEditor({ id }: { id: string }) {
   useUnsavedChanges(prose.hasUnsaved, 'scene prose', { inApp: false, flush: prose.flush });
 
   const styleReport = useStyleCheck(prose.text, p?.style.sheet);
-  const marks = useMemo<StyleMark[]>(() => (styleReport?.violations ?? []).filter((v) => v.end > v.start).map((v) => ({ from: v.start, to: v.end, kind: v.kind, message: v.message })), [styleReport]);
+  const styleMarks = useMemo<StyleMark[]>(() => (styleReport?.violations ?? []).filter((v) => v.end > v.start).map((v) => ({ from: v.start, to: v.end, kind: v.kind, message: v.message })), [styleReport]);
+  // Life stories: the ghostwriter's margin notes and gap markers, underlined in the text.
+  const notes = useMemo(() => detail?.notes ?? [], [detail?.notes]);
+  const marks = useMemo<StyleMark[]>(() => {
+    if (!p?.life) return styleMarks;
+    const text = prose.text;
+    const out: StyleMark[] = [...styleMarks];
+    for (const n of notes) {
+      if (n.status !== 'open' || !n.quote) continue;
+      const at = text.indexOf(n.quote);
+      if (at >= 0) out.push({ from: at, to: at + n.quote.length, kind: n.kind === 'source' ? 'source' : n.kind === 'gap' ? 'gap' : 'note', message: `${NOTE_KIND[n.kind].label}: ${n.text}` });
+    }
+    for (const m of text.matchAll(/\[TK:[^\]]*\]/g)) if (!out.some((x) => x.from === m.index)) out.push({ from: m.index!, to: m.index! + m[0].length, kind: 'gap', message: 'A gap the ghostwriter left for you' });
+    return out;
+  }, [styleMarks, notes, prose.text, p?.life]);
+  const [notesOpen, setNotesOpen] = useState(true);
+  const jumpTo = (quote: string) => {
+    const at = prose.text.indexOf(quote);
+    if (at >= 0) setJump({ from: at, to: at + quote.length });
+  };
   const banned = useMemo(() => bannedRegexes(p?.style.banned ?? ''), [p?.style.banned]);
   const words = useMemo(() => (prose.text.trim() ? prose.text.trim().split(/\s+/).length : 0), [prose.text]);
 
@@ -282,7 +303,7 @@ export function SceneEditor({ id }: { id: string }) {
   const pov = chars.find((c) => c.id === card.pov);
 
   return (
-    <div className={`editor ${focus ? 'focus' : ''} ${inspector ? 'inspector-open' : ''}`}>
+    <div className={`editor ${focus ? 'focus' : ''} ${inspector ? 'inspector-open' : ''} ${p.life && notes.length && notesOpen && !focus ? 'notes-open' : ''}`}>
       {/* ---------------- card */}
       <aside className="card-pane" id="scene-inspector" aria-label="Scene card" hidden={!inspector || focus}>
         <div className="inspector-title"><span>Scene details</span><Button size="sm" variant="ghost" iconOnly icon={<X />} tip="Close scene details" onClick={() => { setInspector(false); savePref('sceneInspector', false); }} /></div>
@@ -294,6 +315,25 @@ export function SceneEditor({ id }: { id: string }) {
             <Button size="sm" variant="ghost" iconOnly icon={<Trash2 />} tip="Delete scene" onClick={remove} />
           </div>
           <input className="input title" value={card.title} onChange={(e) => set('title', e.target.value)} aria-label="Scene title" placeholder="Untitled scene" />
+          {p.life && (
+            <>
+              <Field label="Then" hint="What you knew and felt at the time.">
+                <textarea className="textarea" rows={2} value={card.then ?? ''} onChange={(e) => set('then', e.target.value)} />
+              </Field>
+              <Field label="Now" hint="What you understand looking back.">
+                <textarea className="textarea" rows={2} value={card.now ?? ''} onChange={(e) => set('now', e.target.value)} />
+              </Field>
+              {(card.stories ?? []).length > 0 && (
+                <Field label="From the stories">
+                  <div className="row wrap">
+                    {(card.stories ?? []).map((sid) => (
+                      <Badge key={sid} kind="outline">{p.life!.stories.find((x) => x.id === sid)?.title ?? sid}</Badge>
+                    ))}
+                  </div>
+                </Field>
+              )}
+            </>
+          )}
           <div className="grid-2">
             <Field label="Point of view">
               <select className="select" value={card.pov} onChange={(e) => set('pov', e.target.value)}>
@@ -432,6 +472,11 @@ export function SceneEditor({ id }: { id: string }) {
             {card.status === 'approved' ? 'Approved' : 'Approve'}
           </Button>
           <Button size="sm" variant="ghost" iconOnly icon={card.lock === 'none' ? <LockOpen /> : <Lock />} tip={card.lock === 'none' ? 'Lock card and prose' : 'Unlock'} onClick={() => setLock(card.lock === 'none' ? 'both' : 'none')} disabled={!!busy} />
+          {p.life && notes.length > 0 && (
+            <Button size="sm" variant="ghost" icon={<MessageSquareText />} aria-expanded={notesOpen && !focus} onClick={() => setNotesOpen(!notesOpen)}>
+              Notes{notes.some((n) => n.status === 'open') ? ` (${notes.filter((n) => n.status === 'open').length})` : ''}
+            </Button>
+          )}
           <Button size="sm" variant="ghost" icon={<PanelRight />} aria-expanded={inspector && !focus} aria-controls="scene-inspector" onClick={() => { const next = focus || !inspector; if (focus) setFocus(false); setInspector(next); savePref('sceneInspector', next); }}>Scene details{cardDirty ? ' •' : ''}</Button>
           <Button size="sm" variant="ghost" iconOnly icon={focus ? <Minimize2 /> : <Maximize2 />} tip="Focus mode" kbd={keys('.')} onClick={() => setFocus(!focus)} />
         </div>
@@ -512,6 +557,7 @@ export function SceneEditor({ id }: { id: string }) {
           </div>
         </div>
       </section>
+      {p.life && notes.length > 0 && notesOpen && !focus && <NotesPanel scene={id} notes={notes} onJump={jumpTo} onChanged={() => (load(), refresh())} />}
 
       {impact && (
         <Dialog

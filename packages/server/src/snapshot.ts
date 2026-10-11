@@ -128,6 +128,7 @@ export function sceneDetail(store: GraphStore, id: string) {
     sync: sceneSync(s),
     prev: idx > 0 ? order[idx - 1] : null,
     next: idx >= 0 && idx < order.length - 1 ? order[idx + 1] : null,
+    notes: s.notes?.notes ?? [],
     states: s.card.characters.map((c) => ({
       character: c,
       before: store.stateBefore(c, id)?.snapshot ?? null,

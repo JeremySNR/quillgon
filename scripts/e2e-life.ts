@@ -3,6 +3,8 @@
  *  A. Start a life story from the welcome screen for someone else's life.
  *  B. An interview session: the agenda, typed and spoken answers (the spoken one kept as a
  *     recording), a story filed with its ladder, "That's all I remember", undo, end.
+ *  C. Shaping the book: chapters proposed from the stories and adopted; a chapter drafted from
+ *     its stories with margin notes; a gap answered in the editor.
  *
  *   pnpm build && pnpm tsx scripts/e2e-life.ts [screenshot-dir]
  */
@@ -81,6 +83,42 @@ try {
   if (!rec.length) throw new Error('no recording kept');
   if (fs.readFileSync(path.join(bookDir, '.gitignore'), 'utf8').indexOf('audio/') < 0) throw new Error('audio not git-ignored');
   step(`recording on disk (${rec.length}), audio/ kept out of git`);
+
+  console.log('C. Shaping and drafting');
+  // A second session gives the book a story with a date and a place.
+  await page.getByRole('button', { name: 'Back to sessions' }).click();
+  await page.getByRole('button', { name: 'Start' }).click();
+  await page.locator('.gw-turn').first().waitFor();
+  // The session opens on the story from last time; move on to a new one.
+  await page.getByRole('button', { name: 'Move on' }).click();
+  await page.locator('.gw-text', { hasText: 'That’s fine.' }).waitFor();
+  await page.getByLabel('Your answer').fill('In 1955 we went to Scarborough on the train with Mum and Dad. Peter Ellis was sick on the way home.');
+  await page.getByRole('button', { name: 'Send' }).click();
+  await page.locator('.ladder-card').waitFor();
+  await page.getByRole('button', { name: 'End session' }).click();
+  await page.locator('.session-summary').waitFor();
+  await page.locator('nav .nav-item', { hasText: 'Shaping the book' }).click();
+  await page.getByRole('heading', { name: 'Shaping the book' }).waitFor();
+  await page.getByRole('button', { name: 'Propose chapters' }).click();
+  await page.getByText('Proposed: Chronological').waitFor();
+  await page.getByRole('button', { name: 'Use these chapters' }).click();
+  await page.locator('.trow .c1', { hasText: 'The 1950s' }).waitFor();
+  step('chapters proposed by decade and adopted');
+  await shot('shaping');
+  const row = page.locator('.trow', { hasText: 'The 1950s' });
+  await row.getByRole('button', { name: /Draft (it|anyway)/ }).click();
+  await row.getByRole('button', { name: 'Open draft' }).waitFor({ timeout: 20000 });
+  step('drafted the chapter; it is waiting on the author’s notes');
+  await row.getByRole('button', { name: 'Open draft' }).click();
+  await page.locator('.notes-pane').waitFor();
+  await page.locator('.cm-gap').first().waitFor();
+  step('the draft opened with margin notes and its gap marked in the text');
+  await shot('draft-notes');
+  const gap = page.locator('.note-card', { hasText: 'Where did this happen?' });
+  await gap.getByLabel('Your answer').fill('On the front at Scarborough, by the harbour');
+  await gap.getByRole('button', { name: 'Answer' }).click();
+  await page.locator('.note-card', { hasText: 'Where did this happen?' }).waitFor({ state: 'detached' });
+  step('answered the gap');
 
   if (errors.length) throw new Error(`page errors:\n${errors.join('\n')}`);
   console.log('\nLife story e2e passed.');
