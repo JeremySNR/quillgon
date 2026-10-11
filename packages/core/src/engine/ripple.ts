@@ -7,7 +7,9 @@ import type { GraphStore } from '../store.js';
 import { paths, sceneOrder, stateBefore, type Project } from '../project.js';
 import { analyseImpact, cardDiffSummary, changeFiles, partitionImpacts, type Change, type Impact } from '../impact.js';
 import { applyExtraction, runExtraction } from './extraction.js';
-import type { Progress } from './style-passes.js';
+import { runStylePasses, type Progress } from './style-passes.js';
+import { truthGuard } from './truth.js';
+import { isLifeBook } from '../schemas/index.js';
 import { cardHash } from '../sync.js';
 import { timestamp } from '../util.js';
 import { relevantFacts } from '../scope.js';
@@ -272,7 +274,9 @@ export class Ripple {
       const voices = nc.characters.filter((c) => p.characters.has(c)).map((c) => ({ character: c, name: p.characters.get(c)!.bio.name, voice: p.characters.get(c)!.voice }));
       try {
         const out = await this.agents.reviseProse({ intent: p.intent, change: this.data.description, old_card: it.card!.before, new_card: nc, old_prose: it.prose.before, voices });
-        it.prose.after = out.prose;
+        // The same house style and AI-habit cleanup as a fresh draft, before the author reviews it.
+        const styled = await runStylePasses(this.store, this.agents, it.scene, out.prose, progress, { voice: false, ...(isLifeBook(p.book) ? { truth: truthGuard(p, nc.stories ?? []) } : {}) });
+        it.prose.after = styled.prose;
         it.prose.summary = out.summary;
         it.prose.status = 'proposed';
       } catch (e) {

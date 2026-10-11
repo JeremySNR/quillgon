@@ -516,6 +516,14 @@ export class OfflineSuite implements AgentSuite {
       const replacement = h.text === '—' ? ', ' : h.text === '!' ? '.' : '';
       edits.push({ find, replace: find.replace(h.text + ' ', replacement ? replacement + ' ' : '').replace(h.text, replacement), category: 'style-rule', reason: `${h.rule}: ${h.text}` });
     }
+    // AI-writing habits with a mechanical fix: cut the commentary, keep what was said.
+    for (const v of violations.filter((x) => x.rule.startsWith('tell:'))) {
+      if (!v.text || seen.has(v.text)) continue;
+      seen.add(v.text);
+      const fix = offlineTellFix(v.rule.slice(5), v.text, prose);
+      if (!fix || prose.indexOf(fix.find) < 0 || prose.indexOf(fix.find) !== prose.lastIndexOf(fix.find)) continue;
+      edits.push({ ...fix, category: v.rule === 'tell:ing-rider' ? 'unnecessary-exposition' : 'poor-sentence-structure', reason: v.message });
+    }
     return { edits };
   }
 
@@ -802,6 +810,43 @@ function mentioned(prose: string, factId: string, facts: { id: string; statement
   const lower = prose.toLowerCase();
   const hits = words.filter((w) => lower.includes(w)).length;
   return hits >= Math.min(2, words.length);
+}
+
+/** A mechanical fix for an AI-writing habit, or null when it needs a writer. Only cuts and plain swaps. */
+function offlineTellFix(rule: string, text: string, prose: string): { find: string; replace: string } | null {
+  const at = prose.indexOf(text);
+  if (at < 0) return null;
+  const toSentenceEnd = () => {
+    const end = prose.slice(at).search(/[.!?]/);
+    return end > 0 ? prose.slice(at, at + end) : null;
+  };
+  switch (rule) {
+    case 'not-x-but-y': {
+      // "It wasn't the noise. It was the silence." -> "It was the silence."
+      const two = text.match(/^[^.;]+[.;]\s+(.+)$/s);
+      return two ? { find: text, replace: two[1] } : null;
+    }
+    case 'ing-rider': {
+      // "…, highlighting how much had changed." -> "…." (the match ends at the participle: cut to the sentence end)
+      const rider = toSentenceEnd();
+      return rider ? { find: rider, replace: '' } : null;
+    }
+    case 'serves-as':
+      return { find: text, replace: text.replace(/^(?:serves|stands|functions) as/i, 'is').replace(/^(?:served|stood|functioned) as/i, 'was').replace(/^serving as/i, 'being') };
+    case 'coda': {
+      // "Ultimately, it was…" -> "It was…"
+      const next = prose.charAt(at + text.length);
+      return next ? { find: text + next, replace: next.toUpperCase() } : null;
+    }
+    case 'important-to-note': {
+      const lead = prose.slice(at).match(/^[^.!?]*?\bthat\s+(\w)/);
+      return lead ? { find: lead[0], replace: lead[1].toUpperCase() } : null;
+    }
+    case 'adverb-tag':
+      return { find: text, replace: text.replace(/\s+\w+ly$/, '') };
+    default:
+      return null;
+  }
 }
 
 /** Test helper: an offline suite where any method can be replaced, recording every call. */

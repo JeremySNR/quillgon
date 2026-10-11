@@ -587,6 +587,13 @@ export const StyleSheet = z.object({
   guidance: z.array(z.string()).default([]),
   /** Repair rounds after drafting before remaining issues go to the author. */
   repair_passes: z.number().int().min(0).max(4).default(2),
+  /**
+   * The habits of machine-written prose (tells.ts): repaired after every draft (strong ones are
+   * enforced), only flagged, or off.
+   */
+  tells: z.enum(['repair', 'flag', 'off']).default('repair'),
+  /** Words, phrases and tell rules the author wants kept ("whispered", "adverb-tag"). */
+  allow: z.array(z.string()).default([]),
 });
 export type StyleSheet = z.infer<typeof StyleSheet>;
 

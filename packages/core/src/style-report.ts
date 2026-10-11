@@ -1,6 +1,6 @@
 import type { GraphStore } from './store.js';
 import type { StylePassReport } from './engine/style-passes.js';
-import { checkStyle } from './style-check.js';
+import { checkStyle, styleCheckOptions } from './style-check.js';
 import { sceneOrder } from './project.js';
 
 export interface SceneStyle {
@@ -32,7 +32,7 @@ export function runStyleCheck(store: GraphStore): Record<string, SceneStyle> {
   for (const id of sceneOrder(p)) {
     const prose = p.scenes.get(id)?.prose?.body;
     if (!prose) continue;
-    const r = checkStyle(prose, p.style.sheet, { book: p.book, banned: p.style.banned });
+    const r = checkStyle(prose, p.style.sheet, styleCheckOptions(p));
     all[id] = { scene: id, enforced: r.enforced, guided: r.guided, checked_at: new Date().toISOString() };
   }
   store.writeReport('style-latest.json', JSON.stringify(all, null, 2));

@@ -14,6 +14,7 @@ import {
   initProject,
   paths,
   checkStyle,
+  styleCheckOptions,
   fingerprint,
   obligationIssues,
   readEdits,
@@ -829,7 +830,7 @@ export class NovelServer {
     });
     r('POST', '/api/style/check', ({ engine, body }) => {
       const p = engine.store.project;
-      return checkStyle(String(body.text ?? ''), p.style.sheet, { book: p.book, banned: p.style.banned });
+      return checkStyle(String(body.text ?? ''), p.style.sheet, styleCheckOptions(p));
     });
     r('POST', '/api/style/check-all', ({ engine }) => runStyleCheck(engine.store));
     r('POST', '/api/style/fingerprint', ({ engine, body }) => {

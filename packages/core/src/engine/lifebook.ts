@@ -8,6 +8,8 @@ import { GuideShape, isGuide, LifeShape } from '../schemas/index.js';
 import { styleRules } from '../style-sheet.js';
 import { slugify, uniq } from '../util.js';
 import { Proposals } from './pipeline.js';
+import { runStylePasses } from './style-passes.js';
+import { storyMaterial, truthGuard } from './truth.js';
 
 /**
  * A life story's chapters: proposing a shape from the stories gathered, drafting a chapter from
@@ -236,29 +238,36 @@ export class LifeBook {
       words,
       hard_rules: [...this.p.intent.hard_rules, ...this.p.notebook.off_limits.map((t) => `Never mention: ${t}`)],
     });
-    progress('saving', 'Checking every sentence against what you said');
     const round = (ch.round ?? 0) + 1;
     const ids = out.scenes.map((_, i) => ch.scenes[i] ?? this.newSceneId(id));
     for (const old of ch.scenes.slice(out.scenes.length)) this.store.deleteScene(old);
     const placeId = (place: string) => (place ? slugify(place) : 'somewhere');
-    out.scenes.forEach((sc, i) => {
+    for (const [i, draft] of out.scenes.entries()) {
       const sid = ids[i];
-      const people = sc.people.filter((x) => this.p.characters.has(x));
-      const storyIds = sc.stories.filter((x) => this.p.stories.has(x));
+      const people = draft.people.filter((x) => this.p.characters.has(x));
+      const storyIds = draft.stories.filter((x) => this.p.stories.has(x));
+      const sc = draft;
       this.store.saveCard({ id: sid, title: sc.title, pov: narratorId, location: placeId(sc.place), time: sc.when, purpose: storyIds.map((x) => this.p.stories.get(x)!.title).join('; '), characters: uniq([narratorId, ...people]), stories: storyIds, then: sc.then, now: sc.now });
-      this.store.saveProse(sid, sc.prose, 'generated');
+      // The house style and the habits of machine prose, cleaned with small edits that may only
+      // cut or reword: nothing is added that the author did not say.
+      progress('style', `Cleaning up “${sc.title}”`);
+      const styled = await this.cleanUp(sid, sc.prose, storyIds.length ? storyIds : stories.map((s) => s.id), progress);
+      const prose = styled.prose;
+      this.store.saveProse(sid, prose, 'generated');
       this.store.markInSync(sid);
-      const checks = this.codeNotes(sc.prose, storyIds.length ? storyIds : stories.map((s) => s.id));
+      const checks = this.codeNotes(prose, storyIds.length ? storyIds : stories.map((s) => s.id));
       const notes: MarginNote[] = [
-        ...sc.notes.map((n, k) => ({ id: `r${round}-${k + 1}`, kind: n.kind, quote: sc.prose.includes(n.quote) ? n.quote : '', text: n.text, options: n.options, status: 'open' as const, answer: '', round })),
+        ...sc.notes.map((n, k) => ({ id: `r${round}-${k + 1}`, kind: n.kind, quote: prose.includes(n.quote) ? n.quote : '', text: n.text, options: n.options, status: 'open' as const, answer: '', round })),
         // Gap markers the draft left without a note still get one.
-        ...gapMarkers(sc.prose)
+        ...gapMarkers(prose)
           .filter((g) => !sc.notes.some((n) => n.quote === g))
           .map((g, k) => ({ id: `r${round}-g${k + 1}`, kind: 'gap' as const, quote: g, text: `${g.slice(4, -1).trim() || 'Something is missing here'}: can you tell me?`, options: [], status: 'open' as const, answer: '', round })),
         ...checks.map((c, k) => ({ id: `r${round}-s${k + 1}`, ...c, status: 'open' as const, answer: '', round })),
+        // Where the line editor wanted more detail: only the author can give it.
+        ...styled.report.asks.filter((a) => prose.includes(a.quote)).map((a, k) => ({ id: `r${round}-t${k + 1}`, kind: 'thin' as const, quote: a.quote, text: a.text, options: [], status: 'open' as const, answer: '', round })),
       ];
       this.store.saveNotes(sid, { notes });
-    });
+    }
     const st: Structure = structuredClone(this.p.structure);
     for (const a of st.acts) a.chapters = a.chapters.map((c) => (c.id === id ? { ...c, scenes: ids, stage: 'notes', round } : c));
     this.store.saveStructure(st);
@@ -305,6 +314,14 @@ export class LifeBook {
     return usableEvidence(this.p.research).flatMap((e) => [e.claim, e.quote]);
   }
 
+  /**
+   * The house style and AI-habit cleanup for a true book's scene: span edits checked by code,
+   * which may cut or reword but never touch what was said or add what was not.
+   */
+  private cleanUp(sid: string, prose: string, storyIds: string[], progress: (stage: string, detail?: string) => void = () => {}) {
+    return runStylePasses(this.store, this.agents, sid, prose, progress, { voice: false, truth: truthGuard(this.p, storyIds), repair: this.p.style.sheet.tells !== 'off' || this.p.style.sheet.repair_passes > 0 });
+  }
+
   /** The chapter's prose, scenes joined. */
   prose(chapterId: string): string {
     const c = this.chapters().find((x) => x.id === chapterId);
@@ -313,24 +330,7 @@ export class LifeBook {
 
   /** Everything the author said about some stories, for the source check: filed details and the turns they came from. */
   material(storyIds: string[]): { text: string[]; quotes: string[] } {
-    const text: string[] = [];
-    const quotes: string[] = [];
-    const turn = (ref: { session: string; turn: number } | null) => (ref ? this.p.sessions.get(ref.session)?.turns[ref.turn] : undefined);
-    for (const id of storyIds) {
-      const s = this.p.stories.get(id);
-      if (!s) continue;
-      text.push(s.title, s.summary, s.place, s.when, s.then, s.now, ...s.details.map((d) => d.text), ...s.versions.map((v) => v.text));
-      for (const q of s.quotes) quotes.push(q.text), text.push(q.text);
-      for (const x of [...s.details, ...s.quotes]) {
-        const t = turn(x.from);
-        if (t && !t.off_record) text.push(t.text);
-      }
-      for (const p of s.people) text.push(this.p.characters.get(p)?.bio.name ?? '');
-      // Answers to margin notes count as things the author said.
-      for (const sc of this.p.scenes.values()) if (sc.card.stories?.includes(id)) for (const n of sc.notes?.notes ?? []) if (n.answer) text.push(n.answer);
-    }
-    text.push(this.p.characters.get(this.p.book.life.narrator ?? '')?.bio.name ?? '');
-    return { text: text.filter(Boolean), quotes };
+    return storyMaterial(this.p, storyIds);
   }
 
   /** The author's own words from the interviews, newest first, for the voice. */
@@ -484,6 +484,17 @@ export class LifeBook {
     if (!r) throw new Error('no revision in progress for this chapter');
     const ch = this.chapter(id);
     let applied = 0;
+    // Standing preferences become the book's rules first, so this chapter is held to them too.
+    const rules = r.plan.filter((p, n) => p.kind === 'rule' && !r.overruled.includes(n));
+    if (rules.length) {
+      const sheet = this.p.style.sheet;
+      this.store.saveStyleSheet({
+        ...sheet,
+        never: uniq([...sheet.never, ...rules.flatMap((x) => x.never)]),
+        prefer: [...sheet.prefer, ...rules.flatMap((x) => x.prefer).filter((x) => !sheet.prefer.some((y) => y.avoid === x.avoid))],
+        guidance: uniq([...sheet.guidance, ...rules.flatMap((x) => x.guidance)]),
+      });
+    }
     for (const sid of ch.scenes) {
       const sc = this.p.scenes.get(sid);
       if (!sc?.prose) continue;
@@ -494,25 +505,16 @@ export class LifeBook {
         prose = prose.slice(0, at) + it.replace + prose.slice(at + it.find.length);
         applied++;
       }
-      if (prose !== sc.prose.body) {
-        this.store.saveProse(sid, prose.replace(/\n{3,}/g, '\n\n').replace(/ {2,}/g, ' '), 'generated');
+      if (prose !== sc.prose.body || rules.length) {
+        const tidy = prose.replace(/\n{3,}/g, '\n\n').replace(/ {2,}/g, ' ');
+        const styled = await this.cleanUp(sid, tidy, sc.card.stories ?? []);
+        this.store.saveProse(sid, styled.prose, 'generated');
         this.store.markInSync(sid);
       }
       // Notes the round dealt with are resolved; new notes join the rest.
       const notes = (sc.notes?.notes ?? []).map((n) => (r.resolved.includes(n.id) || (n.status === 'answered' && r.items.some((it) => it.scene === sid && it.status !== 'rejected' && n.quote && it.find.includes(n.quote))) ? { ...n, status: 'resolved' as const } : n));
       const fresh = r.notes.filter((n) => n.scene === sid).map((n, k) => ({ id: `r${r.round}-${k + 1}`, kind: n.kind, quote: n.quote, text: n.text, options: n.options, status: 'open' as const, answer: '', round: r.round }));
       this.store.saveNotes(sid, { notes: [...notes, ...fresh] });
-    }
-    // Standing preferences become the book's rules, checked on every word from now on.
-    const rules = r.plan.filter((p, n) => p.kind === 'rule' && !r.overruled.includes(n));
-    if (rules.length) {
-      const sheet = this.p.style.sheet;
-      this.store.saveStyleSheet({
-        ...sheet,
-        never: uniq([...sheet.never, ...rules.flatMap((x) => x.never)]),
-        prefer: [...sheet.prefer, ...rules.flatMap((x) => x.prefer).filter((x) => !sheet.prefer.some((y) => y.avoid === x.avoid))],
-        guidance: uniq([...sheet.guidance, ...rules.flatMap((x) => x.guidance)]),
-      });
     }
     const questions = r.plan.filter((p) => p.kind === 'question' && p.question);
     if (questions.length) {

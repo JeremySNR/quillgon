@@ -26,6 +26,7 @@ import {
   Thread,
   costSummary,
   checkStyle,
+  styleCheckOptions,
   fingerprint,
   obligationIssues,
   readEdits,
@@ -388,7 +389,7 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
         for (const id of flags.scene ? [flags.scene as string] : sceneOrder(p)) {
           const prose = p.scenes.get(id)?.prose?.body;
           if (!prose) continue;
-          const r = checkStyle(prose, p.style.sheet, { book: p.book, banned: p.style.banned });
+          const r = checkStyle(prose, p.style.sheet, styleCheckOptions(p));
           enforced += r.enforced;
           say(`${id.padEnd(5)} ${r.enforced ? red(`${r.enforced} enforced`) : green('clean')}  ${dim(`${r.guided} guided · ${r.stats.sentence_mean} words/sentence`)}`);
           if (flags.scene || flags.verbose) for (const v of r.violations.slice(0, 40)) say(`    ${v.kind === 'enforced' ? red('●') : yellow('○')} ${v.message}${v.text ? dim(`  “${v.text.slice(0, 50)}”`) : ''}`);

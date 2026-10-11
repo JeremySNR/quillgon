@@ -243,6 +243,12 @@ export const HumaniseInput = z.object({
   violations: z.array(z.object({ rule: z.string(), text: z.string(), message: z.string() })).default([]),
   style_rules: z.array(z.string()).default([]),
   style_samples: z.string().default(''),
+  /**
+   * fiction: the line editor may sharpen a vague passage with a concrete detail. true (life
+   * stories, memoirs, guides): it may only cut or reword; a vague passage is a question for the
+   * author, never an invented detail.
+   */
+  mode: z.enum(['fiction', 'true']).default('fiction'),
 });
 export type HumaniseInput = z.infer<typeof HumaniseInput>;
 

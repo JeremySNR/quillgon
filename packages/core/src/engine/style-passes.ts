@@ -2,9 +2,11 @@ import type { AgentSuite, SpanEdit, VoiceFlag } from '../agents/contracts.js';
 import type { GraphStore } from '../store.js';
 import { dialogue } from '../context.js';
 import { findBannedPatterns, type BannedHit } from '../style.js';
-import { applyFixes, checkStyle, type StyleViolation } from '../style-check.js';
+import { applyFixes, checkStyle, styleCheckOptions, type StyleViolation } from '../style-check.js';
 import { styleRules } from '../style-sheet.js';
 import { judgeBothWays } from './judge.js';
+import { findTells } from '../tells.js';
+import { stem } from '../life.js';
 
 export interface StylePassReport {
   voiceFlags: VoiceFlag[];
@@ -18,6 +20,21 @@ export interface StylePassReport {
   enforcedBefore: number;
   enforcedAfter: number;
   guidedAfter: number;
+  /** Strong AI-writing habits before and after the passes. */
+  tellsBefore: number;
+  tellsAfter: number;
+  /** True books: edits refused because they would add or change what the author said. */
+  refused: { find: string; replace: string; why: string }[];
+  /** True books: places the line editor wanted more specific; questions for the author, not edits. */
+  asks: { quote: string; text: string }[];
+}
+
+/** What a true book's line editor must not touch or add to. */
+export interface TruthGuard {
+  /** Words that were said: never edited. */
+  verbatim: string[];
+  /** Everything the author said: a replacement may not bring in content words from anywhere else. */
+  material: string[];
 }
 
 export type Progress = (stage: string, detail?: string) => void;
@@ -50,16 +67,21 @@ export async function runStylePasses(
   sceneId: string,
   prose: string,
   progress: Progress = () => undefined,
-  opts: { repair?: boolean } = {},
+  opts: { repair?: boolean; voice?: boolean; truth?: TruthGuard } = {},
 ): Promise<{ prose: string; report: StylePassReport }> {
   const p = store.project;
   const card = store.scene(sceneId).card;
   const sheet = p.style.sheet;
-  const check = (t: string) => checkStyle(t, sheet, { book: p.book, banned: p.style.banned });
+  const checkOpts = styleCheckOptions(p);
+  const check = (t: string) => checkStyle(t, sheet, checkOpts);
+  const strongTells = (t: string) => (sheet.tells === 'off' ? 0 : findTells(t, { samples: checkOpts.samples, kind: checkOpts.kind, allow: sheet.allow }).filter((x) => x.strength === 'strong').length);
+  const tellsBefore = strongTells(prose);
+  const refused: StylePassReport['refused'] = [];
+  const asks: StylePassReport['asks'] = [];
   let text = prose;
 
   progress('voice', 'Checking each character against their voice sheet');
-  const lines = dialogue(p, sceneId, text)
+  const lines = (opts.voice === false ? [] : dialogue(p, sceneId, text))
     .filter((l) => l.character)
     .map((l) => ({ character: l.character!, line: l.line }));
   let voiceFlags: VoiceFlag[] = [];
@@ -92,8 +114,12 @@ export async function runStylePasses(
         violations: before.violations.filter((v) => v.text).slice(0, 40).map((v) => ({ rule: v.rule, text: v.text, message: v.message })),
         style_rules: styleRules(p),
         style_samples: p.style.samples.slice(0, 4000),
+        mode: opts.truth ? 'true' : 'fiction',
       });
-      const candidate = applySpanEdits(text, out.edits);
+      const vetted = vetEdits(out.edits, text, opts.truth, (t) => strongTells(t));
+      refused.push(...vetted.refused);
+      for (const a of vetted.asks) if (!asks.some((x) => x.quote === a.quote)) asks.push(a);
+      const candidate = applySpanEdits(text, vetted.edits);
       if (!candidate.applied.length) {
         rounds.push({ edits: out.edits.length, applied: 0, enforcedBefore: before.enforced, enforcedAfter: before.enforced, kept: false, why: 'nothing to change' });
         break;
@@ -138,6 +164,66 @@ export async function runStylePasses(
       enforcedBefore: first.enforced,
       enforcedAfter: final.enforced,
       guidedAfter: final.guided,
+      tellsBefore,
+      tellsAfter: strongTells(text),
+      refused,
+      asks,
     },
   };
+}
+
+const CONTENT = /[\p{L}'’]{3,}/gu;
+const FUNCTION_WORDS = new Set(
+  'the and but for nor yet with from into onto over under then than that this these those there their they them was were are has had have not its it’s it\'s his her him she our out who whom what when where which while would could should will can did does done been being very just only even also back down away off again ever still such some any each every both few more most much many own same other another'.split(' '),
+);
+
+/**
+ * Edits a line editor proposed, checked by code before any is applied. An edit that brings in a
+ * new AI habit is dropped. In a true book an edit may only cut or reword: it may not touch the
+ * words someone said or a gap left for the author, or add a name, figure or content word that is
+ * neither in the passage it replaces nor anywhere in what the author said. A request for more
+ * specific detail becomes a question for the author.
+ */
+export function vetEdits(edits: SpanEdit[], text: string, truth: TruthGuard | undefined, strong: (t: string) => number) {
+  const kept: SpanEdit[] = [];
+  const refusedOut: { find: string; replace: string; why: string }[] = [];
+  const asksOut: { quote: string; text: string }[] = [];
+  const vocab = truth ? new Set(truth.material.join(' ').match(CONTENT)?.map((w) => stem(w)) ?? []) : null;
+  for (const e of edits) {
+    if (strong(e.replace) > strong(e.find)) {
+      refusedOut.push({ find: e.find, replace: e.replace, why: 'it adds an AI-writing habit' });
+      continue;
+    }
+    if (truth) {
+      const at = text.indexOf(e.find);
+      const span = at < 0 ? e.find : text.slice(Math.max(0, at - 1), at + e.find.length + 1);
+      if (truth.verbatim.some((q) => q && (span.includes(q) || q.includes(e.find) || (at >= 0 && overlaps(text, at, e.find.length, q))))) {
+        refusedOut.push({ find: e.find, replace: e.replace, why: 'it changes words someone said' });
+        continue;
+      }
+      if (/\[TK:/.test(e.find) || /\[TK:/.test(e.replace)) {
+        refusedOut.push({ find: e.find, replace: e.replace, why: 'gaps are for the author to fill' });
+        continue;
+      }
+      if (e.category === 'lack-of-specificity') {
+        asksOut.push({ quote: e.find, text: e.reason ? `This could be more particular: ${e.reason}` : 'This is general. Can you remember one particular detail here?' });
+        continue;
+      }
+      const before = new Set((e.find.match(CONTENT) ?? []).map((w) => stem(w)));
+      const added = (e.replace.match(CONTENT) ?? []).filter((w) => !FUNCTION_WORDS.has(w.toLowerCase()) && !before.has(stem(w)) && !vocab!.has(stem(w)));
+      const numbers = (e.replace.match(/\d[\d,.]*/g) ?? []).filter((n) => !e.find.includes(n));
+      if (numbers.length || added.length > 1 || added.some((w) => /^[A-Z]/.test(w))) {
+        refusedOut.push({ find: e.find, replace: e.replace, why: `it adds what you did not say (${[...numbers, ...added].slice(0, 3).join(', ')})` });
+        continue;
+      }
+    }
+    kept.push(e);
+  }
+  return { edits: kept, refused: refusedOut, asks: asksOut };
+}
+
+/** Does the span [at, at+len) overlap any occurrence of q in text? */
+function overlaps(text: string, at: number, len: number, q: string): boolean {
+  for (let i = text.indexOf(q); i >= 0; i = text.indexOf(q, i + 1)) if (i < at + len && at < i + q.length) return true;
+  return false;
 }

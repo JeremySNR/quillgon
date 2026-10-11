@@ -39,4 +39,6 @@ export * from './engine/lifebook.js';
 export * from './eval-life.js';
 export * from './research.js';
 export * from './guide.js';
+export * from './tells.js';
 export * from './engine/research.js';
+export * from './engine/truth.js';

@@ -8,7 +8,7 @@ import type {
   StructureAlternative,
   StructureOutput,
 } from '../agents/contracts.js';
-import { Intent, SceneCard, type PipelineStage, type StateSnapshot } from '../schemas/index.js';
+import { Intent, isLifeBook, SceneCard, type PipelineStage, type StateSnapshot } from '../schemas/index.js';
 import type { GraphStore } from '../store.js';
 import { paths, sceneOrder } from '../project.js';
 import { canGenerate, cardHash, sceneSync } from '../sync.js';
@@ -16,6 +16,7 @@ import { writerContext } from '../context.js';
 import { relevantFacts, unrevealedFacts, wordsPerScene } from '../scope.js';
 import { fromYaml, slugify, uniq } from '../util.js';
 import { runStylePasses, type Progress, type StylePassReport } from './style-passes.js';
+import { truthGuard } from './truth.js';
 import { resolveObligationScenes } from '../obligations.js';
 import { recordStyleReport } from '../style-report.js';
 import { applyExtraction, runExtraction, type ExtractionResult } from './extraction.js';
@@ -422,7 +423,8 @@ export class Pipeline {
     const oldCard = (await this.committedCard(sceneId)) ?? s.card;
     const voices = s.card.characters.filter((c) => this.p.characters.has(c)).map((c) => ({ character: c, name: this.p.characters.get(c)!.bio.name, voice: this.p.characters.get(c)!.voice }));
     const out = await this.agents.reviseProse({ intent: this.p.intent, change, old_card: oldCard, new_card: s.card, old_prose: before, voices });
-    return { before, after: out.prose };
+    const styled = await runStylePasses(this.store, this.agents, sceneId, out.prose, () => undefined, { voice: false, ...(isLifeBook(this.p.book) ? { truth: truthGuard(this.p, s.card.stories ?? []) } : {}) });
+    return { before, after: styled.prose };
   }
 
   /**

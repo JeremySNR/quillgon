@@ -1,4 +1,6 @@
 import type { Book, StyleSheet } from './schemas/index.js';
+import type { Project } from './project.js';
+import { findTells } from './tells.js';
 import type { BannedPattern } from './style.js';
 import { findBannedPatterns } from './style.js';
 import { ADVERB_RE, FILTER_RE, fingerprint, isAdverb, spellingFixes, type Fingerprint } from './style-sheet.js';
@@ -38,7 +40,23 @@ const SAID_ONLY = new Set(['said', 'asked', 'says', 'asks']);
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const wordRe = (phrase: string) => new RegExp(`${/^\w/.test(phrase) ? '\\b' : ''}${escapeRe(phrase).replace(/\s+/g, '\\s+')}${/\w$/.test(phrase) ? '\\b' : ''}`, 'gi');
 
-export function checkStyle(text: string, sheet: StyleSheet, opts: { book?: Pick<Book, 'pov_mode' | 'tense'>; banned?: BannedPattern[] } = {}): StyleReport {
+export interface StyleCheckOptions {
+  book?: Pick<Book, 'pov_mode' | 'tense'>;
+  banned?: BannedPattern[];
+  /** The author's own writing: AI habits it shares are their voice, not tells. */
+  samples?: string;
+  /** True books never have their real names called stock names. */
+  kind?: 'fiction' | 'true';
+  /** Leave AI habits out (they are measured separately). */
+  tells?: boolean;
+}
+
+/** Everything a style check needs from a book. */
+export function styleCheckOptions(p: Pick<Project, 'book' | 'style'>): StyleCheckOptions {
+  return { book: p.book, banned: p.style.banned, samples: p.style.samples, kind: p.book.kind === 'novel' ? 'fiction' : 'true' };
+}
+
+export function checkStyle(text: string, sheet: StyleSheet, opts: StyleCheckOptions = {}): StyleReport {
   const v: StyleViolation[] = [];
   const add = (x: StyleViolation) => v.push(x);
   const narration = narrationMask(text);
@@ -55,6 +73,13 @@ export function checkStyle(text: string, sheet: StyleSheet, opts: { book?: Pick<
   // banned patterns
   // A phrase on both the never list and the banned list counts once.
   for (const h of findBannedPatterns(text, opts.banned ?? [])) if (!v.some((x) => x.start <= h.index && x.end >= h.index + h.match.length)) add({ rule: 'banned', kind: 'enforced', start: h.index, end: h.index + h.match.length, text: h.match, message: `Banned pattern: ${h.label}` });
+
+  // AI writing habits: strong ones are enforced when the sheet repairs them; weak ones (words that
+  // cluster, repeated openers) are guided.
+  if (opts.tells !== false && (sheet.tells ?? 'repair') !== 'off')
+    for (const t of findTells(text, { samples: opts.samples, kind: opts.kind, allow: sheet.allow ?? [] }))
+      if (!v.some((x) => x.start < t.end && t.start < x.end))
+        add({ rule: `tell:${t.rule}`, kind: t.strength === 'strong' && (sheet.tells ?? 'repair') === 'repair' ? 'enforced' : 'guided', start: t.start, end: t.end, text: t.text, message: t.message });
 
   // spelling
   if (sheet.spelling !== 'any')
