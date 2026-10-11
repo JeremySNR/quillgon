@@ -113,7 +113,8 @@ export function useDictation({ target, scene = null, long = false, session, onTe
   );
 
   const start = useCallback(async () => {
-    if (rec.current || !ready) return;
+    // A take still being tidied finishes first; a second capture would interleave with it.
+    if (rec.current || pending.current || !ready) return;
     if (!Recorder.supported()) return fail('Dictation unavailable')(new Error('This window cannot use a microphone.'));
     const r = new Recorder({ onLevel: setLevel, ...(long ? { onSegment: (wav) => send(wav) } : {}) });
     rec.current = r;
@@ -132,14 +133,16 @@ export function useDictation({ target, scene = null, long = false, session, onTe
     const r = rec.current;
     if (r) {
       rec.current = null;
+      // Out of "listening" at once, so a second click cannot start another capture mid-flush.
+      setState('tidying');
       const last = await r.stop();
       if (last) send(last.wav);
-      setState(pending.current ? 'tidying' : 'idle');
+      else if (!pending.current) setState('idle');
     }
     await chain.current;
   }, [send]);
 
-  const toggle = useCallback(() => (rec.current ? stop() : start()), [start, stop]);
+  const toggle = useCallback(() => (rec.current ? stop() : pending.current ? undefined : start()), [start, stop]);
   useEffect(() => () => void rec.current?.stop(), []);
   return { state, level, start, stop, toggle, ready, reason: project?.dictation?.reason, local: !!project?.dictation?.local };
 }
