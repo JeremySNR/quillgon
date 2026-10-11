@@ -128,6 +128,10 @@ const TITLES: Record<View, string> = {
   covers: 'Book covers',
   history: 'History',
   settings: 'Settings',
+  sessions: 'Sessions',
+  timeline: 'Timeline',
+  notebook: 'Ghostwriter’s notebook',
+  share: 'Before you share',
 };
 
 export function TopBar() {

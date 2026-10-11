@@ -19,7 +19,8 @@ export class ModelSuite implements AgentSuite {
   ) {}
 
   private system(def: AgentDef<unknown, unknown>): string {
-    return [builtinPrompt('shared'), intentBlock(this.ctx.intent()), loadPrompt(def.name, this.ctx.projectDir)].join('\n\n---\n\n');
+    const book = this.ctx.book();
+    return [builtinPrompt(book.kind === 'novel' ? 'shared' : 'shared-life'), intentBlock(this.ctx.intent(), book), loadPrompt(def.name, this.ctx.projectDir)].join('\n\n---\n\n');
   }
 
   private async run<I, O>(def: AgentDef<I, O>, input: I, scene?: string): Promise<O> {

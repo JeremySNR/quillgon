@@ -1,5 +1,10 @@
 import type {
   Book,
+  Notebook,
+  Question,
+  Story,
+  Session,
+  MarginNote,
   Change,
   CharacterBio,
   CharacterVoice,
@@ -88,6 +93,11 @@ export type {
   ShapeFinding,
   Predictability,
   TwistCheck,
+  Notebook,
+  Question,
+  Story,
+  Session,
+  MarginNote,
 };
 
 export interface SceneSummary {
@@ -103,6 +113,8 @@ export interface SceneSummary {
   issues: ContinuityIssue[];
   engagement: number | null;
   style: { enforced: number; guided: number; checked_at: string } | null;
+  /** Open margin notes from the ghostwriter (life stories). */
+  notes: number;
 }
 
 export interface CharacterEntry {
@@ -121,8 +133,28 @@ export interface DictationStatus {
   reason?: string;
 }
 
+export interface SessionSummary {
+  id: string;
+  title: string;
+  started: string;
+  ended: string | null;
+  minutes: number;
+  speaker: string;
+  turns: number;
+  summary: string;
+}
+
+/** Life stories only (null for a novel). */
+export interface LifeSnapshot {
+  stories: Story[];
+  sessions: SessionSummary[];
+  questions: Question[];
+  notebook: Notebook;
+}
+
 export interface Snapshot {
   dir: string;
+  life: LifeSnapshot | null;
   mode: 'offline' | 'live';
   dictation: DictationStatus;
   book: Book;

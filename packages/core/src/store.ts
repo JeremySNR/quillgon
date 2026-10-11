@@ -7,6 +7,11 @@ import {
   Obligation,
   StyleSheet,
   IdeaBoard,
+  Notebook,
+  Questions,
+  SceneNotes,
+  Session,
+  Story,
   CharacterBio,
   CharacterState,
   CharacterVoice,
@@ -68,10 +73,16 @@ export class GraphStore {
 
   static open(dir: string, opts: OpenOptions = {}): GraphStore {
     const s = new GraphStore(path.resolve(dir), opts);
-    // Checkpoints stage the whole tree, so the index must be ignored even in an older repo.
-    if (s.repo.isRepo()) s.repo.ensureIgnored();
     s.reload();
+    // Checkpoints stage the whole tree, so the index (and a life story's recordings) must be
+    // ignored even in an older repo.
+    if (s.repo.isRepo()) s.repo.ensureIgnored(s.ignoredExtra());
     return s;
+  }
+
+  /** What else this book keeps out of git: a life story's recordings. */
+  ignoredExtra(): string[] {
+    return this.project.book.kind === 'novel' ? [] : ['audio/'];
   }
 
   /** Re-read every file from disk and rebuild the index. */
@@ -417,6 +428,70 @@ export class GraphStore {
     }
     this.after(`scene:${id}`);
     return states;
+  }
+
+  // --------------------------------------------------------------- life stories
+
+  saveStory(value: unknown) {
+    const st = parseOrThrow(Story, value, 'stories/?.yaml');
+    this.write(paths.story(st.id), toYaml(st));
+    this.project.stories.set(st.id, st);
+    this.after(`story:${st.id}`);
+    return st;
+  }
+
+  deleteStory(id: string) {
+    this.remove(paths.story(id));
+    this.project.stories.delete(id);
+    this.after(`story:${id}`);
+  }
+
+  saveSession(value: unknown) {
+    const se = parseOrThrow(Session, value, 'sessions/?.yaml');
+    this.write(paths.session(se.id), toYaml(se));
+    this.project.sessions.set(se.id, se);
+    this.after(`session:${se.id}`);
+    return se;
+  }
+
+  saveQuestions(value: unknown) {
+    const q = parseOrThrow(Questions, value, paths.questions);
+    this.write(paths.questions, toYaml(q));
+    this.project.questions = q;
+    this.after('questions');
+    return q;
+  }
+
+  saveNotebook(value: unknown) {
+    const n = parseOrThrow(Notebook, value, paths.notebook);
+    this.write(paths.notebook, toYaml(n));
+    this.project.notebook = n;
+    this.after('notebook');
+    return n;
+  }
+
+  saveNotes(sceneId: string, value: unknown) {
+    const entry = this.scene(sceneId);
+    const notes = parseOrThrow(SceneNotes, value, paths.notes(sceneId));
+    this.write(paths.notes(sceneId), toYaml(notes));
+    entry.notes = notes;
+    this.after(`scene:${sceneId}`);
+    return notes;
+  }
+
+  /** Keep a recording next to its session. Never committed (audio/ is git-ignored). */
+  saveAudio(session: string, file: string, data: Uint8Array) {
+    if (!/^[a-z0-9-]+$/.test(session) || !/^[a-z0-9-]+\.wav$/.test(file)) throw new Error('invalid recording name');
+    const abs = path.join(this.dir, paths.audio(session, file));
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, data, { mode: 0o600 });
+    return paths.audio(session, file);
+  }
+
+  readAudio(session: string, file: string): Buffer | null {
+    if (!/^[a-z0-9-]+$/.test(session) || !/^[a-z0-9-]+\.wav$/.test(file)) return null;
+    const abs = path.join(this.dir, paths.audio(session, file));
+    return fs.existsSync(abs) ? fs.readFileSync(abs) : null;
   }
 
   // --------------------------------------------------------------- reports

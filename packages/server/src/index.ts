@@ -143,7 +143,7 @@ export class NovelServer {
       this.broadcast('store', e);
     });
     this.watch(abs);
-    rememberRecent(abs, store.book.title);
+    rememberRecent(abs, store.book.title, store.book.kind);
     this.broadcast('reloaded', { opened: abs });
     return engine;
   }
@@ -151,7 +151,7 @@ export class NovelServer {
   private watch(dir: string) {
     try {
       this.watcher = fs.watch(dir, { recursive: true }, (_ev, file) => {
-        if (!file || /^(\.engine|\.git|reports)[\\/]?/.test(String(file))) return;
+        if (!file || /^(\.engine|\.git|reports|audio)[\\/]?/.test(String(file))) return;
         if (Date.now() < this.quietUntil) return;
         if (this.reloadTimer) clearTimeout(this.reloadTimer);
         this.reloadTimer = setTimeout(() => this.externalReload(String(file)), 300);
@@ -353,7 +353,21 @@ export class NovelServer {
       '/api/init',
       async ({ body, server }) => {
         const dir = path.resolve(expandHome(body.dir));
-        const store = await initProject(dir, { title: body.title, genre: body.genre, target_words: Number(body.target_words) || 12000, offline: !!body.offline, codex: !!body.codex });
+        const kind = ['novel', 'life-story', 'memoir'].includes(body.kind) ? body.kind : 'novel';
+        const store = await initProject(dir, {
+          title: body.title,
+          genre: body.genre,
+          target_words: Number(body.target_words) || undefined,
+          offline: !!body.offline,
+          codex: !!body.codex,
+          kind,
+          subject_name: typeof body.subject_name === 'string' ? body.subject_name : undefined,
+          life: {
+            ...(body.subject === 'self' || body.subject === 'other' ? { subject: body.subject } : {}),
+            ...(body.audience === 'family' || body.audience === 'public' ? { audience: body.audience } : {}),
+            ...(typeof body.born === 'string' ? { born: body.born } : {}),
+          },
+        });
         store.close();
         server.open(dir);
         return { ok: true, dir };
@@ -837,16 +851,16 @@ function expandHome(p: string) {
   return p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p;
 }
 
-function recent(): { dir: string; title: string; opened: string }[] {
+function recent(): { dir: string; title: string; opened: string; kind?: string }[] {
   try {
-    return (JSON.parse(fs.readFileSync(RECENT, 'utf8')) as { dir: string; title: string; opened: string }[]).filter((r) => fs.existsSync(path.join(r.dir, 'book.yaml')));
+    return (JSON.parse(fs.readFileSync(RECENT, 'utf8')) as { dir: string; title: string; opened: string; kind?: string }[]).filter((r) => fs.existsSync(path.join(r.dir, 'book.yaml')));
   } catch {
     return [];
   }
 }
 
-function rememberRecent(dir: string, title: string) {
-  const list = [{ dir, title, opened: new Date().toISOString() }, ...recent().filter((r) => r.dir !== dir)].slice(0, 12);
+function rememberRecent(dir: string, title: string, kind: string) {
+  const list = [{ dir, title, kind, opened: new Date().toISOString() }, ...recent().filter((r) => r.dir !== dir)].slice(0, 12);
   try {
     fs.mkdirSync(path.dirname(RECENT), { recursive: true });
     fs.writeFileSync(RECENT, JSON.stringify(list, null, 2));
