@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { fieldTarget } from './dictate';
 
 /** A controlled field whose React state only catches up when `render()` is called. */
@@ -38,5 +38,58 @@ describe('dictating into a field', () => {
     const swap = f.target.insert(' nineteen sixty two.');
     swap(' um, sixty-two, I think.');
     expect(f.value()).toBe('It was um, sixty-two, I think.');
+  });
+});
+
+// ------------------------------------------------------------------ the hook
+
+const h = vi.hoisted(() => ({
+  stops: [] as ((v: { wav: Blob; seconds: number } | null) => void)[],
+  posted: [] as string[],
+}));
+
+vi.mock('../lib/app', () => ({ useApp: () => ({ project: { dictation: { ready: true } }, toast: () => undefined, fail: () => () => undefined }) }));
+vi.mock('../lib/api', () => ({
+  post: async (_path: string, body: { audio: string }) => {
+    h.posted.push(body.audio);
+    return { raw: body.audio, text: ` ${body.audio}`, level: 'verbatim', provider: 'offline', seconds: 1, flags: [] };
+  },
+}));
+vi.mock('../lib/recorder', () => ({
+  blobToBase64: async (b: Blob) => b.text(),
+  Recorder: class {
+    static supported = () => true;
+    async start() {}
+    stop() {
+      return new Promise((resolve) => h.stops.push(resolve));
+    }
+  },
+}));
+
+describe('stopping dictation', () => {
+  it('a second stop waits for the last piece of the first, so a send right after a key release has every word', async () => {
+    const { act, renderHook } = await import('@testing-library/react');
+    const { useDictation } = await import('./dictate');
+    let text = '';
+    const target = { context: () => ({ before: text, after: '' }), insert: (t: string) => ((text += t), () => undefined) };
+    const { result } = renderHook(() => useDictation({ target, long: true }));
+    await act(() => result.current.start());
+    let first!: Promise<void>;
+    let second!: Promise<void>;
+    act(() => {
+      first = result.current.stop(); // the key is released
+      second = result.current.stop(); // send, a moment later
+    });
+    let secondDone = false;
+    void second.then(() => (secondDone = true));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+      expect(secondDone).toBe(false); // the recorder has not handed over its last piece yet
+      h.stops[0]({ wav: new Blob(['the last words']), seconds: 1 });
+      await second;
+    });
+    expect(text).toBe(' the last words');
+    await first;
+    expect(result.current.state).toBe('idle');
   });
 });

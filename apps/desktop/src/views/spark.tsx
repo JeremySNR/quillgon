@@ -392,12 +392,21 @@ function TalkPanel({ board, onBoard, beforeSend, focus, setFocus, inputRef }: { 
     log.current?.scrollTo({ top: log.current.scrollHeight, behavior: 'smooth' });
   }, [board.talk.length, pending]);
 
+  const sending = useRef(false);
   const send = async () => {
-    if (pending) return;
-    // Everything said before pressing send is part of the message: wait for the last piece to land.
-    await dictation.stop();
-    const message = textRef.current.trim();
-    if (!message) return;
+    // A ref, not `pending`: a second Enter while the last words are still landing must not send twice.
+    if (sending.current) return;
+    sending.current = true;
+    try {
+      // Everything said before pressing send is part of the message: wait for the last piece to land.
+      await dictation.stop();
+      const message = textRef.current.trim();
+      if (message) await talk(message);
+    } finally {
+      sending.current = false;
+    }
+  };
+  const talk = async (message: string) => {
     setPending(message);
     putText('');
     try {

@@ -77,6 +77,8 @@ export function useDictation({ target, scene = null, long = false, session, onTe
   const [level, setLevel] = useState(0);
   const rec = useRef<Recorder | null>(null);
   const chain = useRef<Promise<void>>(Promise.resolve());
+  // The recorder handing over its last piece: a second stop must wait for it to be queued too.
+  const stopping = useRef<Promise<void>>(Promise.resolve());
   const pending = useRef(0);
   const targetRef = useRef(target);
   targetRef.current = target;
@@ -135,10 +137,10 @@ export function useDictation({ target, scene = null, long = false, session, onTe
       rec.current = null;
       // Out of "listening" at once, so a second click cannot start another capture mid-flush.
       setState('tidying');
-      const last = await r.stop();
-      if (last) send(last.wav);
-      else if (!pending.current) setState('idle');
+      const settle = () => void (!pending.current && setState('idle'));
+      stopping.current = r.stop().then((last) => (last ? send(last.wav) : settle()), settle);
     }
+    await stopping.current;
     await chain.current;
   }, [send]);
 

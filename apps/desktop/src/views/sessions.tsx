@@ -179,6 +179,7 @@ function SessionView({ id }: { id: string }) {
   // What dictation heard for the answer being composed. A ref, not state: send reads it right
   // after the last piece lands, before React has rendered.
   const heard = useRef<Heard>(NOTHING_HEARD);
+  const sending = useRef(false);
   const putText = useCallback((v: string) => {
     textRef.current = v;
     setText(v);
@@ -198,11 +199,19 @@ function SessionView({ id }: { id: string }) {
   const dictation = useDictation({ target: ended ? null : target, long: true, session: id, onText });
 
   const send = async (signal: string | null = null) => {
-    if (pending || !s) return;
-    // Everything said before pressing send is part of the answer: wait for the last piece to land.
-    await dictation.stop();
-    const message = textRef.current.trim();
-    if (!message && !signal) return;
+    // A ref, not `pending`: a second Enter while the last words are still landing must not send twice.
+    if (sending.current || !s) return;
+    sending.current = true;
+    try {
+      // Everything said before pressing send is part of the answer: wait for the last piece to land.
+      await dictation.stop();
+      const message = textRef.current.trim();
+      if (message || signal) await answer(message, signal);
+    } finally {
+      sending.current = false;
+    }
+  };
+  const answer = async (message: string, signal: string | null) => {
     setPending(message || SIGNALS.find((x) => x.signal === signal)?.label || '');
     putText('');
     const h = heard.current;
