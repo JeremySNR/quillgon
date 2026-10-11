@@ -406,14 +406,15 @@ renderer: getUserMedia → AudioWorklet (16 kHz mono) → Silero VAD
 
 | Novel | Life story | |
 | --- | --- | --- |
-| Writing desk | Writing desk | Adapted: counts memories and years covered; the next step is often the biographer's question |
-| | **Memories** | New: recordings, transcripts and photos, with the biographer, voice first |
-| Story planning | Shaping the book | Adapted: same stepper, with steps Purpose, Gather, Timeline, Shape, Chapters, Prose, Review |
+| Writing desk | Writing desk | Adapted: counts memories and years covered; the next step is often the ghostwriter's next session or a draft waiting for notes |
+| | **Sessions** | New: interview sessions with the ghostwriter (see Part 4); recordings, transcripts and photos |
+| Story planning | Shaping the book | Adapted: every chapter has its own stage (see Part 4) instead of the whole book moving together |
 | Manuscript | Manuscript | Same |
 | | **Timeline** | New: years along the axis with age beneath, fuzzy dates as bars, gaps shaded and turned into questions |
 | Characters | People | Adapted: relationship, living, real name or pseudonym, consent |
 | Threads | Themes | Adapted: the same horizontal chart |
 | Ripple review | Ripple review | Same |
+| | **Ghostwriter's notebook** | New: what the AI has learned about the author, editable |
 | Reader report | Before you share | Adapted and new: reader report without twists, plus unsourced claims, consent and the author's note |
 
 **What is hidden in a life-story book:**
@@ -427,7 +428,161 @@ renderer: getUserMedia → AudioWorklet (16 kHz mono) → Silero VAD
 - a source marker per paragraph that plays the recording behind it;
 - a wavy underline on claims no memory supports. This reuses the style-check decorations in `prose-editor.tsx`.
 
-**Dictation belongs to every kind of book.** It works the same everywhere: in the editor, the thinking partner, card fields and Memories. Its settings are a new Voice tab in Settings.
+**Dictation belongs to every kind of book.** It works the same everywhere: in the editor, the thinking partner, card fields, interview sessions and margin notes. Its settings are a new Voice tab in Settings.
+
+## Part 4: The AI as ghostwriter
+
+In a life-story book the AI should not wait for the author to write. It should work like a professional ghostwriter:
+- interview over many sessions;
+- keep asking until a story has real detail;
+- draft the chapters itself;
+- go back and forth with the author until each chapter is signed off.
+
+This replaces the "biographer" described in Part 1. That one only interviewed; this one also drafts and revises.
+
+### How professionals do it
+
+All the sources below came from search summaries, and many are ghostwriters' own marketing, so treat the numbers as rough.
+
+- **Interview hours.** About 20 to 30 hours for a full memoir. Reported figures run from 10 hours to Moehringer's roughly 250 hours with Agassi. A rough rule is 1.5 to 3 hours per chapter ([Amy Suto](https://www.amysuto.com/desk-of-amy-suto/my-process-how-i-ghostwrite-books-as-a-memoir-ghostwriter), [Scribe](https://scribemedia.com/lp/q/memoir-ghostwriter), [London Writers Club on Andrew Crofts](https://londonwritersclub.com/?p=999)).
+- **A sample chapter sets the voice.** Scribe drafts one chapter first, and finishes the rest only once the client agrees the voice ([Scribe](https://scribemedia.com/how-it-works)).
+- **Drafting is a rolling loop.** Other ghostwriters share chapters as they are finished, so they can be discussed in later interviews.
+- **Questions between sessions.** Ghostwriters send written questions between drafts. Clients often give better material answering them later by voice memo than live ([Writers for Hire](https://www.thewritersforhire.com/the-insiders-perspective-what-ghostwriters-wish-clients-knew-before-starting-a-memoir-project/)).
+- **Revision summaries.** Each round comes with a short summary of what changed ([River Editor](https://rivereditor.com/blogs/9-revision-strategies-keep-ghostwriting-clients-happy)).
+- **Voice comes from the transcripts.**
+  - Mark "gold quotes" and keep the client's signature phrases.
+  - Ask "does this sound like you?"
+  - Watch for clients starting to "perform" in later sessions ([River Editor](https://rivereditor.com/blogs/how-ghostwriters-capture-client-voice-first-interview)).
+  - Over-polishing is the common failure. A plain line made grand no longer sounds like the person who lived it.
+- **The ghost argues, the client decides.** Crofts calls the ghost "an instrument of the client". Moehringer's 2 a.m. argument with Prince Harry over the last line of a *Spare* scene ended with Harry agreeing to cut it ([ET](https://www.etonline.com/prince-harrys-ghostwriter-recalls-arguing-with-royal-over-princess-diana-story-for-spare-memoir)).
+
+**Interviewing technique:**
+- **Open questions.** Baylor's oral-history manual prefers "Tell me how you felt about the place where you grew up" to a leading yes/no question. It also warns against fully scripted questions ([Baylor](https://library.web.baylor.edu/sites/g/files/ecbvkj1806/files/2024-12/intro_manual_2016.pdf)).
+- **StoryCorps follow-ups.** "What happened next?", "How did that make you feel?", "What were you thinking at the time?" ([StoryCorps](https://storycorps.org/participate/tips-for-a-great-conversation/)).
+- **The cognitive interview** (Fisher and Geiselman):
+  - rebuild the context;
+  - report everything;
+  - recall in a different order;
+  - recall from another perspective.
+
+  It raises the number of correct details recalled with only a small rise in errors, and older adults benefit more ([Memon, Meissner and Fraser 2010](https://repository.royalholloway.ac.uk/items/2f9938b0-c01b-7310-9ec8-e0aee92c9d17/2)).
+
+**Risks the design has to handle:**
+- **Planted memories.** Misleading wording and imagined events can plant memories. Imagining an event makes people more confident it happened ([Loftus](https://research.universityofcalifornia.edu/profiles/2011/07/elizabeth-loftus.html), [imagination inflation](https://staff.washington.edu/eloftus/Articles/Imagine.htm)). An AI that writes a plausible detail and asks "is that right?" is doing exactly this.
+- **Memory conformity.** 71% of witnesses who discussed an event with a partner later reported details they had only heard from the partner ([Gabbert, Memon and Allan 2003](https://research.gold.ac.uk/id/eprint/10677)). Relatives' accounts must stay separate.
+- **Weak follow-ups.** LLM interviewers produced data of comparable quality to human interviewers, but mostly failed the instruction to follow up on surprising or unclear answers ([Wuttke et al. 2024](https://arxiv.org/pdf/2410.01824)). NN/g found AI moderators interrupting and repeating questions ([NN/g](https://www.nngroup.com/articles/ai-interviewers/)).
+
+### The behaviour
+
+**Three loops**, each feeding the others:
+
+1. **Interview.** Sessions with an agenda the ghostwriter sets and explains ("chapter 2 has one finished scene; you've mentioned Jean three times but I can't picture her").
+   - One question at a time.
+   - Answers are kept as recordings. Exact quotes are marked as verbatim.
+   - Each story climbs a **ladder** until it is enough for a scene:
+     - what happened;
+     - one particular time;
+     - who was there;
+     - what you saw and heard;
+     - what was said;
+     - what you felt then;
+     - what it means now.
+   - "That's all I remember" and "Move on" always end the climb.
+2. **Draft.** When a chapter has enough material, the ghostwriter drafts it from those memories only, in the voice agreed in the sample chapter.
+   - Where something is missing, it leaves a gap and a margin note instead of guessing.
+3. **Revise.** The author reacts in plain speech or comments ("too posh", "Dad wasn't soft").
+   - The ghostwriter plays back a numbered plan of what it understood.
+   - It proposes per-passage diffs to accept or reject.
+   - Standing preferences become style rules (never-words). Gaps become questions for the next session.
+
+**Who holds the pen** is a setting, per book and changeable per chapter:
+
+| Setting | What the AI does |
+| --- | --- |
+| **Interviewer** | Asks and checks; the author writes every word. |
+| **Co-writer** | Drafts scenes the author hands it. |
+| **Ghostwriter** (the default for life stories) | Drafts every chapter; the author answers, reacts and approves. |
+
+**Per-chapter stages:**
+- Gathering → Ready → Draft → Your notes → Revising → Approved.
+- Chapter 1 is the voice sample.
+- The book board shows whose turn each chapter is.
+
+**Margin notes come in four kinds:**
+
+| Kind | Example |
+| --- | --- |
+| **Gap** | "What was the street? I've left it blank rather than guess." |
+| **Two versions** | "Session 3 and session 7 disagree. Which is right?" |
+| **Thin** | "This tells me you loved the dances. Is there one night you remember?" |
+| **Voice** | "You say 'our Peter', so I've kept it." |
+
+There is deliberately no "I imagined this detail, keep it?" note.
+
+**A notebook the author can edit:**
+- how they talk;
+- what is off limits;
+- what it promised to come back to;
+- what to ask other people.
+
+**Questioning rules, enforced in the prompt and, where possible, in code:**
+1. **Open questions, never supplied details.** "Tell me about Jean", not "Was Jean older than you?"
+2. **Ask for one particular time** to turn "we always…" into a scene.
+3. **Rebuild the place first** (the room, the season, the radio), then ask what they remember.
+4. **Ask for then and now** on every important story.
+5. **"I don't remember" is an answer.** The draft says so honestly.
+6. **Revisit stories in later sessions**, from a draft, a photo or a date.
+7. **Short sessions** (default 20 to 40 minutes), check-ins after hard stories, and pause, skip and off-the-record always available. Off-limits topics are never raised.
+8. **Chase the surprising answer.** A vague, surprising or emotional answer gets a follow-up before anything else on the agenda.
+9. **Other people's versions stay separate.** Ask the author an open question; never relay a relative's account as fact.
+10. **Argue once, then defer**, and note the decision.
+11. **Verbatim quotes and signature phrases** survive every revision.
+
+### What it reuses
+
+| Need | Existing code |
+| --- | --- |
+| Turns that file what was said, each undoable | Thinking partner: `talk()`, `undoTalk()`, `applyTalk()` / `revertTalk()` and the `TalkChange` log (`packages/core/src/engine/ideation.ts`; schema in `packages/core/src/schemas/index.ts`). The "Talk it through" prompt in `muse/prompt.md` already asks one question at a time and records the author's words as theirs. |
+| Questions from a draft | Every agent output already has `needs_decision`, and `shared.md` tells agents to put missing facts there instead of inventing them. Margin notes are `needs_decision` grown up: anchored to a quote and offset, with a kind and a status. |
+| Revising passages from feedback | The reviser's "Revise flagged lines" job (`packages/agents/src/agents/reviser/prompt.md`). |
+| Showing a revision round | Ripple review's diff view and `j`/`k`, `a`/`r`, `⇧↵` keys (`apps/desktop/src/views/ripple.tsx`, `components/diff.tsx`). |
+| Feedback that becomes rules | Style sheet never-words and "learned from your edits" (`style/style.yaml`, `views/style-settings.tsx`). |
+| Signing off a chapter | Scene `lock` and `Status` (`approved`, `locked`) in the schema. |
+| One commit per round, revertible | `store.commit(...)`, as `finish()` in `ideation.ts` does. |
+
+### What is new
+
+- **A `ghostwriter` agent** (`packages/agents/src/agents/ghostwriter/`) with six tasks:
+  1. plan a session from the question queue and chapter stages;
+  2. interview turn, with explicit probe triggers for vague, surprising or emotional answers;
+  3. wrap a session: summary, filed changes, new questions;
+  4. draft a chapter, with notes;
+  5. find gaps in a draft;
+  6. plan a revision from free-form feedback.
+- **`sessions/<id>/`:** audio, turns, and what each turn filed.
+- **`ghostwriter/notebook.yaml`:** voice observations, off-limits topics, promises, questions for other people.
+- **`questions.yaml`:** a queue. Each question has:
+  - a target (chapter, scene or person);
+  - the technique it uses;
+  - why it is asked;
+  - a priority;
+  - a status (queued, asked, answered, parked, off-limits).
+- **A per-chapter `stage` on chapters in `structure.yaml`.** Today stages are global (`STAGES` in `packages/core/src/engine/pipeline.ts`), and the whole book moves through them together.
+- **`scenes/<id>/notes.yaml`:** anchored margin notes.
+- **Verbatim marks** on quoted spans that revision passes may not change. The line editor already keeps a change only when code confirms it broke nothing; this adds one more check.
+- **Checks in code:**
+  - a leading-question lint (yes/no questions that introduce a name, place or detail that is not in the author's own words);
+  - an off-limits filter on every planned question;
+  - the draft-against-sources check from Part 1.
+
+### How to know it works
+
+Extend `quillgon eval` with **simulated interviewees**. Each is a model given a hidden, fixed life story (a few hundred facts) and instructions to answer like a person: vague at first, more specific when asked well. This mirrors the simulated reader. Score each run on:
+- **detail per session hour:** hidden facts elicited;
+- **leading-question rate:** questions that introduce facts the interviewee never gave;
+- **follow-up rate:** probes after answers that were seeded as surprising;
+- **invented-fact rate:** draft claims found in neither the transcript nor the hidden life;
+- **voice match:** the both-orders judge comparing drafts with the interviewee's transcripts.
 
 ## Suggested order
 
@@ -437,19 +592,23 @@ renderer: getUserMedia → AudioWorklet (16 kHz mono) → Silero VAD
    - light cleanup with the guardrails.
 
    Small, useful straight away, and it builds the audio plumbing.
-2. **The memory store and memory sessions:**
-   - long-form recording;
-   - raw, never-changed transcripts in `memories/`, versioned with git;
-   - extraction into timeline, people and places, with reviewable, undoable changes.
-3. **`Book.kind` and the biographer:**
-   - the memoir `shared.md`;
-   - McAdams-style interviewing, pacing and sensitivity controls;
-   - `questions.yaml` built from gaps.
-4. **Shape, cards and prose for memoir:**
-   - shape picker;
-   - then / now cards;
-   - verbatim, light or polished prose;
+2. **Sessions and the interviewing ghostwriter:**
+   - `Book.kind` and the memoir `shared.md`;
+   - long-form recording with raw, never-changed transcripts in `sessions/`, versioned with git;
+   - the interview loop: agendas, the story ladder, probe triggers, pacing and off-limits controls;
+   - extraction into timeline, people and places, with reviewable, undoable changes;
+   - `questions.yaml` and the notebook;
+   - the simulated-interviewee eval, from the start, so interview quality can be measured as it changes.
+3. **Drafting with notes:**
+   - shape picker and per-chapter stages;
+   - a voice sample chapter first;
+   - chapter drafts from memories only, with anchored margin notes;
    - the draft-against-sources check.
+4. **Revision rounds:**
+   - free-form feedback to a numbered plan to per-passage diffs, reusing ripple review;
+   - feedback that becomes style rules;
+   - verbatim marks;
+   - chapter sign-off.
 5. **Before sharing:**
    - truth flags and an author's note;
    - living-people review;
