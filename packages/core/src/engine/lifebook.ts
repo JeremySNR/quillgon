@@ -1,7 +1,10 @@
 import type { AgentSuite, GhostReviseOutput, GhostShapeOutput } from '../agents/contracts.js';
 import type { GraphStore } from '../store.js';
-import type { Chapter, ChapterStage, LifeShape, MarginNote, Story, Structure, TimelineEvent } from '../schemas/index.js';
+import type { Chapter, ChapterStage, MarginNote, Story, Structure, TimelineEvent } from '../schemas/index.js';
 import { enoughForScene, gapMarkers, ladderScore, touchesOffLimits, unsourced } from '../life.js';
+import { adviceWording, checkSums, datedFigures, unbackedClaims } from '../guide.js';
+import { draftEvidence, usableEvidence } from '../research.js';
+import { GuideShape, isGuide, LifeShape } from '../schemas/index.js';
 import { styleRules } from '../style-sheet.js';
 import { slugify, uniq } from '../util.js';
 import { Proposals } from './pipeline.js';
@@ -16,7 +19,8 @@ import { Proposals } from './pipeline.js';
 export const STAGES: ChapterStage[] = ['gathering', 'ready', 'draft', 'notes', 'revising', 'approved'];
 
 export interface ShapeProposal extends GhostShapeOutput {
-  shape: LifeShape;
+  /** A life story's shape (chronological, thematic…) or a guide's (framework, problem-led…). */
+  shape: LifeShape | GuideShape;
 }
 
 /** Before the book goes to anyone: what is unsourced, unanswered, unconsented or sensitive. */
@@ -28,8 +32,12 @@ export interface ShareReview {
   people: { id: string; name: string; relationship: string; living: boolean | null; consent: string; naming: string; scenes: number; flag: 'high' | 'note' | null; why: string }[];
   sensitive: { story: string; title: string; scenes: string[] }[];
   unapproved: { id: string; title: string; stage: ChapterStage }[];
+  /** Guides: figures with no source, figures that date, advice wording, sums that do not add up. */
+  claims: { scene: string; title: string; text: string; kind: 'evidence' | 'dated' | 'advice' | 'maths'; detail: string }[];
   authors_note: string;
 }
+
+type CodeNote = Pick<MarginNote, 'kind' | 'quote' | 'text' | 'options'>;
 
 /** One proposed change in a revision round, reviewed passage by passage like a ripple. */
 export interface RevisionItem {
@@ -106,16 +114,18 @@ export class LifeBook {
 
   // ---------------------------------------------------------------- shape
 
-  async proposeShape(shape?: LifeShape): Promise<ShapeProposal> {
+  async proposeShape(shape?: LifeShape | GuideShape): Promise<ShapeProposal> {
     const life = this.p.book.life;
-    const chosen = shape ?? life.shape ?? 'chronological';
+    const guide = isGuide(this.p.book);
+    const chosen = guide ? (GuideShape.safeParse(shape).data ?? this.p.book.guide.shape ?? 'framework') : (LifeShape.safeParse(shape).data ?? life.shape ?? 'chronological');
     const narrator = this.p.characters.get(life.narrator ?? '')?.bio.name ?? 'the narrator';
     const stories = [...this.p.stories.values()].filter((s) => s.status !== 'cut');
     if (!stories.length) throw new Error('there are no stories yet: start with an interview session');
     const out = await this.agents.ghostShape({
+      kind: this.p.book.kind,
       narrator,
       born: life.born,
-      about: this.p.intent.premise,
+      about: guide ? this.guideAbout() : this.p.intent.premise,
       shape: chosen,
       target_words: this.p.book.target_words,
       stories: stories.map((s) => ({ id: s.id, title: s.title, summary: s.summary, when: s.when, key: s.key, depth: Math.round(ladderScore(s.ladder) * 100) / 100, sensitive: s.sensitive })),
@@ -132,6 +142,16 @@ export class LifeBook {
     };
     this.proposals.set('shape', proposal);
     return proposal;
+  }
+
+  /** A guide's brief for shaping: the promise and reader, and how the strongest books on its shelf are built. */
+  private guideAbout(): string {
+    const g = this.p.book.guide;
+    const lib = this.p.research;
+    const parts = [g.promise, g.reader && `For ${g.reader}`, g.method && `Method: ${g.method}`, this.p.intent.premise];
+    if (lib.positioning) parts.push(`Where it sits: ${lib.positioning}`);
+    if (lib.patterns.length) parts.push(`How the strongest books on its shelf are built: ${lib.patterns.slice(0, 5).map((x) => x.text.replace(/\.$/, '')).join('; ')}`);
+    return parts.filter(Boolean).join('. ');
   }
 
   /** Adopt a proposed shape: chapters (keeping existing ones and their scenes), and each story's chapter. */
@@ -153,7 +173,8 @@ export class LifeBook {
       const ch = where.get(s.id) ?? null;
       if (s.chapter !== ch) this.store.saveStory({ ...s, chapter: ch });
     }
-    this.store.updateBook({ life: { ...this.p.book.life, shape: proposal.shape } });
+    if (isGuide(this.p.book)) this.store.updateBook({ guide: { ...this.p.book.guide, shape: GuideShape.parse(proposal.shape) } });
+    else this.store.updateBook({ life: { ...this.p.book.life, shape: LifeShape.parse(proposal.shape) } });
     this.proposals.delete('shape');
     await this.store.commit(`Shape the book: ${proposal.shape}, ${chapters.length} chapters`);
     return chapters;
@@ -199,6 +220,8 @@ export class LifeBook {
     const words = Math.round(this.p.book.target_words / Math.max(chapters.length, 1));
     progress('drafting', `Writing “${ch.title}” from ${stories.length} ${stories.length === 1 ? 'story' : 'stories'}`);
     const out = await this.agents.ghostDraft({
+      kind: this.p.book.kind,
+      evidence: isGuide(this.p.book) ? draftEvidence(this.p.research, this.material(stories.map((s) => s.id)).text) : [],
       narrator,
       born: life.born,
       pen: life.pen,
@@ -225,24 +248,14 @@ export class LifeBook {
       this.store.saveCard({ id: sid, title: sc.title, pov: narratorId, location: placeId(sc.place), time: sc.when, purpose: storyIds.map((x) => this.p.stories.get(x)!.title).join('; '), characters: uniq([narratorId, ...people]), stories: storyIds, then: sc.then, now: sc.now });
       this.store.saveProse(sid, sc.prose, 'generated');
       this.store.markInSync(sid);
-      const material = this.material(storyIds.length ? storyIds : stories.map((s) => s.id));
-      const checks = unsourced(sc.prose, material.text, material.quotes);
+      const checks = this.codeNotes(sc.prose, storyIds.length ? storyIds : stories.map((s) => s.id));
       const notes: MarginNote[] = [
         ...sc.notes.map((n, k) => ({ id: `r${round}-${k + 1}`, kind: n.kind, quote: sc.prose.includes(n.quote) ? n.quote : '', text: n.text, options: n.options, status: 'open' as const, answer: '', round })),
         // Gap markers the draft left without a note still get one.
         ...gapMarkers(sc.prose)
           .filter((g) => !sc.notes.some((n) => n.quote === g))
           .map((g, k) => ({ id: `r${round}-g${k + 1}`, kind: 'gap' as const, quote: g, text: `${g.slice(4, -1).trim() || 'Something is missing here'}: can you tell me?`, options: [], status: 'open' as const, answer: '', round })),
-        ...checks.map((c, k) => ({
-          id: `r${round}-s${k + 1}`,
-          kind: 'source' as const,
-          quote: c.text,
-          text: c.reason === 'quote-changed' ? 'This is not word for word what you said. Keep your exact words?' : 'Nothing you said covers this. Is it true, or should it go?',
-          options: c.reason === 'quote-changed' ? ['Use my exact words', 'This is right'] : ['It’s true', 'Mark as reconstructed', 'Take it out'],
-          status: 'open' as const,
-          answer: '',
-          round,
-        })),
+        ...checks.map((c, k) => ({ id: `r${round}-s${k + 1}`, ...c, status: 'open' as const, answer: '', round })),
       ];
       this.store.saveNotes(sid, { notes });
     });
@@ -253,6 +266,43 @@ export class LifeBook {
     if (!life.voice_sample) this.store.updateBook({ life: { ...life, voice_sample: id } });
     await this.store.commit(`Draft ${round}: ${ch.title}`);
     return ids;
+  }
+
+  /**
+   * The code's own margin notes on a draft. A life story: sentences nothing the author said
+   * supports, and quotes changed. A guide may explain in the ghostwriter's words, so only its
+   * quotes and scripts must be word for word, and its figures need the author or the evidence
+   * library behind them; finance guides also flag undated figures and advice wording, and every
+   * guide's worked examples are added up again.
+   */
+  private codeNotes(prose: string, storyIds: string[], max = 20): CodeNote[] {
+    const material = this.material(storyIds);
+    const quoteNote = (text: string): CodeNote => ({ kind: 'source', quote: text, text: 'This is not word for word what you said. Keep your exact words?', options: ['Use my exact words', 'This is right'] });
+    if (!isGuide(this.p.book)) {
+      return unsourced(prose, material.text, material.quotes, max).map((c) =>
+        c.reason === 'quote-changed' ? quoteNote(c.text) : { kind: 'source', quote: c.text, text: 'Nothing you said covers this. Is it true, or should it go?', options: ['It’s true', 'Mark as reconstructed', 'Take it out'] },
+      );
+    }
+    const g = this.p.book.guide;
+    const notes: CodeNote[] = unsourced(prose, material.text, material.quotes, max)
+      .filter((c) => c.reason === 'quote-changed')
+      .map((c) => quoteNote(c.text));
+    for (const s of unbackedClaims(prose, [...material.text, ...this.evidenceText()], max))
+      notes.push({ kind: 'evidence', quote: s, text: 'A figure or a study with nothing behind it: neither you nor the research said this. Where does it come from?', options: ['I can vouch for it', 'Find a source in Research', 'Take it out'] });
+    if (g.preset === 'finance') {
+      for (const s of datedFigures(prose, g.as_of, max))
+        notes.push({ kind: 'dated', quote: s, text: `This figure changes with the year${g.jurisdiction ? '' : ' and the country'}. Say when it holds${g.jurisdiction ? ` (${g.jurisdiction})` : ''}, or give it in the reader's own terms.`, options: g.as_of ? [`Add “as of ${g.as_of}”`, 'It doesn’t change'] : ['It doesn’t change'] });
+      for (const s of adviceWording(prose, max))
+        notes.push({ kind: 'advice', quote: s, text: 'This reads as a personal recommendation or a promise of returns. Readers’ circumstances differ: reword it as information, or say who it suits and who it doesn’t.', options: ['Reword it', 'Keep it'] });
+    }
+    for (const c of checkSums(prose))
+      notes.push({ kind: 'maths', quote: c.text, text: `The sum doesn’t add up: by my working it comes to ${c.expected.toLocaleString('en-GB')}, not ${c.stated.toLocaleString('en-GB')}.`, options: ['Fix the figure', 'The working is right'] });
+    return notes.slice(0, max);
+  }
+
+  /** Evidence a guide may stand on: kept and new, not dismissed, not failed. */
+  private evidenceText(): string[] {
+    return usableEvidence(this.p.research).flatMap((e) => [e.claim, e.quote]);
   }
 
   /** The chapter's prose, scenes joined. */
@@ -363,6 +413,7 @@ export class LifeBook {
     progress('revising', `Reading your notes on “${ch.title}”`);
     const narrator = this.p.characters.get(this.p.book.life.narrator ?? '')?.bio.name ?? 'the narrator';
     const out = await this.agents.ghostRevise({
+      kind: this.p.book.kind,
       narrator,
       chapter: { id, title: ch.title, round: ch.round ?? 1 },
       scenes,
@@ -538,7 +589,8 @@ export class LifeBook {
     const sceneIds = chapters.flatMap((c) => c.scenes).filter((s) => p.scenes.get(s)?.prose);
     const title = (sid: string) => p.scenes.get(sid)?.card.title || sid;
     const confirmed = (sid: string) =>
-      new Set((p.scenes.get(sid)?.notes?.notes ?? []).filter((n) => n.kind === 'source' && (n.status === 'resolved' || (n.status === 'answered' && !/take it out|exact words/i.test(n.answer)) || n.status === 'dismissed')).map((n) => n.quote));
+      new Set((p.scenes.get(sid)?.notes?.notes ?? []).filter((n) => ['source', 'evidence', 'dated', 'advice', 'maths'].includes(n.kind) && (n.status === 'resolved' || (n.status === 'answered' && !/take it out|exact words|fix the figure|reword/i.test(n.answer)) || n.status === 'dismissed')).map((n) => n.quote));
+    const claims: ShareReview['claims'] = [];
     const unsourcedList: ShareReview['unsourced'] = [];
     const gaps: ShareReview['gaps'] = [];
     const open: ShareReview['open_notes'] = [];
@@ -547,8 +599,11 @@ export class LifeBook {
       const ok = confirmed(sid);
       const stories = sc.card.stories?.length ? sc.card.stories : [];
       if (stories.length) {
-        const m = this.material(stories);
-        for (const u of unsourced(sc.prose!.body, m.text, m.quotes, 20)) if (!ok.has(u.text)) unsourcedList.push({ scene: sid, title: title(sid), text: u.text, reason: u.reason });
+        for (const n of this.codeNotes(sc.prose!.body, stories, 40)) {
+          if (ok.has(n.quote)) continue;
+          if (n.kind === 'source') unsourcedList.push({ scene: sid, title: title(sid), text: n.quote, reason: /word for word/.test(n.text) ? 'quote-changed' : 'no-source' });
+          else if (n.kind === 'evidence' || n.kind === 'dated' || n.kind === 'advice' || n.kind === 'maths') claims.push({ scene: sid, title: title(sid), text: n.quote, kind: n.kind, detail: n.text });
+        }
       }
       for (const g of gapMarkers(sc.prose!.body)) gaps.push({ scene: sid, title: title(sid), marker: g });
       const n = (sc.notes?.notes ?? []).filter((x) => x.status === 'open').length;
@@ -577,13 +632,14 @@ export class LifeBook {
       .map((s) => ({ story: s.id, title: s.title, scenes: sceneIds.filter((sid) => p.scenes.get(sid)!.card.stories?.includes(s.id)) }))
       .filter((s) => s.scenes.length);
     const unapproved = chapters.filter((c) => c.scenes.length && this.stageOf(c.id) !== 'approved').map((c) => ({ id: c.id, title: c.title, stage: this.stageOf(c.id) }));
-    return { unsourced: unsourcedList, gaps, open_notes: open, people, sensitive, unapproved, authors_note: this.authorsNote() };
+    return { unsourced: unsourcedList, gaps, open_notes: open, people, sensitive, unapproved, claims, authors_note: this.authorsNote() };
   }
 
   /** A short author's note from the choices made: memory, reconstructed dialogue, changed names, other versions. */
   authorsNote(): string {
     const p = this.p;
     const people = [...p.characters.values()];
+    if (isGuide(p.book)) return this.guideNote();
     const changed = people.some((c) => c.bio.naming === 'pseudonym');
     const composite = people.some((c) => c.bio.naming === 'composite');
     const versions = [...p.stories.values()].some((s) => s.versions.length);
@@ -595,6 +651,23 @@ export class LifeBook {
     if (changed) lines.push('Some names have been changed to protect the privacy of the people involved.');
     if (composite) lines.push('One or two people are composites of several real people.');
     if (p.book.life.audience === 'family') lines.push('It was written for my family.');
+    return lines.join(' ');
+  }
+
+  /** A guide's front-matter note: where its knowledge comes from, how cases are disguised, and its limits. */
+  private guideNote(): string {
+    const p = this.p;
+    const g = p.book.guide;
+    const people = [...p.characters.values()].filter((c) => c.id !== p.book.life.narrator);
+    const disguised = people.some((c) => c.bio.naming === 'pseudonym' || c.bio.naming === 'composite');
+    const cited = p.research.evidence.some((e) => e.status !== 'dismissed');
+    const lines = ['What follows comes from my own work: the methods I use, and what I have seen work and fail.'];
+    if (people.length) lines.push(disguised ? 'The people in it are real, but names and details have been changed, and some are composites, so that no one can be identified.' : 'The people in it are real, and appear with their permission.');
+    if (cited) lines.push('Where the book relies on research or published figures, the source is given.');
+    if (g.preset === 'finance') {
+      lines.push('This book is for information and education. It is not personal financial advice: your circumstances are your own, so take regulated advice before acting on anything here.');
+      if (g.jurisdiction || g.as_of) lines.push(`Figures are correct${g.jurisdiction ? ` for ${g.jurisdiction}` : ''}${g.as_of ? ` as of ${g.as_of}` : ''}, and rules and rates change.`);
+    } else if (g.preset === 'self-help') lines.push('It is not a substitute for professional help. If you are struggling, please talk to someone qualified.');
     return lines.join(' ');
   }
 

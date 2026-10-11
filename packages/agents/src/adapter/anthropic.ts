@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { Backend, RawRequest, RawResponse } from './types.js';
+import type { Backend, RawRequest, RawResponse, WebSource } from './types.js';
 import { RefusalError } from './types.js';
 import { strictify } from './schema.js';
 
@@ -46,37 +46,62 @@ export class AnthropicBackend implements Backend {
     const client = this.client(req);
     const outputConfig: Record<string, unknown> = {};
     if (req.config.effort) outputConfig.effort = req.config.effort;
-    if (native) outputConfig.format = { type: 'json_schema', schema: strictify(req.jsonSchema, 'optional') };
+    // Research asks for JSON in the prompt rather than natively: search results arrive as cited
+    // text blocks, and the JSON is pulled out of the final text either way.
+    if (native && !req.web) outputConfig.format = { type: 'json_schema', schema: strictify(req.jsonSchema, 'optional') };
     const fallbackCapable = /^claude-(opus-5|fable-5|sonnet-5-5)/.test(req.config.model);
-    const params = {
-      model: req.config.model,
-      max_tokens: req.maxTokens,
-      // The system prompt (shared rules + intent + agent prompt + output schema) is stable
-      // across calls: cache it, so repeated calls read it at a fraction of the price.
-      system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }],
-      messages: req.messages,
-      ...(Object.keys(outputConfig).length ? { output_config: outputConfig } : {}),
-      ...(fallbackCapable ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' } : {}),
-    };
-    const stream = fallbackCapable
-      ? client.beta.messages.stream(params as unknown as Parameters<typeof client.beta.messages.stream>[0])
-      : client.messages.stream(params as unknown as Parameters<typeof client.messages.stream>[0]);
-    const msg = (await stream.finalMessage()) as Anthropic.Message & { stop_details?: { category?: string; explanation?: string } };
-    if (msg.stop_reason === 'refusal') {
-      throw new RefusalError(msg.stop_details?.category ?? null, msg.stop_details?.explanation ?? 'the model declined this request');
+    // The dynamic-filtering search needs a current model; older ones take the basic tool.
+    const searchTool = /^claude-(opus-(5|4-[678])|fable-5|sonnet-(5|4-6))/.test(req.config.model) ? 'web_search_20260209' : 'web_search_20250305';
+    const messages: Anthropic.MessageParam[] = req.messages.map((m) => ({ role: m.role, content: m.content }));
+    const usage = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0, searches: 0 };
+    const sources = new Map<string, WebSource>();
+    let text = '';
+    let model = req.config.model;
+    // A long search can pause the server's loop; sending the turn back resumes it.
+    for (let turn = 0; turn < 6; turn++) {
+      const params = {
+        model: req.config.model,
+        max_tokens: req.maxTokens,
+        // The system prompt (shared rules + intent + agent prompt + output schema) is stable
+        // across calls: cache it, so repeated calls read it at a fraction of the price.
+        system: [{ type: 'text', text: req.system, cache_control: { type: 'ephemeral' } }],
+        messages,
+        ...(req.web ? { tools: [{ type: searchTool, name: 'web_search', max_uses: req.web.maxSearches }] } : {}),
+        ...(Object.keys(outputConfig).length ? { output_config: outputConfig } : {}),
+        ...(fallbackCapable ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' } : {}),
+      };
+      const stream = fallbackCapable
+        ? client.beta.messages.stream(params as unknown as Parameters<typeof client.beta.messages.stream>[0])
+        : client.messages.stream(params as unknown as Parameters<typeof client.messages.stream>[0]);
+      const msg = (await stream.finalMessage()) as Anthropic.Message & { stop_details?: { category?: string; explanation?: string } };
+      if (msg.stop_reason === 'refusal') {
+        throw new RefusalError(msg.stop_details?.category ?? null, msg.stop_details?.explanation ?? 'the model declined this request');
+      }
+      const u = msg.usage as Anthropic.Usage & { cache_creation_input_tokens?: number | null; cache_read_input_tokens?: number | null };
+      usage.input += u.input_tokens;
+      usage.output += u.output_tokens;
+      usage.cacheWrite += u.cache_creation_input_tokens ?? 0;
+      usage.cacheRead += u.cache_read_input_tokens ?? 0;
+      usage.searches += u.server_tool_use?.web_search_requests ?? 0;
+      model = msg.model;
+      // The answer is in the last turn; text before a pause is commentary between searches.
+      text = '';
+      for (const b of msg.content) {
+        if (b.type === 'text') text += b.text;
+        // A failed search comes back as an error object, not a list.
+        else if (b.type === 'web_search_tool_result' && Array.isArray(b.content)) for (const r of b.content) sources.set(r.url, { url: r.url, title: r.title });
+      }
+      if (msg.stop_reason !== 'pause_turn') break;
+      messages.push({ role: 'assistant', content: msg.content as Anthropic.ContentBlockParam[] });
     }
-    const text = msg.content
-      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-      .map((b) => b.text)
-      .join('');
-    const u = msg.usage as Anthropic.Usage & { cache_creation_input_tokens?: number | null; cache_read_input_tokens?: number | null };
     return {
       text,
-      inputTokens: u.input_tokens,
-      outputTokens: u.output_tokens,
-      cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
-      cacheReadTokens: u.cache_read_input_tokens ?? 0,
-      model: msg.model,
+      inputTokens: usage.input,
+      outputTokens: usage.output,
+      cacheWriteTokens: usage.cacheWrite,
+      cacheReadTokens: usage.cacheRead,
+      model,
+      ...(req.web ? { sources: [...sources.values()], searches: usage.searches } : {}),
     };
   }
 }

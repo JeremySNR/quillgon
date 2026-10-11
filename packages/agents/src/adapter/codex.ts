@@ -41,14 +41,20 @@ export class CodexBackend implements Backend {
         sandboxMode: 'read-only',
         approvalPolicy: 'never',
         networkAccessEnabled: false,
-        webSearchMode: 'disabled',
+        // Research may search the web; nothing else may. Shell commands stay without network either way.
+        webSearchMode: req.web ? 'live' : 'disabled',
       });
+      const rules = req.web
+        ? `Search the web as needed (at most ${req.web.maxSearches} searches), then return the requested JSON. Do not run commands or inspect files.`
+        : 'Use only the supplied story context. Return the requested JSON; do not use tools or inspect files.';
       const result = await thread.run(
-        `${req.system}\n\nUse only the supplied story context. Return the requested JSON; do not use tools or inspect files.\n\nConversation:\n${JSON.stringify(req.messages)}`,
+        `${req.system}\n\n${rules}\n\nConversation:\n${JSON.stringify(req.messages)}`,
         { outputSchema: nativeSchema(req.jsonSchema), signal: AbortSignal.timeout(15 * 60 * 1000) },
       );
       const cached = result.usage?.cached_input_tokens ?? 0;
-      return { text: result.finalResponse, inputTokens: (result.usage?.input_tokens ?? 0) - cached, cacheReadTokens: cached, outputTokens: result.usage?.output_tokens ?? 0, model: req.config.model || 'codex-account-default' };
+      // Codex does not report which pages a search returned; research checks every quote itself.
+      const web = req.web ? { sources: null, searches: result.items.filter((i) => i.type === 'web_search').length } : {};
+      return { ...web, text: result.finalResponse, inputTokens: (result.usage?.input_tokens ?? 0) - cached, cacheReadTokens: cached, outputTokens: result.usage?.output_tokens ?? 0, model: req.config.model || 'codex-account-default' };
     } catch (error) {
       const message = (error as Error).message;
       if ((error as Error).name === 'TimeoutError' || /aborted|timed? ?out/i.test(message)) {

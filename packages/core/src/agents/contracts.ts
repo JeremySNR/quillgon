@@ -12,7 +12,8 @@ import {
   KeyMoment,
   DatePrecision,
   Certainty,
-  Ladder,
+  LadderPatch,
+  LessonPart,
   Story,
   Obligation,
   PlotPoint,
@@ -553,7 +554,19 @@ const StoryBrief = z.object({
 });
 export type StoryBrief = z.infer<typeof StoryBrief>;
 
+/** Something from research the ghostwriter may bring into an interview, attributed: another book's view, a reader question. */
+export const ResearchPrompt = z.object({ text: z.string(), source: z.string().default('') });
+export type ResearchPrompt = z.infer<typeof ResearchPrompt>;
+
+/** A fact a draft may state, with where it comes from: the only outside facts a guide may use. */
+export const DraftEvidence = z.object({ id: Id, claim: z.string(), quote: z.string().default(''), source: z.string().default(''), url: z.string().default(''), as_of: z.string().default(''), jurisdiction: z.string().default('') });
+export type DraftEvidence = z.infer<typeof DraftEvidence>;
+
 export const GhostPlanInput = z.object({
+  /** life-story, memoir, or guide. */
+  kind: z.string().default('life-story'),
+  /** Research to bring in (guides): reader questions and other books' views, to react to. */
+  research: z.array(ResearchPrompt).default([]),
   minutes: z.number(),
   /** Who is answering: empty for the narrator. */
   speaker: z.string().default(''),
@@ -587,6 +600,8 @@ export const AuthorSignal = z.enum(['dont-remember', 'move-on', 'off-record', 'h
 export type AuthorSignal = z.infer<typeof AuthorSignal>;
 
 export const GhostTurnInput = z.object({
+  kind: z.string().default('life-story'),
+  research: z.array(ResearchPrompt).default([]),
   speaker: z.string().default(''),
   narrator: z.string(),
   born: z.string().default(''),
@@ -628,8 +643,9 @@ export const GhostTurnOutput = z.object({
     .nullable()
     .default(null),
   /** Rungs the answer climbed. */
-  ladder: Ladder.partial().default({}),
-  details: z.array(z.object({ text: z.string().min(1), certainty: Certainty.default('sure') })).default([]),
+  ladder: LadderPatch.default({}),
+  /** In a guide, `part` says which part of the lesson each detail is. */
+  details: z.array(z.object({ text: z.string().min(1), certainty: Certainty.default('sure'), part: LessonPart.optional() })).default([]),
   quotes: z.array(z.object({ text: z.string().min(1), who: z.string().default('') })).default([]),
   then: z.string().nullable().default(null),
   now: z.string().nullable().default(null),
@@ -663,6 +679,7 @@ export const GhostWrapOutput = z.object({
 export type GhostWrapOutput = z.infer<typeof GhostWrapOutput>;
 
 export const GhostShapeInput = z.object({
+  kind: z.string().default('life-story'),
   narrator: z.string(),
   born: z.string().default(''),
   about: z.string().default(''),
@@ -683,7 +700,8 @@ export const GhostShapeOutput = z.object({
 export type GhostShapeOutput = z.infer<typeof GhostShapeOutput>;
 
 export const NoteDraft = z.object({
-  kind: z.enum(['gap', 'versions', 'thin', 'voice']),
+  /** Guides may also note `steps` (too vague to act on) and `example` (an idea with no case). */
+  kind: z.enum(['gap', 'versions', 'thin', 'voice', 'steps', 'example']),
   /** Exact text in the scene's prose the note is about ("[TK: the street]"). Empty: the whole scene. */
   quote: z.string().default(''),
   text: z.string().min(1),
@@ -692,6 +710,9 @@ export const NoteDraft = z.object({
 export type NoteDraft = z.infer<typeof NoteDraft>;
 
 export const GhostDraftInput = z.object({
+  kind: z.string().default('life-story'),
+  /** Guides: the outside facts the chapter may state, each with its source. Nothing else from outside. */
+  evidence: z.array(DraftEvidence).default([]),
   narrator: z.string(),
   born: z.string().default(''),
   pen: z.string(),
@@ -733,6 +754,7 @@ export const GhostDraftOutput = z.object({
 export type GhostDraftOutput = z.infer<typeof GhostDraftOutput>;
 
 export const GhostReviseInput = z.object({
+  kind: z.string().default('life-story'),
   narrator: z.string(),
   chapter: z.object({ id: Id, title: z.string(), round: z.number().int() }),
   scenes: z.array(
@@ -815,6 +837,97 @@ export type IntervieweeInput = z.infer<typeof IntervieweeInput>;
 export const IntervieweeOutput = z.object({ answer: z.string().min(1), told: z.array(Id).default([]) });
 export type IntervieweeOutput = z.infer<typeof IntervieweeOutput>;
 
+// ------------------------------------------------------------------ research
+
+/** What research knows about the book it is researching for. */
+export const ResearchContext = z.object({
+  kind: z.string(),
+  title: z.string(),
+  /** The premise, the promise to the reader, or the life: whatever the book is about. */
+  about: z.string().default(''),
+  /** Who the book is for. */
+  reader: z.string().default(''),
+  genre: z.string().default(''),
+  /** What the author asked research to look into. */
+  brief: z.string().default(''),
+  /** Where figures and rules must hold (finance guides): "UK", "US". */
+  jurisdiction: z.string().default(''),
+  /** Already in the library, so a run adds rather than repeats. */
+  known_comps: z.array(z.string()).default([]),
+  known_gaps: z.array(z.string()).default([]),
+});
+export type ResearchContext = z.infer<typeof ResearchContext>;
+
+export const ResearchPlanInput = z.object({ context: ResearchContext, web_queries: z.number().int().min(1).max(12), catalogue_queries: z.number().int().min(1).max(6) });
+export type ResearchPlanInput = z.infer<typeof ResearchPlanInput>;
+export const ResearchPlanOutput = z.object({
+  /** One line on what this run will look for. */
+  focus: z.string(),
+  web: z.array(z.object({ query: z.string().min(1), why: z.string().default('') })).min(1).max(12),
+  /** Subject or title searches for a book catalogue ("cold calling sales", "personal finance UK"). */
+  catalogue: z.array(z.string().min(1)).min(1).max(6),
+});
+export type ResearchPlanOutput = z.infer<typeof ResearchPlanOutput>;
+
+/** A fact from the web, with the exact words that support it and where they are. */
+export const WebFact = z.object({
+  claim: z.string().min(1),
+  /** Copied word for word from the page: code checks it is there. */
+  quote: z.string().min(1),
+  url: z.string().min(1),
+  title: z.string().default(''),
+  publisher: z.string().default(''),
+  published: z.string().default(''),
+  topic: z.string().default(''),
+  as_of: z.string().default(''),
+  jurisdiction: z.string().default(''),
+});
+export type WebFact = z.infer<typeof WebFact>;
+
+export const ResearchSearchInput = z.object({ context: ResearchContext, query: z.string(), why: z.string().default(''), max_facts: z.number().int().min(1).max(20).default(8), max_searches: z.number().int().min(1).max(10).default(4) });
+export type ResearchSearchInput = z.infer<typeof ResearchSearchInput>;
+export const ResearchSearchOutput = z.object({
+  facts: z.array(WebFact).default([]),
+  /** What readers ask, in forums and reviews, that a book like this should answer. */
+  reader_questions: z.array(z.object({ question: z.string().min(1), url: z.string().default(''), why: z.string().default('') })).default([]),
+  /** Books the pages mention that sit on the same shelf. */
+  books: z.array(z.object({ title: z.string().min(1), author: z.string().default(''), why: z.string().default('') })).default([]),
+});
+export type ResearchSearchOutput = z.infer<typeof ResearchSearchOutput>;
+
+export const ResearchCompsInput = z.object({
+  context: ResearchContext,
+  /** Searches allowed for reviews and discussions of these books. */
+  max_searches: z.number().int().min(0).max(12).default(4),
+  books: z.array(z.object({ id: Id, title: z.string(), authors: z.array(z.string()), year: z.string(), subjects: z.array(z.string()).default([]), description: z.string().default(''), contents: z.array(z.string()).default([]) })).min(1),
+});
+export type ResearchCompsInput = z.infer<typeof ResearchCompsInput>;
+export const ResearchCompsOutput = z.object({
+  comps: z.array(z.object({ id: Id, promise: z.string().default(''), framework: z.string().default(''), structure: z.string().default(''), praise: z.array(z.string()).default([]), complaints: z.array(z.string()).default([]), shelf: z.enum(['core', 'adjacent']).default('core') })),
+  /** How the strongest of these books are built. */
+  patterns: z.array(z.object({ text: z.string().min(1), from: z.array(Id).default([]) })).default([]),
+  /** What these books leave unanswered or get wrong: questions for the author. */
+  gaps: z.array(z.object({ question: z.string().min(1), why: z.string().default(''), kind: z.enum(['reader-question', 'uncovered', 'disagreement', 'check']).default('uncovered') })).default([]),
+  positioning: z.string().default(''),
+});
+export type ResearchCompsOutput = z.infer<typeof ResearchCompsOutput>;
+
+export const ResearchMaterialInput = z.object({ context: ResearchContext, file: z.string(), text: z.string() });
+export type ResearchMaterialInput = z.infer<typeof ResearchMaterialInput>;
+export const ResearchMaterialOutput = z.object({
+  facts: z.array(z.object({ claim: z.string().min(1), quote: z.string().min(1), topic: z.string().default('') })).default([]),
+  /** What the material covers that the book does not yet: questions to ask the author. */
+  questions: z.array(z.object({ question: z.string().min(1), why: z.string().default('') })).default([]),
+});
+export type ResearchMaterialOutput = z.infer<typeof ResearchMaterialOutput>;
+
+/** A research answer, with the pages its searches actually returned (null: the provider does not say). */
+export interface WebAnswer<T> {
+  output: T;
+  sources: { url: string; title: string }[] | null;
+  searches: number;
+}
+
 // ------------------------------------------------------------------ the suite the core calls
 
 export interface CallInfo {
@@ -864,6 +977,14 @@ export interface AgentSuite {
   ghostRevise(input: GhostReviseInput): Promise<GhostReviseOutput>;
   /** Evals: a simulated person answering the ghostwriter from a hidden life. */
   interviewee(input: IntervieweeInput): Promise<IntervieweeOutput>;
+  /** Research: what to search for, in this book's terms. */
+  researchPlan(input: ResearchPlanInput): Promise<ResearchPlanOutput>;
+  /** Research: one web search, reduced to facts with exact quotes, reader questions and books. */
+  researchSearch(input: ResearchSearchInput): Promise<WebAnswer<ResearchSearchOutput>>;
+  /** Research: the books on the shelf, what they promise and how they are built, and what they miss. */
+  researchComps(input: ResearchCompsInput): Promise<WebAnswer<ResearchCompsOutput>>;
+  /** Research: the author's own material, as facts with exact quotes and questions. */
+  researchMaterial(input: ResearchMaterialInput): Promise<ResearchMaterialOutput>;
 }
 
 export const Contracts = {
@@ -890,6 +1011,12 @@ export const Contracts = {
   continuity: { input: ContinuityInput, output: ContinuityOutput },
   scribe: { input: ScribeInput, output: ScribeOutput },
   interviewee: { input: IntervieweeInput, output: IntervieweeOutput },
+  researcher: {
+    plan: { input: ResearchPlanInput, output: ResearchPlanOutput },
+    search: { input: ResearchSearchInput, output: ResearchSearchOutput },
+    comps: { input: ResearchCompsInput, output: ResearchCompsOutput },
+    material: { input: ResearchMaterialInput, output: ResearchMaterialOutput },
+  },
   ghostwriter: {
     plan: { input: GhostPlanInput, output: GhostPlanOutput },
     turn: { input: GhostTurnInput, output: GhostTurnOutput },

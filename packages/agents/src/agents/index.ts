@@ -12,5 +12,6 @@ export { critic, sampler } from './critic/index.js';
 export { judge } from './judge/index.js';
 export { scribe } from './scribe/index.js';
 export { interviewee } from './interviewee/index.js';
+export { researchComps, researchMaterial, researchPlan, researchSearch } from './researcher/index.js';
 export { ghostDraft, ghostPlan, ghostRevise, ghostShape, ghostTurn, ghostWrap } from './ghostwriter/index.js';
 export { builtinPrompt, loadPrompt, intentBlock, type AgentDef } from './define.js';

@@ -272,6 +272,42 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
     },
   },
 
+  research: {
+    help: 'research ["what to look into"] [--deep]   Find the books on your shelf, reader questions and sourced facts\n        research add <file.md|.txt>   Read your own material (notes, talks, course pages)\n        research show                 What research has found',
+    async run() {
+      const e = openEngine();
+      const R = e.research;
+      const lib = () => e.store.project.research;
+      if (args[0] === 'add') {
+        const file = args[1];
+        if (!file) throw new Error('usage: quillgon research add <file.md|.txt>');
+        const name = path.basename(file).toLowerCase().replace(/[^a-z0-9.]+/g, '-').replace(/^-+/, '');
+        const r = await R.addMaterial(/\.(md|txt)$/.test(name) ? name : `${name}.txt`, fs.readFileSync(file, 'utf8'));
+        return void say(green(`✓ Read ${name}: ${r.evidence} facts quoted from it, ${r.gaps} questions for you`));
+      }
+      if (args[0] === 'show') {
+        const l = lib();
+        if (l.positioning) say(`${bold('Where the book sits')}\n  ${l.positioning}`);
+        say(bold(`\nThe shelf (${l.comps.length})`));
+        for (const c of l.comps.filter((x) => x.status !== 'dismissed')) say(`  ${c.title}${c.authors.length ? dim(` · ${c.authors.join(', ')}`) : ''}${c.year ? dim(` (${c.year})`) : ''}${c.promise ? `\n    ${dim(c.promise)}` : ''}`);
+        say(bold(`\nEvidence (${l.evidence.length})`));
+        for (const x of l.evidence.filter((v) => v.status !== 'dismissed')) say(`  ${x.check === 'found' ? green('✓') : yellow('?')} ${x.claim}${dim(`  ${l.sources.find((s) => s.id === x.source)?.url || l.sources.find((s) => s.id === x.source)?.file || ''}`)}`);
+        say(bold(`\nQuestions for you (${l.gaps.filter((g) => g.status === 'open').length} open)`));
+        for (const g of l.gaps.filter((v) => v.status === 'open')) say(`  · ${g.question}`);
+        return;
+      }
+      const depth = flags.deep ? 'deep' : 'quick';
+      const can = R.canSearch();
+      if (!can.ok) say(yellow(can.reason));
+      const est = R.estimate(depth);
+      if (can.ok && !yes && !(await confirm(`Run ${depth} research with ${est.model}? About ${est.searches} searches${est.subscription ? ' on your subscription' : `, roughly $${est.cost_usd}`}.`, true))) return;
+      const run = await R.run({ brief: args.join(' ') || undefined, depth, progress: (l) => say(dim(`  · ${l}`)) });
+      say(bold(`\nResearch ${run.status}: ${run.found.comps} books, ${run.found.evidence} facts, ${run.found.gaps} questions${run.cost_usd ? `, $${run.cost_usd}` : ''}`));
+      if (run.error) say(yellow(`  ${run.error}`));
+      say(dim('  quillgon research show'));
+    },
+  },
+
   session: {
     help: 'session [--minutes 30] [--speaker Name]   Life stories: an interview with your ghostwriter. Commands: /move, /forget, /off <answer>, /hard, /undo, /end',
     async run() {

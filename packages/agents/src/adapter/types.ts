@@ -13,6 +13,14 @@ export interface RawRequest {
   jsonSchema: Record<string, unknown>;
   schemaName: string;
   maxTokens: number;
+  /** Let the model search the web (research only), up to this many searches. */
+  web?: { maxSearches: number };
+}
+
+/** A page a web search actually returned. */
+export interface WebSource {
+  url: string;
+  title: string;
 }
 
 export interface RawResponse {
@@ -23,6 +31,9 @@ export interface RawResponse {
   cacheWriteTokens?: number;
   cacheReadTokens?: number;
   model: string;
+  /** With `web`: the pages the searches returned (null when the provider does not say), and how many searches ran. */
+  sources?: WebSource[] | null;
+  searches?: number;
 }
 
 /** One provider. Turns a request into raw text. */
@@ -43,6 +54,8 @@ export interface UsageRecord {
   cache_read_tokens?: number;
   cache_write_tokens?: number;
   cost_usd: number;
+  /** Web searches the call ran (research). */
+  searches?: number;
   attempts: number;
   ok: boolean;
   /** Why the call failed, when ok is false. */

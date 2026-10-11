@@ -1,5 +1,8 @@
-import { GhostDraftInput, GhostDraftOutput, GhostReviseInput, GhostReviseOutput, GhostPlanInput, GhostPlanOutput, GhostShapeInput, GhostShapeOutput, GhostTurnInput, GhostTurnOutput, GhostWrapInput, GhostWrapOutput, LADDER } from '@quillgon/core';
+import { GhostDraftInput, GhostDraftOutput, GhostReviseInput, GhostReviseOutput, GhostPlanInput, GhostPlanOutput, GhostShapeInput, GhostShapeOutput, GhostTurnInput, GhostTurnOutput, GhostWrapInput, GhostWrapOutput, GUIDE_LADDER, LADDER } from '@quillgon/core';
 import { defineAgent, json } from '../define.js';
+
+/** Says which kind of book: a guide changes what is drawn out and how (see "When the book is a guide"). */
+const kindLine = (kind: string) => (kind === 'guide' ? 'kind: guide. This book teaches what the author knows; "narrator" is the author, and each story is a lesson.' : '');
 
 const said = (h: { role: string; text: string }[]) => h.map((t) => `**${t.role === 'author' ? 'Author' : 'You'}:** ${t.text}`).join('\n\n');
 
@@ -12,6 +15,7 @@ export const ghostPlan = defineAgent({
   render: (i) =>
     [
       `# Plan a session (about ${i.minutes} minutes)`,
+      kindLine(i.kind),
       `Narrator: ${i.narrator}${i.born ? `, born ${i.born}` : ''}.${i.speaker ? ` This session you are talking to ${i.speaker}, about the narrator's life.` : ''}`,
       i.about ? `What the book is about: ${i.about}` : 'What the book is about: not settled yet.',
       `How hard to push: ${i.push}.`,
@@ -22,6 +26,7 @@ export const ghostPlan = defineAgent({
       i.questions.length ? json('Question queue (priority 1 = most important)', i.questions) : '',
       i.promises.length ? json('You promised to come back to', i.promises) : '',
       i.recent.length ? json('Recent sessions', i.recent) : '## Recent sessions\n(this is the first session)',
+      i.research.length ? json('From research: reader questions and other books’ views the author could react to', i.research) : '',
       i.off_limits.length ? json('Off limits: never plan or ask about these', i.off_limits) : '',
     ]
       .filter(Boolean)
@@ -37,10 +42,12 @@ export const ghostTurn = defineAgent({
   render: (i) =>
     [
       '# One exchange',
+      kindLine(i.kind),
       `Narrator: ${i.narrator}${i.born ? `, born ${i.born}` : ''}.${i.speaker ? ` You are talking to ${i.speaker}, about the narrator's life; file what they say as their version.` : ''} Push: ${i.push}.`,
       json('Agenda', i.agenda.map((a, n) => ({ n, topic: a.topic, question: a.question, done: a.done }))),
       i.story ? json('The story you are drawing out', i.story) : '## The story you are drawing out\n(none yet)',
-      i.next_rung ? `Next rung to climb: ${i.next_rung} (rungs in order: ${LADDER.join(', ')}).` : '',
+      i.next_rung ? `Next rung to climb: ${i.next_rung} (rungs in order: ${(i.kind === 'guide' ? GUIDE_LADDER : LADDER).join(', ')}).` : '',
+      i.research.length ? json('From research, to bring in when it fits (attribute it; never present it as your own)', i.research) : '',
       i.stories.length ? json('Other stories (reuse an id when it is the same episode)', i.stories) : '',
       i.people.length ? json('People (reuse ids)', i.people) : '',
       i.history.length ? `## The session so far\n${said(i.history)}` : '',
@@ -81,6 +88,7 @@ export const ghostShape = defineAgent({
   render: (i) =>
     [
       '# Shape the book',
+      kindLine(i.kind),
       `Narrator: ${i.narrator}${i.born ? `, born ${i.born}` : ''}. About ${i.target_words.toLocaleString('en')} words.`,
       i.about ? `What the book is about: ${i.about}` : 'What the book is about: not settled; shape it around the life itself.',
       `Shape: ${i.shape ?? 'chronological (the author has not chosen)'}`,
@@ -100,9 +108,11 @@ export const ghostDraft = defineAgent({
   render: (i) =>
     [
       `# Draft chapter ${i.chapter.number}: ${i.chapter.title}`,
+      kindLine(i.kind),
       `Narrator: ${i.narrator}${i.born ? `, born ${i.born}` : ''}. About ${i.words.toLocaleString('en')} words.`,
       i.chapter.summary ? `What this chapter does: ${i.chapter.summary}` : '',
-      json('The stories (the only material you may use)', i.stories),
+      json(i.kind === 'guide' ? 'The lessons and cases (the only material from the author you may use)' : 'The stories (the only material you may use)', i.stories),
+      i.evidence.length ? json('Evidence (the only outside facts you may state; cite the source in the text)', i.evidence) : i.kind === 'guide' ? '## Evidence\n(none: state no statistics or research findings)' : '',
       json('People', i.people),
       i.voice_notes.length ? json('How the author talks', i.voice_notes) : '',
       i.voice_samples ? `## The author's own words, as spoken in interviews\n${i.voice_samples}` : '',
@@ -124,6 +134,7 @@ export const ghostRevise = defineAgent({
   render: (i) =>
     [
       `# Revise chapter: ${i.chapter.title} (round ${i.chapter.round + 1})`,
+      kindLine(i.kind),
       `Narrator: ${i.narrator}.`,
       i.feedback ? `## What the author said about the draft\n${i.feedback}` : '## What the author said about the draft\n(nothing beyond the answers to your notes)',
       ...i.scenes.map((sc) => [`## Scene ${sc.id}: ${sc.title}`, sc.prose, sc.notes.length ? json(`Notes on ${sc.id}`, sc.notes) : ''].filter(Boolean).join('\n\n')),

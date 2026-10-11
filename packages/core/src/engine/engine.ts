@@ -11,6 +11,7 @@ import { estimate } from './estimate.js';
 import { Ideation } from './ideation.js';
 import { Interviews } from './interview.js';
 import { LifeBook } from './lifebook.js';
+import { Research, type ResearchNet } from './research.js';
 import { critiquePlan, critiqueAlternatives, predictability } from './critics.js';
 import { runStyleCheck } from '../style-report.js';
 import type { StructureAlternative } from '../agents/contracts.js';
@@ -24,14 +25,17 @@ export class Engine {
   readonly ideation: Ideation;
   readonly interviews: Interviews;
   readonly life: LifeBook;
+  readonly research: Research;
   constructor(
     readonly store: GraphStore,
     readonly agents: AgentSuite,
+    opts: { net?: ResearchNet } = {},
   ) {
     this.pipeline = new Pipeline(store, agents);
     this.ideation = new Ideation(store, agents);
     this.interviews = new Interviews(store, agents);
     this.life = new LifeBook(store, agents);
+    this.research = new Research(store, agents, opts.net);
   }
 
   critique() {

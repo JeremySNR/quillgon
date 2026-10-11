@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { DEFAULT_AGENT_TIERS, type AgentSuite, type Book, type Intent } from '@quillgon/core';
+import { DEFAULT_AGENT_TIERS, type AgentSuite, type Book, type Intent, type WebAnswer } from '@quillgon/core';
 import type { ModelAdapter } from './adapter/structured.js';
 import * as A from './agents/index.js';
 import { builtinPrompt, intentBlock, loadPrompt, type AgentDef } from './agents/define.js';
@@ -20,7 +20,7 @@ export class ModelSuite implements AgentSuite {
 
   private system(def: AgentDef<unknown, unknown>): string {
     const book = this.ctx.book();
-    return [builtinPrompt(book.kind === 'novel' ? 'shared' : 'shared-life'), intentBlock(this.ctx.intent(), book), loadPrompt(def.name, this.ctx.projectDir)].join('\n\n---\n\n');
+    return [builtinPrompt(book.kind === 'novel' ? 'shared' : book.kind === 'guide' ? 'shared-guide' : 'shared-life'), intentBlock(this.ctx.intent(), book), loadPrompt(def.name, this.ctx.projectDir)].join('\n\n---\n\n');
   }
 
   private async run<I, O>(def: AgentDef<I, O>, input: I, scene?: string): Promise<O> {
@@ -36,6 +36,23 @@ export class ModelSuite implements AgentSuite {
       maxTokens: def.maxTokens,
       scene,
     });
+  }
+
+  /** Research: the researcher's own prompt and the book, without the writing rules; may search the web. */
+  private async runWeb<I, O>(def: AgentDef<I, O>, input: I, maxSearches: number): Promise<WebAnswer<O>> {
+    const parsed = def.input.parse(input);
+    const tier = this.ctx.book().agents[def.name] ?? DEFAULT_AGENT_TIERS[def.name];
+    const r = await this.adapter.completeWeb({
+      agent: `${def.name}.${def.task}`,
+      tier,
+      system: [intentBlock(this.ctx.intent(), this.ctx.book()), loadPrompt(def.name, this.ctx.projectDir)].join('\n\n---\n\n'),
+      messages: [{ role: 'user', content: def.render(parsed) }],
+      schema: def.output,
+      schemaName: `${def.name}.${def.task}`,
+      maxTokens: def.maxTokens,
+      ...(maxSearches > 0 ? { web: { maxSearches } } : {}),
+    });
+    return { output: r.data, sources: r.sources, searches: r.searches };
   }
 
   private humaniserSkill(): string {
@@ -71,4 +88,8 @@ export class ModelSuite implements AgentSuite {
   ghostDraft: AgentSuite['ghostDraft'] = (i) => this.run(A.ghostDraft, i);
   ghostRevise: AgentSuite['ghostRevise'] = (i) => this.run(A.ghostRevise, i);
   interviewee: AgentSuite['interviewee'] = (i) => this.run(A.interviewee, i);
+  researchPlan: AgentSuite['researchPlan'] = async (i) => (await this.runWeb(A.researchPlan, i, 0)).output;
+  researchSearch: AgentSuite['researchSearch'] = (i) => this.runWeb(A.researchSearch, i, i.max_searches ?? 4);
+  researchComps: AgentSuite['researchComps'] = (i) => this.runWeb(A.researchComps, i, i.max_searches ?? 4);
+  researchMaterial: AgentSuite['researchMaterial'] = async (i) => (await this.runWeb(A.researchMaterial, i, 0)).output;
 }

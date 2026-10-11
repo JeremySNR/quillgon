@@ -9,6 +9,8 @@ import {
   IdeaBoard,
   Notebook,
   Questions,
+  ResearchLibrary,
+  ResearchRun,
   SceneNotes,
   Session,
   Story,
@@ -42,7 +44,10 @@ import { ProjectIndex } from './index-db.js';
 import { DirtyTreeError, Repo } from './git.js';
 import { cardHash, proseHash, projectSync, sceneSync } from './sync.js';
 import { parseBannedPatterns } from './style.js';
-import { timestamp, toYaml, wordCount } from './util.js';
+import { fromYaml, timestamp, toYaml, wordCount } from './util.js';
+
+const UPLOAD_NAME = /^[a-z0-9][a-z0-9-]{0,80}\.(md|txt)$/;
+const MAX_UPLOAD = 2_000_000;
 
 export interface OpenOptions {
   /** Use an in-memory index instead of .engine/index.sqlite (tests). */
@@ -477,6 +482,58 @@ export class GraphStore {
     entry.notes = notes;
     this.after(`scene:${sceneId}`);
     return notes;
+  }
+
+  saveResearch(value: unknown) {
+    const lib = parseOrThrow(ResearchLibrary, value, paths.research);
+    this.write(paths.research, toYaml(lib));
+    this.project.research = lib;
+    this.after('research');
+    return lib;
+  }
+
+  saveResearchRun(value: unknown) {
+    const run = parseOrThrow(ResearchRun, value, 'research/runs/?.yaml');
+    this.write(paths.researchRun(run.id), toYaml(run));
+    return run;
+  }
+
+  readResearchRun(id: string): ResearchRun | null {
+    if (!/^[a-z0-9-]+$/.test(id)) return null;
+    const abs = path.join(this.dir, paths.researchRun(id));
+    if (!fs.existsSync(abs)) return null;
+    const r = ResearchRun.safeParse(fromYaml(fs.readFileSync(abs, 'utf8')));
+    return r.success ? r.data : null;
+  }
+
+  listResearchRuns(): ResearchRun[] {
+    const dir = path.join(this.dir, 'research', 'runs');
+    if (!fs.existsSync(dir)) return [];
+    return fs
+      .readdirSync(dir)
+      .filter((f) => f.endsWith('.yaml'))
+      .map((f) => this.readResearchRun(f.replace(/\.yaml$/, '')))
+      .filter((r): r is ResearchRun => !!r)
+      .sort((a, b) => b.started.localeCompare(a.started));
+  }
+
+  /** The author's own material, kept as text with the book (and committed: it is theirs). */
+  saveUpload(file: string, text: string) {
+    if (!UPLOAD_NAME.test(file)) throw new Error('Name the file with letters, numbers and hyphens, ending .md or .txt');
+    if (Buffer.byteLength(text) > MAX_UPLOAD) throw new Error(`That file is over ${MAX_UPLOAD / 1_000_000} MB of text; split it into parts.`);
+    this.write(paths.upload(file), text);
+    return paths.upload(file);
+  }
+
+  readUpload(file: string): string | null {
+    if (!UPLOAD_NAME.test(file)) return null;
+    const abs = path.join(this.dir, paths.upload(file));
+    return fs.existsSync(abs) ? fs.readFileSync(abs, 'utf8') : null;
+  }
+
+  deleteUpload(file: string) {
+    if (!UPLOAD_NAME.test(file)) throw new Error('invalid file name');
+    this.remove(paths.upload(file));
   }
 
   /** Keep a recording next to its session. Never committed (audio/ is git-ignored). */

@@ -12,6 +12,7 @@ export class OpenAICompatibleBackend implements Backend {
   readonly provider = 'openai-compatible';
 
   async call(req: RawRequest): Promise<RawResponse> {
+    if (req.web) throw new BackendError('This provider cannot search the web. For research, set the research tier to OpenAI, Anthropic or Codex in Settings → Models.', false);
     const base = (req.config.base_url || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
     const key = process.env[req.config.api_key_env || 'OPENAI_API_KEY'];
     let res: Response;

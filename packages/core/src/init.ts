@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { GraphStore } from './store.js';
-import { DEFAULT_MODELS, CODEX_MODELS, DEFAULT_LIFE, type BookKind, type LifeSettings } from './schemas/index.js';
+import { DEFAULT_MODELS, CODEX_MODELS, DEFAULT_GUIDE, DEFAULT_LIFE, type BookKind, type GuideSettings, type LifeSettings } from './schemas/index.js';
 import { openingQuestions } from './life.js';
+import { guideOpeningQuestions } from './guide.js';
 import { slugify } from './util.js';
 
 export const DEFAULT_BANNED = `# Banned patterns
@@ -40,6 +41,8 @@ export interface InitOptions {
   /** Life stories: whose life, by name ("Margaret Ellis"); empty for the author's own. */
   subject_name?: string;
   life?: Partial<Pick<LifeSettings, 'subject' | 'born' | 'audience' | 'pen'>>;
+  /** Guides: who it is for, what it promises, and which checks apply. */
+  guide?: Partial<GuideSettings>;
 }
 
 /** Create a new manuscript repo: book.yaml, intent.md, style files, git. */
@@ -54,29 +57,32 @@ export async function initProject(dir: string, opts: InitOptions) {
   fs.writeFileSync(path.join(root, 'book.yaml'), `title: ${JSON.stringify(opts.title)}\n`);
   const store = GraphStore.open(root);
   const offline = { provider: 'offline' as const, model: 'offline', price_in: 0, price_out: 0 };
-  const subject = opts.life?.subject ?? (opts.subject_name?.trim() ? 'other' : 'self');
+  const guide = kind === 'guide';
+  // A guide is always the author's own knowledge, in their voice; subject_name is their name.
+  const subject = guide ? 'self' : (opts.life?.subject ?? (opts.subject_name?.trim() ? 'other' : 'self'));
   const narratorName = opts.subject_name?.trim() || 'Me';
   const narrator = life ? (subject === 'self' && !opts.subject_name?.trim() ? 'me' : slugify(narratorName)) : null;
   store.saveBook({
     title: opts.title,
     kind,
-    genre: opts.genre ?? (kind === 'memoir' ? 'memoir' : life ? 'life story' : ''),
+    genre: opts.genre ?? (kind === 'memoir' ? 'memoir' : guide ? 'non-fiction' : life ? 'life story' : ''),
     target_words: opts.target_words ?? (life ? 40000 : 12000),
     // A novel starts at the idea stage (an author with a premise can skip to intent). A life
     // story has no premise to find: it starts with the interview.
     stage: life ? 'intent' : 'idea',
     ...(life ? { pov_mode: 'first' as const, tense: 'past' as const } : {}),
     models: opts.offline ? { frontier: offline, mid: offline, small: offline, reader: offline } : opts.codex ? CODEX_MODELS : DEFAULT_MODELS,
-    ...(life ? { life: { ...DEFAULT_LIFE, ...opts.life, subject, narrator } } : {}),
+    ...(life ? { life: { ...DEFAULT_LIFE, ...(guide ? { audience: 'public' as const } : {}), ...opts.life, subject, narrator } } : {}),
+    ...(guide ? { guide: { ...DEFAULT_GUIDE, ...opts.guide } } : {}),
   });
   store.saveIntent({});
   if (life && narrator) {
     store.saveCharacter({ bio: { id: narrator, name: narratorName, role: 'narrator', relationship: subject === 'self' ? 'the author' : 'the subject of the book', living: true, naming: 'real', consent: subject === 'self' ? 'not-needed' : 'not-asked', born: opts.life?.born ?? '' } });
-    store.saveQuestions({ questions: openingQuestions() });
+    store.saveQuestions({ questions: guide ? guideOpeningQuestions(opts.guide?.preset) : openingQuestions() });
     store.saveNotebook({});
   }
   // A life story's chapters live in one act: the shape comes later, from what the interviews find.
-  store.saveStructure({ acts: life ? [{ id: 'life', title: '', chapters: [] }] : [] });
+  store.saveStructure({ acts: life ? [{ id: guide ? 'book' : 'life', title: '', chapters: [] }] : [] });
   store.saveTimeline({ events: [] });
   store.saveStyle({ samples: DEFAULT_SAMPLES, banned: DEFAULT_BANNED });
   store.saveStyleSheet({});

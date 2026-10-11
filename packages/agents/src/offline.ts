@@ -16,7 +16,7 @@ import type {
   StructureAlternative,
   StructureOutput,
 } from '@quillgon/core';
-import { cleanDictation, joinToCursor, EMPTY_LADDER, enoughForScene, LADDER, nextRung, quotedSpeech, RUNG_QUESTION, slugify, touchesOffLimits, yearOf, type GhostDraftOutput, type GhostPlanOutput, type GhostReviseOutput, type GhostShapeOutput, type GhostTurnOutput, type GhostWrapOutput, type IntervieweeOutput, type Ladder } from '@quillgon/core';
+import { cleanDictation, joinToCursor, EMPTY_GUIDE_LADDER, EMPTY_LADDER, enoughForScene, GUIDE_LADDER, LADDER, type LessonPart, nextRung, quotedSpeech, RUNG_QUESTION, slugify, touchesOffLimits, yearOf, type GhostDraftOutput, type GhostPlanOutput, type GhostReviseOutput, type GhostShapeOutput, type GhostTurnOutput, type GhostWrapOutput, type IntervieweeOutput, type Ladder, type ResearchCompsOutput, type ResearchMaterialOutput, type ResearchPlanOutput, type ResearchSearchOutput, type WebAnswer } from '@quillgon/core';
 
 /**
  * A deterministic, model-free stand-in for every agent. It makes the whole app usable
@@ -56,6 +56,7 @@ export class OfflineSuite implements AgentSuite {
     if (i.signal === 'hard') return { ...empty, reply: 'Thank you for telling me that much. We can leave it there. Would you like to talk about something else, or stop for today?', technique: 'Check in', why: 'You said it is hard to talk about.' };
     if (i.signal === 'dont-remember' || i.signal === 'move-on') return moveOn('That’s fine.');
 
+    if (i.kind === 'guide') return this.guideTurn(i, empty, moveOn);
     const text = i.answer.trim();
     const sentences = text.split(/(?<=[.!?])\s+/).filter((x) => x.split(/\s+/).length >= 3);
     const known = new Set(i.people.flatMap((p) => [p.name.toLowerCase(), ...p.name.toLowerCase().split(/\s+/)]));
@@ -97,7 +98,53 @@ export class OfflineSuite implements AgentSuite {
     return { ...base, reply: RUNG_QUESTION[rung](story.title), technique: RUNG_TECHNIQUE[rung], why: `Climbing the ladder: ${rung.replace('_', ' ')}.` };
   }
 
+  /**
+   * A guide's exchange, without a model: each sentence filed as the part of the lesson it sounds
+   * like (steps, mistakes, a case, why it works), then the next rung of the lesson ladder.
+   */
+  private guideTurn(i: Parameters<AgentSuite['ghostTurn']>[0], empty: GhostTurnOutput, moveOn: (lead: string, done?: number) => GhostTurnOutput): GhostTurnOutput {
+    const text = i.answer.trim();
+    const sentences = text.split(/(?<=[.!?])\s+|\n+/).map((x) => x.trim()).filter((x) => x.split(/\s+/).length >= 3);
+    const story = i.story
+      ? { id: i.story.id, title: i.story.title, summary: null, when: null, precision: null, place: null, key: null }
+      : { id: slugify(shorten(sentences[0] ?? text, 6)), title: shorten(sentences[0] ?? text, 6), summary: sentences[0] ?? text, when: null, precision: null, place: null, key: null };
+    const partOf = (x: string): LessonPart | undefined =>
+      /^(first|then|next|after that|finally|step \d|\d[.)])|\b(you (start|begin|open|ask|call|write|set|put|move))\b/i.test(x) ? 'step'
+      : /\b(mistake|wrong|forget|fail|most people|beginners?|don'?t|never|avoid|too (much|early|late|soon))\b/i.test(x) ? 'mistake'
+      : /\bbecause\b|\bthe reason\b|\bthat'?s why\b|\bit works\b/i.test(x) ? 'why'
+      : /\b(last (week|month|time|year)|a client|one client|a customer|i remember|we had|once,|one time)\b/i.test(x) ? 'case'
+      : /\b(practi[sc]e|try (this|it)|exercise|role[- ]play|tomorrow|start by)\b/i.test(x) ? 'practice'
+      : /\b(when|unless|only if|works best|doesn'?t work)\b/i.test(x) ? 'when'
+      : /\d\s?%|\bper ?cent\b|\bstud(y|ies)\b|\bresearch\b|[£$€]\d/i.test(x) ? 'claim'
+      : undefined;
+    const details = sentences.map((x) => ({ text: x, certainty: 'sure' as const, part: partOf(x) }));
+    const quotes = quotedSpeech(text).map((q) => ({ text: q, who: '' }));
+    const ladder: Partial<Ladder> = {};
+    if (!i.story) ladder.idea = 'yes';
+    const has = (part: LessonPart) => details.some((d) => d.part === part);
+    if (has('case')) ladder.case = 'yes';
+    if (has('step')) ladder.steps = details.filter((d) => d.part === 'step').length >= 2 ? 'yes' : 'some';
+    if (has('mistake')) ladder.mistakes = 'yes';
+    if (has('why')) ladder.why = 'yes';
+    if (has('when')) ladder.when = 'some';
+    if (has('practice')) ladder.practice = 'yes';
+    if (quotes.length && !ladder.steps) ladder.steps = 'some';
+    const merged = { ...(i.story?.ladder ?? EMPTY_GUIDE_LADDER) } as Ladder;
+    for (const r of GUIDE_LADDER) if (ladder[r] && (merged[r] === 'no' || ladder[r] === 'yes')) merged[r] = ladder[r]!;
+    const rung = nextRung(merged);
+    const base = { ...empty, story, ladder, details: details.slice(0, 6), quotes, people: [] };
+    if (enoughForScene({ ladder: merged }) || !rung) return { ...moveOn('Thank you. That is enough to write it.'), story, ladder, details: base.details, quotes };
+    return { ...base, reply: RUNG_QUESTION[rung](story.title), technique: RUNG_TECHNIQUE[rung], why: `Drawing out the lesson: ${RUNG_TECHNIQUE[rung].toLowerCase()}.` };
+  }
+
   async ghostShape(i: Parameters<AgentSuite['ghostShape']>[0]): Promise<GhostShapeOutput> {
+    if (i.kind === 'guide') {
+      // One chapter per lesson, in the order they were gathered; existing chapters keep theirs.
+      const placed = new Set(i.chapters.flatMap((c) => c.stories));
+      const chapters = i.chapters.map((c) => ({ id: c.id, title: c.title, summary: '', stories: [...c.stories] }));
+      for (const st of i.stories.filter((s) => !placed.has(s.id) && !s.sensitive)) chapters.push({ id: slugify(st.title), title: st.title, summary: st.summary, stories: [st.id] });
+      return { rationale: `A chapter for each part of the method (${i.shape ?? 'framework'}), in the order you teach it.`, chapters, left_out: [] };
+    }
     // Chronological by decade; undated stories go with the chapter before them. Existing chapters keep their stories.
     const placed = new Set(i.chapters.flatMap((c) => c.stories));
     const chapters = i.chapters.map((c) => ({ id: c.id, title: c.title, summary: '', stories: [...c.stories] }));
@@ -113,6 +160,7 @@ export class OfflineSuite implements AgentSuite {
   }
 
   async ghostDraft(i: Parameters<AgentSuite['ghostDraft']>[0]): Promise<GhostDraftOutput> {
+    if (i.kind === 'guide') return this.guideDraft(i);
     // One scene per story, built only from what was filed: details as sentences, quotes as dialogue,
     // the narrator-now at the end. Gaps become [TK] markers with notes.
     const scenes = i.stories.slice(0, 4).map((st) => {
@@ -129,6 +177,36 @@ export class OfflineSuite implements AgentSuite {
       if (st.ladder.senses === 'no') notes.push({ kind: 'thin', quote: '', text: 'This tells me what happened but not what it was like. What could you see and hear?', options: [] });
       for (const v of st.versions) notes.push({ kind: 'versions', quote: '', text: `${v.by || 'Another telling'} remembers it differently: “${v.text}”. Which is right?`, options: ['Mine', v.by || 'Theirs', 'Both, as they are'] });
       return { title: st.title, stories: [st.id], when: st.when, place: st.place, people: st.people, then: st.then, now: st.now, prose: paras.join('\n\n'), notes };
+    });
+    return { scenes, needs_decision: [] };
+  }
+
+  /** A guide chapter, without a model: the idea, a case, the steps, what goes wrong, why, and something to try. Gaps where a part is missing. */
+  private guideDraft(i: Parameters<AgentSuite['ghostDraft']>[0]): GhostDraftOutput {
+    const scenes = i.stories.slice(0, 4).map((st) => {
+      const notes: GhostDraftOutput['scenes'][number]['notes'] = [];
+      const part = (p: LessonPart) => st.details.filter((d) => d.part === p).map((d) => d.text.replace(/[.!?]*$/, '.'));
+      const paras: string[] = [];
+      const gap = (marker: string, question: string) => (notes.push({ kind: 'gap', quote: marker, text: question, options: [] }), marker);
+      paras.push(st.summary || st.title);
+      const cases = part('case');
+      paras.push(cases.length ? cases.join(' ') : gap('[TK: a real example]', 'Tell me about one real time you used this, so readers can see it work. I left a gap rather than invent one.'));
+      if (!cases.length) notes.push({ kind: 'example', quote: '', text: 'This idea has no real case yet: a client, a deal, a moment.', options: [] });
+      const steps = part('step');
+      if (steps.length) paras.push(steps.map((x, n) => `${n + 1}. ${x}`).join('\n'));
+      else paras.push(gap('[TK: the steps]', 'Walk me through exactly what to do, in order.'));
+      if (steps.length === 1) notes.push({ kind: 'steps', quote: '', text: 'One step is not enough to act on. What comes before and after it?', options: [] });
+      for (const q of st.quotes) paras.push(`Say it like this: “${q.text}”`);
+      const mistakes = part('mistake');
+      if (mistakes.length) paras.push(`Where it goes wrong: ${mistakes.join(' ')}`);
+      const why = part('why');
+      if (why.length) paras.push(why.join(' '));
+      const claims = part('claim');
+      for (const c of claims) paras.push(c);
+      const practice = part('practice');
+      paras.push(practice.length ? `Try this: ${practice.join(' ')}` : gap('[TK: something to try]', 'What should a reader do tomorrow to practise this?'));
+      for (const e of i.evidence.slice(0, 1)) paras.push(`${e.source ? `According to ${e.source}, ` : ''}${e.claim.replace(/^./, (c) => c.toLowerCase())}`);
+      return { title: st.title, stories: [st.id], when: '', place: '', people: st.people, then: '', now: '', prose: paras.join('\n\n'), notes };
     });
     return { scenes, needs_decision: [] };
   }
@@ -168,6 +246,50 @@ export class OfflineSuite implements AgentSuite {
       step(`Ask you next time for a moment that shows what you meant: “${i.feedback.trim().slice(0, 80)}”.`, { kind: 'question', question: `You said: “${i.feedback.trim().slice(0, 120)}”. Can you tell me about a moment that shows it?` });
     if (!plan.length) step('Nothing to change: the answers so far need no edits.');
     return { plan, edits, resolved, notes: [] };
+  }
+
+  // ---------------------------------------------------------------- research
+  // Offline research never leaves the machine: no web, no catalogue. It can still read the
+  // author's own material, and it gives the comps step something deterministic to test with.
+
+  async researchPlan(i: Parameters<AgentSuite['researchPlan']>[0]): Promise<ResearchPlanOutput> {
+    const subject = (i.context.about || i.context.title).replace(/[.!?].*$/, '').slice(0, 80) || i.context.title;
+    const web = [`${subject} books`, `${subject}: questions readers ask`, `${subject} statistics official sources`].slice(0, i.web_queries).map((query) => ({ query, why: 'Offline plan' }));
+    return { focus: `Offline: ${subject}`, web, catalogue: [subject].slice(0, i.catalogue_queries) };
+  }
+
+  async researchSearch(): Promise<WebAnswer<ResearchSearchOutput>> {
+    return { output: { facts: [], reader_questions: [], books: [] }, sources: [], searches: 0 };
+  }
+
+  async researchComps(i: Parameters<AgentSuite['researchComps']>[0]): Promise<WebAnswer<ResearchCompsOutput>> {
+    const comps = i.books.map((b) => ({
+      id: b.id,
+      promise: (b.description.match(/^[^.!?]+[.!?]/)?.[0] ?? '').trim(),
+      framework: '',
+      structure: b.contents.length ? `${b.contents.length} parts: ${b.contents.slice(0, 4).join('; ')}${b.contents.length > 4 ? '…' : ''}` : '',
+      praise: [],
+      complaints: [],
+      shelf: 'core' as const,
+    }));
+    const withContents = i.books.filter((b) => b.contents.length);
+    const patterns = withContents.length ? [{ text: `Contents run to about ${Math.round(withContents.reduce((n, b) => n + b.contents.length, 0) / withContents.length)} parts.`, from: withContents.map((b) => b.id) }] : [];
+    return { output: { comps, patterns, gaps: [], positioning: '' }, sources: [], searches: 0 };
+  }
+
+  /** Sentences with a figure in them become facts (quoted exactly); headings become questions. */
+  async researchMaterial(i: Parameters<AgentSuite['researchMaterial']>[0]): Promise<ResearchMaterialOutput> {
+    const sentences = i.text
+      .replace(/^#+ .*$/gm, '')
+      .split(/(?<=[.!?])\s+|\n{2,}/)
+      .map((x) => x.replace(/\s+/g, ' ').trim())
+      .filter((x) => x.split(' ').length >= 6 && x.split(' ').length <= 60);
+    const facts = sentences.filter((x) => /\d/.test(x)).slice(0, 8).map((x) => ({ claim: x, quote: x, topic: '' }));
+    const questions = [...i.text.matchAll(/^#{1,3}\s+(.+)$/gm)]
+      .map((m) => m[1].trim())
+      .slice(0, 5)
+      .map((h) => ({ question: `Your notes cover "${h}". Walk me through the last time you used it with someone.`, why: `From ${i.file}` }));
+    return { facts, questions };
   }
 
   /**
@@ -688,7 +810,7 @@ export class ScriptedSuite extends OfflineSuite {
   constructor(overrides: Partial<AgentSuite> = {}) {
     super();
     const self = this as unknown as Record<string, (i: unknown) => Promise<unknown>>;
-    for (const m of ['interview', 'plotPoints', 'structures', 'cards', 'write', 'voice', 'reviseLines', 'humanise', 'extract', 'reviseCard', 'reviseProse', 'read', 'continuity', 'judge', 'critique', 'sampleTurns', 'diverge', 'expand', 'talk', 'scribe', 'ghostPlan', 'ghostTurn', 'ghostWrap', 'ghostShape', 'ghostDraft', 'ghostRevise', 'interviewee'] as const) {
+    for (const m of ['interview', 'plotPoints', 'structures', 'cards', 'write', 'voice', 'reviseLines', 'humanise', 'extract', 'reviseCard', 'reviseProse', 'read', 'continuity', 'judge', 'critique', 'sampleTurns', 'diverge', 'expand', 'talk', 'scribe', 'ghostPlan', 'ghostTurn', 'ghostWrap', 'ghostShape', 'ghostDraft', 'ghostRevise', 'interviewee', 'researchPlan', 'researchSearch', 'researchComps', 'researchMaterial'] as const) {
       const base = (overrides[m] as ((i: unknown) => Promise<unknown>) | undefined) ?? self[m].bind(this);
       self[m] = (i: unknown) => {
         this.calls.push({ method: m, input: i });
@@ -713,6 +835,13 @@ const RUNG_TECHNIQUE: Record<string, string> = {
   words: 'What was said',
   felt_then: 'Then and now',
   means_now: 'Then and now',
+  idea: 'The idea',
+  case: 'The last real time',
+  when: 'When it works',
+  steps: 'Step by step',
+  mistakes: 'Play the beginner',
+  why: 'Why it works',
+  practice: 'Something to try',
 };
 
 function shorten(text: string, words: number): string {

@@ -1,4 +1,4 @@
-import { LADDER, type Ladder, type Question, type Story } from './schemas/index.js';
+import { rungsOf, type Ladder, type Question, type Rung, type Story } from './schemas/index.js';
 
 /**
  * Life stories, the parts that need no model: the opening question bank, how far a story has
@@ -28,21 +28,35 @@ export function openingQuestions(): Question[] {
 
 /** How far up the ladder a story is, 0..1: half credit for a rung partly there. */
 export function ladderScore(l: Ladder): number {
-  return LADDER.reduce((n, r) => n + (l[r] === 'yes' ? 1 : l[r] === 'some' ? 0.5 : 0), 0) / LADDER.length;
+  const rungs = rungsOf(l);
+  return rungs.reduce((n, r) => n + (l[r] === 'yes' ? 1 : l[r] === 'some' ? 0.5 : 0), 0) / rungs.length;
 }
 
 /** The next rung to climb: the first not yet there. */
-export function nextRung(l: Ladder): (typeof LADDER)[number] | null {
-  return LADDER.find((r) => l[r] === 'no') ?? LADDER.find((r) => l[r] === 'some') ?? null;
+export function nextRung(l: Ladder): Rung | null {
+  const rungs = rungsOf(l);
+  return rungs.find((r) => (l[r] ?? 'no') === 'no') ?? rungs.find((r) => l[r] === 'some') ?? null;
 }
 
-/** Enough to write a scene: a particular time, with people, something sensory, and what it meant. */
+/**
+ * Enough to write a scene: a particular time, with people, something sensory, and what it meant.
+ * For a guide's lesson: the idea and its steps, a real case, and what goes wrong or why it works.
+ */
 export function enoughForScene(s: Pick<Story, 'ladder'>): boolean {
   const l = s.ladder;
-  return l.happened === 'yes' && l.instance === 'yes' && l.people !== 'no' && (l.senses !== 'no' || l.words !== 'no') && (l.felt_then !== 'no' || l.means_now !== 'no');
+  const has = (r: Rung) => (l[r] ?? 'no') !== 'no';
+  if (l.idea !== undefined) return l.idea === 'yes' && l.steps === 'yes' && has('case') && (has('mistakes') || has('why'));
+  return l.happened === 'yes' && l.instance === 'yes' && has('people') && (has('senses') || has('words')) && (has('felt_then') || has('means_now'));
 }
 
-export const RUNG_LABEL: Record<(typeof LADDER)[number], string> = {
+export const RUNG_LABEL: Record<Rung, string> = {
+  idea: 'The idea, in a sentence',
+  case: 'A real case',
+  when: 'When to use it',
+  steps: 'The steps',
+  mistakes: 'What goes wrong',
+  why: 'Why it works',
+  practice: 'How a reader practises it',
   happened: 'What happened',
   instance: 'One particular time',
   people: 'Who was there',
@@ -68,7 +82,14 @@ export function ageAt(born: string, when: string): number | null {
 // ------------------------------------------------------------------ interviewing, without a model
 
 /** A safe, open question for each rung: the fallback when a proposed question is refused. */
-export const RUNG_QUESTION: Record<(typeof LADDER)[number], (title: string) => string> = {
+export const RUNG_QUESTION: Record<Rung, (title: string) => string> = {
+  idea: (t) => (t ? `In a sentence or two, what is ${lowerFirst(t)}?` : 'In a sentence or two, what is it?'),
+  case: () => 'Tell me about the last time you used it with someone. What happened?',
+  when: () => 'When does it work, and when would you not use it?',
+  steps: () => 'Walk me through it step by step, as if I were doing it for the first time.',
+  mistakes: () => 'What do people get wrong when they first try it?',
+  why: () => 'Why does it work, do you think?',
+  practice: () => 'If a reader wanted to practise this tomorrow, what should they do first?',
   happened: (t) => (t ? `Tell me about ${lowerFirst(t)}. What happened?` : 'Tell me what happened.'),
   instance: () => 'Can you remember one particular time? Tell me about that one.',
   people: () => 'Who was there?',
@@ -125,7 +146,7 @@ export function leadingQuestion(question: string, said: string, known: string[] 
 }
 
 const COMMON = new Set(
-  'that this there then they them their what when where which while with were have about your yours after before still really remember think feel felt time back like just very much more some first last also ever same other else would could should those these thing things anything something someone anyone people place again been into from over only long well good know want went come came said tell talk sure maybe already right moment there\'s that\'s wasn\'t didn\'t weren\'t hadn\'t'.split(
+  'that this there then they them their what when where which while with were have about your yours after before still really remember think feel felt time back like just very much more some first last also ever same other else would could should those these thing things anything something someone anyone people place again been into from over only long well good know want went come came said tell talk sure maybe already right moment match matches agree disagree differ different similar apply fits there\'s that\'s wasn\'t didn\'t weren\'t hadn\'t'.split(
     ' ',
   ),
 );

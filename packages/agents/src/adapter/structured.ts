@@ -1,6 +1,6 @@
 import { z, type ZodType } from 'zod';
 import { DEFAULT_MODELS, type Book, type ModelConfig, type ModelTier } from '@quillgon/core';
-import type { Backend, Message, RawRequest, RawResponse, UsageRecord } from './types.js';
+import type { Backend, Message, RawRequest, RawResponse, UsageRecord, WebSource } from './types.js';
 import { BackendError, RefusalError, SchemaFailure } from './types.js';
 import { stripInventedNulls } from './schema.js';
 
@@ -13,7 +13,19 @@ export interface CompleteOptions<T> {
   schemaName: string;
   maxTokens?: number;
   scene?: string;
+  /** Research: let the model search the web, up to this many times. */
+  web?: { maxSearches: number };
 }
+
+/** A research call's answer, with the pages its searches actually returned (null: the provider does not say). */
+export interface WebResult<T> {
+  data: T;
+  sources: WebSource[] | null;
+  searches: number;
+}
+
+/** USD per search when the book does not set price_search (the providers' list price, about a cent). */
+const SEARCH_PRICE: Record<string, number> = { openai: 0.01, anthropic: 0.01 };
 
 /** Pull the first JSON value out of model text (tolerates code fences and preamble). */
 export function extractJson(text: string): unknown {
@@ -122,6 +134,11 @@ export class ModelAdapter {
   }
 
   async complete<T>(opts: CompleteOptions<T>): Promise<T> {
+    return (await this.completeWeb(opts)).data;
+  }
+
+  /** As complete(), and also report what web searches ran and which pages they returned. */
+  async completeWeb<T>(opts: CompleteOptions<T>): Promise<WebResult<T>> {
     const config = this.configFor(opts.tier);
     const backend = this.backends[config.provider];
     if (!backend) throw new Error(`no backend for provider "${config.provider}"`);
@@ -136,9 +153,14 @@ export class ModelAdapter {
     let cacheR = 0;
     let model = config.model;
     let attempt = 0;
+    let searches = 0;
+    let sources: Map<string, WebSource> | null = opts.web ? new Map() : null;
     try {
       for (attempt = 1; attempt <= 3; attempt++) {
-        const res = await this.call(backend, { config, system, messages, jsonSchema, schemaName: opts.schemaName, maxTokens: opts.maxTokens ?? 32000 });
+        const res = await this.call(backend, { config, system, messages, jsonSchema, schemaName: opts.schemaName, maxTokens: opts.maxTokens ?? 32000, ...(opts.web ? { web: opts.web } : {}) });
+        searches += res.searches ?? 0;
+        if (res.sources === null) sources = null;
+        else if (sources) for (const x of res.sources ?? []) sources.set(x.url, x);
         inTok += res.inputTokens;
         outTok += res.outputTokens;
         cacheW += res.cacheWriteTokens ?? 0;
@@ -155,8 +177,8 @@ export class ModelAdapter {
         }
         const r = opts.schema.safeParse(parsed);
         if (r.success) {
-          this.log(opts, config, model, inTok, outTok, attempt, true, cacheW, cacheR);
-          return r.data;
+          this.log(opts, config, model, inTok, outTok, attempt, true, cacheW, cacheR, undefined, searches);
+          return { data: r.data, sources: sources ? [...sources.values()] : null, searches };
         }
         lastError = formatZodError(r.error);
         messages.push(
@@ -166,21 +188,22 @@ export class ModelAdapter {
       }
     } catch (e) {
       // A backend failure part-way (after earlier attempts were billed) is still logged.
-      this.log(opts, config, model, inTok, outTok, Math.max(attempt, 1), false, cacheW, cacheR, (e as Error).message);
+      this.log(opts, config, model, inTok, outTok, Math.max(attempt, 1), false, cacheW, cacheR, (e as Error).message, searches);
       throw e;
     }
-    this.log(opts, config, model, inTok, outTok, 3, false, cacheW, cacheR, lastError);
+    this.log(opts, config, model, inTok, outTok, 3, false, cacheW, cacheR, lastError, searches);
     throw new SchemaFailure(opts.agent, 3, lastError, lastText);
   }
 
-  private log(opts: CompleteOptions<unknown>, config: ModelConfig, model: string, inTok: number, outTok: number, attempts: number, ok: boolean, cacheW = 0, cacheR = 0, error?: string) {
+  private log(opts: CompleteOptions<unknown>, config: ModelConfig, model: string, inTok: number, outTok: number, attempts: number, ok: boolean, cacheW = 0, cacheR = 0, error?: string, searches = 0) {
     const pin = config.price_in ?? 0;
     // Cache prices differ by model (reads are 0.025x to 0.1x input): configurable per tier,
     // with the common 1.25x write / 0.1x read as the fallback.
     const pcw = config.price_cache_write ?? pin * 1.25;
     const pcr = config.price_cache_read ?? pin * 0.1;
     // Subscription use has no per-token API charge; quota use is still logged.
-    const cost = config.provider === 'codex' ? 0 : (inTok * pin + cacheW * pcw + cacheR * pcr + outTok * (config.price_out ?? 0)) / 1e6;
+    const perSearch = config.price_search ?? SEARCH_PRICE[config.provider] ?? 0;
+    const cost = config.provider === 'codex' ? 0 : (inTok * pin + cacheW * pcw + cacheR * pcr + outTok * (config.price_out ?? 0)) / 1e6 + searches * perSearch;
     this.onUsage({
       ts: new Date().toISOString(),
       agent: opts.agent,
@@ -192,6 +215,7 @@ export class ModelAdapter {
       output_tokens: outTok,
       ...(cacheW || cacheR ? { cache_write_tokens: cacheW, cache_read_tokens: cacheR } : {}),
       cost_usd: Math.round(cost * 1e6) / 1e6,
+      ...(searches ? { searches } : {}),
       attempts,
       ok,
       ...(error ? { error: error.slice(0, 500) } : {}),

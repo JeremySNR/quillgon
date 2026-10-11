@@ -70,6 +70,11 @@ export class HttpError extends Error {
 
 const RECENT = path.join(os.homedir(), '.quillgon', 'recent.json');
 const MAX_BODY = 20 * 1024 * 1024;
+
+/** Only these fields of a request body, and only when they were sent. */
+function pick<K extends string>(body: Record<string, unknown>, keys: K[]): Partial<Record<K, never>> {
+  return Object.fromEntries(keys.filter((k) => body[k] !== undefined).map((k) => [k, body[k]])) as Partial<Record<K, never>>;
+}
 const TOKEN_HEADER = 'x-quillgon-token';
 const LOOPBACK_HOST = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
 const EXPORT_FORMATS = new Set(['md', 'docx', 'epub']);
@@ -103,6 +108,8 @@ export class NovelServer {
   /** Jobs run one at a time: they share one store, one index and one git repo. */
   private queue: Promise<unknown> = Promise.resolve();
   private active = 0;
+  /** Stops the research run in progress (one at a time; runs queue like every store job). */
+  researchStop: AbortController | null = null;
   /** An external edit that arrived while a job was running; reloaded when the queue drains. */
   private pendingReload: string | null = null;
   readonly http: http.Server;
@@ -526,6 +533,51 @@ export class NovelServer {
       return out;
     });
     r('DELETE', '/api/timeline/events/:id', async ({ engine, params }) => (lb(engine).deleteEvent(params.id), await engine.store.commit(`Timeline: remove ${params.id}`), { ok: true }));
+
+    // ---------------------------------------------------------------- research (any book)
+    const researchView = (e: Engine) => ({
+      library: e.store.project.research,
+      runs: e.store.listResearchRuns().slice(0, 12).map((x) => ({ id: x.id, brief: x.brief, depth: x.depth, started: x.started, ended: x.ended, status: x.status, searches: x.searches, cost_usd: x.cost_usd, found: x.found })),
+      can: e.research.canSearch(),
+      estimate: { quick: e.research.estimate('quick'), deep: e.research.estimate('deep') },
+    });
+    r('GET', '/api/research', ({ engine }) => researchView(engine));
+    r('GET', '/api/research/runs/:id', ({ engine, params }) => engine.store.readResearchRun(params.id) ?? { id: params.id, missing: true });
+    r('POST', '/api/research/run', ({ engine, body, server }) => {
+      const depth = body.depth === 'deep' ? 'deep' : 'quick';
+      const stop = new AbortController();
+      server.researchStop = stop;
+      return server.job('research', (progress) =>
+        engine.research.run({ brief: typeof body.brief === 'string' ? body.brief : undefined, depth, signal: stop.signal, progress: (line) => progress('Researching', line) }).finally(() => {
+          if (server.researchStop === stop) server.researchStop = null;
+        }),
+      );
+    });
+    r('POST', '/api/research/stop', ({ server }) => (server.researchStop?.abort(), { ok: true }));
+    r('POST', '/api/research/material', ({ engine, body, server }) => {
+      const file = String(body.file ?? '');
+      const text = String(body.text ?? '');
+      if (!text.trim()) throw new HttpError(400, 'The file is empty');
+      return server.job('material', (progress) => (progress('Reading your material', file), engine.research.addMaterial(file, text)));
+    });
+    r('DELETE', '/api/research/material/:file', async ({ engine, params }) => (engine.research.removeMaterial(params.file), await engine.store.commit(`Research: remove ${params.file}`), researchView(engine)));
+    r('PUT', '/api/research/evidence/:id', async ({ engine, params, body }) => {
+      engine.research.setEvidence(params.id, pick(body, ['status', 'as_of', 'jurisdiction', 'claim']));
+      await engine.store.commit('Research: evidence');
+      return researchView(engine);
+    });
+    r('PUT', '/api/research/comps/:id', async ({ engine, params, body }) => {
+      engine.research.setComp(params.id, pick(body, ['status', 'difference', 'shelf']));
+      await engine.store.commit('Research: the shelf');
+      return researchView(engine);
+    });
+    r('PUT', '/api/research/gaps/:id', async ({ engine, params, body }) => {
+      if (!['open', 'queued', 'covered', 'dismissed'].includes(body.status)) throw new HttpError(400, 'status must be open, queued, covered or dismissed');
+      engine.research.setGap(params.id, body.status);
+      await engine.store.commit(body.status === 'queued' ? 'Research: ask in the next session' : 'Research: questions');
+      return researchView(engine);
+    });
+    r('PUT', '/api/research/positioning', async ({ engine, body }) => (engine.research.setPositioning(String(body.text ?? '')), await engine.store.commit('Research: positioning'), researchView(engine)));
 
     r('PUT', '/api/questions', async ({ engine, body }) => (engine.store.saveQuestions({ questions: body.questions }), await engine.store.commit('Edit questions'), engine.store.project.questions));
     r('PUT', '/api/notebook', async ({ engine, body }) => (engine.store.saveNotebook({ ...engine.store.project.notebook, ...body.notebook }), await engine.store.commit('Edit the ghostwriter’s notebook'), engine.store.project.notebook));

@@ -11,6 +11,7 @@ import {
   IdeaBoard,
   Locations,
   Notebook,
+  ResearchLibrary,
   Questions,
   SceneNotes,
   Session,
@@ -76,6 +77,8 @@ export interface Project {
   sessions: Map<string, Session>;
   questions: Questions;
   notebook: Notebook;
+  /** What research has found (any kind of book). */
+  research: ResearchLibrary;
 }
 
 export interface Issue {
@@ -113,6 +116,10 @@ export const paths = {
   audio: (session: string, file: string) => `audio/${session}/${file}`,
   questions: 'ghostwriter/questions.yaml',
   notebook: 'ghostwriter/notebook.yaml',
+  research: 'research/library.yaml',
+  researchRun: (id: string) => `research/runs/${id}.yaml`,
+  /** The author's own material (notes, talks, course pages), as text. */
+  upload: (file: string) => `research/uploads/${file}`,
   samples: 'style/samples.md',
   banned: 'style/banned-patterns.md',
   reports: 'reports',
@@ -350,6 +357,7 @@ export function loadProject(dir: string): LoadResult {
   }
   const questions = yamlFile(Questions, paths.questions, {}) ?? Questions.parse({});
   const notebook = yamlFile(Notebook, paths.notebook, {}) ?? Notebook.parse({});
+  const research = yamlFile(ResearchLibrary, paths.research, {}) ?? ResearchLibrary.parse({});
 
   const sheet = yamlFile(StyleSheet, paths.styleSheet, {}) ?? StyleSheet.parse({});
   const samples = readIf(root, paths.samples) ?? '';
@@ -380,6 +388,7 @@ export function loadProject(dir: string): LoadResult {
     sessions,
     questions,
     notebook,
+    research,
   };
   issues.push(...validateReferences(project));
   return { project, issues };
@@ -486,6 +495,9 @@ export function validateReferences(p: Project): Issue[] {
   const narrator = p.book.life.narrator;
   if (p.book.kind !== 'novel' && narrator && !hasChar(narrator)) err(paths.book, 'life.narrator', `character "${narrator}" does not exist`);
 
+  const sourceIds = new Set(p.research.sources.map((s) => s.id));
+  p.research.evidence.forEach((e, i) => !sourceIds.has(e.source) && warn(paths.research, `evidence.${i}.source`, `source "${e.source}" does not exist`));
+  p.research.comps.forEach((c, i) => c.source && !sourceIds.has(c.source) && warn(paths.research, `comps.${i}.source`, `source "${c.source}" does not exist`));
   return issues;
 }
 

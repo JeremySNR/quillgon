@@ -41,6 +41,8 @@ export const ModelConfig = z.object({
   /** USD per million prompt-cache tokens. Default to 1.25x (write) and 0.1x (read) of price_in. */
   price_cache_write: z.number().optional(),
   price_cache_read: z.number().optional(),
+  /** USD per web search, for research runs (the providers charge per search, not per token). */
+  price_search: z.number().optional(),
 });
 export type ModelConfig = z.infer<typeof ModelConfig>;
 
@@ -60,6 +62,7 @@ export const AgentName = z.enum([
   'scribe',
   'ghostwriter',
   'interviewee',
+  'researcher',
 ]);
 export type AgentName = z.infer<typeof AgentName>;
 
@@ -92,6 +95,8 @@ export const DEFAULT_AGENT_TIERS: Record<AgentName, ModelTier> = {
   ghostwriter: 'frontier',
   // The eval's simulated interviewee: ideally another vendor than the ghostwriter, like the reader.
   interviewee: 'reader',
+  // Many calls per run, mostly reading and sorting: the mid tier, which must be a provider that can search.
+  researcher: 'mid',
 };
 
 export const PipelineStage = z.enum(['idea', 'intent', 'plot-points', 'structure', 'cards', 'prose', 'complete']);
@@ -113,10 +118,40 @@ export const VoiceSettings = z.object({
 });
 export type VoiceSettings = z.infer<typeof VoiceSettings>;
 
-/** What kind of book: a novel is planned top down; a life story is gathered from the author's memories. */
-export const BookKind = z.enum(['novel', 'life-story', 'memoir']);
+/**
+ * What kind of book. A novel is planned top down. A life story or memoir is gathered from the
+ * author's memories, and a guide from what the author knows; all three share interview
+ * sessions, ghostwritten drafts with margin notes, and revision rounds.
+ */
+export const BookKind = z.enum(['novel', 'life-story', 'memoir', 'guide']);
 export type BookKind = z.infer<typeof BookKind>;
+/** Gathered from the author in sessions (a life story, a memoir or a guide), not planned top down. */
 export const isLifeBook = (b: { kind: BookKind }) => b.kind !== 'novel';
+/** A guide: non-fiction that teaches what the author knows (coaching, finance, self-help). */
+export const isGuide = (b: { kind: BookKind }) => b.kind === 'guide';
+
+/** Which checks a guide needs: finance adds figures, dates and advice wording; the rest share the basics. */
+export const GuidePreset = z.enum(['general', 'coaching', 'finance', 'self-help']);
+export type GuidePreset = z.infer<typeof GuidePreset>;
+
+export const GuideShape = z.enum(['framework', 'problem-led', 'programme', 'principles', 'q-and-a']);
+export type GuideShape = z.infer<typeof GuideShape>;
+
+export const GuideSettings = z.object({
+  preset: GuidePreset.default('general'),
+  /** Who the reader is and where they are starting from. */
+  reader: z.string().default(''),
+  /** What the reader can do after the book that they could not before. */
+  promise: z.string().default(''),
+  /** The author's method, if it has a name ("the three-call close"). */
+  method: z.string().default(''),
+  /** Where figures and rules must hold, and the date they are true for (finance). */
+  jurisdiction: z.string().default(''),
+  as_of: z.string().default(''),
+  shape: GuideShape.nullable().default(null),
+});
+export type GuideSettings = z.infer<typeof GuideSettings>;
+export const DEFAULT_GUIDE: GuideSettings = { preset: 'general', reader: '', promise: '', method: '', jurisdiction: '', as_of: '', shape: null };
 
 /** How much of the writing the AI does in a life story. */
 export const Pen = z.enum(['interviewer', 'co-writer', 'ghostwriter']);
@@ -180,6 +215,8 @@ export const Book = z.object({
   voice: VoiceSettings.default({ provider: 'auto', model: '', language: '', cleanup: 'light', dictionary: [] }),
   /** Life stories only. */
   life: LifeSettings.default(DEFAULT_LIFE),
+  /** Guides only: who it is for, what it promises, and where its figures hold. */
+  guide: GuideSettings.default(DEFAULT_GUIDE),
 });
 export type Book = z.infer<typeof Book>;
 
@@ -575,11 +612,32 @@ export type TurnRef = z.infer<typeof TurnRef>;
 
 /** How far a story has been drawn out: a gist is not a scene. */
 export const LADDER = ['happened', 'instance', 'people', 'senses', 'words', 'felt_then', 'means_now'] as const;
-export type Rung = (typeof LADDER)[number];
+/** A guide's ladder: how far a lesson has been drawn out of the expert, from the idea to how a reader practises it. */
+export const GUIDE_LADDER = ['idea', 'case', 'when', 'steps', 'mistakes', 'why', 'practice'] as const;
+export type Rung = (typeof LADDER)[number] | (typeof GUIDE_LADDER)[number];
+export const ALL_RUNGS: readonly Rung[] = [...LADDER, ...GUIDE_LADDER];
 export const RungState = z.enum(['no', 'some', 'yes']);
-export const Ladder = z.object(Object.fromEntries(LADDER.map((r) => [r, RungState.default('no')])) as Record<Rung, z.ZodDefault<typeof RungState>>);
-export type Ladder = z.infer<typeof Ladder>;
+export type RungState = z.infer<typeof RungState>;
+export type Ladder = Partial<Record<Rung, RungState>>;
+/** A lesson's ladder has guide rungs; a memory's has the memoir rungs. */
+export const isGuideLadder = (l: Ladder) => l.idea !== undefined;
+export const rungsOf = (l: Ladder): readonly Rung[] => (isGuideLadder(l) ? GUIDE_LADDER : LADDER);
+/** Rung updates from a model: any rung, nothing filled in. */
+export const LadderPatch = z.object(Object.fromEntries(ALL_RUNGS.map((r) => [r, RungState.optional()])) as Record<Rung, z.ZodOptional<typeof RungState>>);
+/** A ladder: the rungs of its own kind are filled in ("no"); the other kind's stay out of the file. */
+export const Ladder = z.preprocess((v) => {
+  if (!v || typeof v !== 'object') return v;
+  const o = { ...(v as Ladder) };
+  for (const r of rungsOf(o)) o[r] ??= 'no';
+  return o;
+}, LadderPatch);
 export const EMPTY_LADDER: Ladder = Object.fromEntries(LADDER.map((r) => [r, 'no'])) as Ladder;
+export const EMPTY_GUIDE_LADDER: Ladder = Object.fromEntries(GUIDE_LADDER.map((r) => [r, 'no'])) as Ladder;
+export const emptyLadder = (kind: BookKind): Ladder => ({ ...(kind === 'guide' ? EMPTY_GUIDE_LADDER : EMPTY_LADDER) });
+
+/** In a guide, which part of a lesson a detail is: the steps, what goes wrong, a case, and so on. */
+export const LessonPart = z.enum(['step', 'case', 'when', 'mistake', 'why', 'practice', 'script', 'claim']);
+export type LessonPart = z.infer<typeof LessonPart>;
 
 /**
  * stories/<id>.yaml: one remembered episode, the unit a ghostwriter turns into a scene.
@@ -600,7 +658,7 @@ export const Story = z.object({
   /** Things that were said, kept word for word: revisions may not change them. */
   quotes: z.array(z.object({ text: z.string().min(1), who: z.string().default(''), from: TurnRef.nullable().default(null) })).default([]),
   /** Details the author gave, each traceable to where they said it. */
-  details: z.array(z.object({ text: z.string().min(1), from: TurnRef.nullable().default(null), source: Provenance.default('memory'), certainty: Certainty.default('sure') })).default([]),
+  details: z.array(z.object({ text: z.string().min(1), from: TurnRef.nullable().default(null), source: Provenance.default('memory'), certainty: Certainty.default('sure'), part: LessonPart.optional(), evidence: Id.optional() })).default([]),
   /** The same story told differently (in two sessions, or by someone else). */
   versions: z.array(z.object({ text: z.string(), from: TurnRef.nullable().default(null), by: z.string().default('') })).default([]),
   /** What it meant then and what it means now, in the author's words. */
@@ -682,7 +740,12 @@ export type Notebook = z.infer<typeof Notebook>;
 /** scenes/<id>/notes.yaml: the ghostwriter's margin notes on a draft. */
 export const MarginNote = z.object({
   id: z.string(),
-  kind: z.enum(['gap', 'versions', 'thin', 'voice', 'source']),
+  /**
+   * gap, versions, thin, voice and source as in a life story; for guides also: a step too vague to
+   * act on, an idea with no example, a figure with no source (evidence), a figure that dates (dated),
+   * advice worded as a personal recommendation (advice), and a sum that does not add up (maths).
+   */
+  kind: z.enum(['gap', 'versions', 'thin', 'voice', 'source', 'steps', 'example', 'evidence', 'dated', 'advice', 'maths']),
   /** Exact text in the prose the note is attached to (empty: the whole scene). */
   quote: z.string().default(''),
   text: z.string().min(1),
@@ -695,3 +758,106 @@ export const MarginNote = z.object({
 export type MarginNote = z.infer<typeof MarginNote>;
 export const SceneNotes = z.object({ notes: z.array(MarginNote).default([]) });
 export type SceneNotes = z.infer<typeof SceneNotes>;
+
+// ================================================================ research
+
+/** Where a finding came from: a web page, a book's catalogue entry, or the author's own material. */
+export const ResearchSource = z.object({
+  id: Id,
+  kind: z.enum(['web', 'book', 'upload']),
+  title: z.string().default(''),
+  /** The page, or the book's catalogue page. Empty for uploads. */
+  url: z.string().default(''),
+  authors: z.array(z.string()).default([]),
+  publisher: z.string().default(''),
+  /** When it was published, as the source gives it. */
+  published: z.string().default(''),
+  /** When research read it (ISO date). */
+  retrieved: z.string().default(''),
+  /** Uploads: the file under research/uploads/. */
+  file: z.string().default(''),
+});
+export type ResearchSource = z.infer<typeof ResearchSource>;
+
+/**
+ * A fact a draft may state, with the exact words that support it. The quote is checked by code
+ * against the page itself (or the uploaded file): "found" means the words are really there.
+ */
+export const Evidence = z.object({
+  id: Id,
+  /** The fact in plain words. */
+  claim: z.string().min(1),
+  /** Word for word from the source. */
+  quote: z.string().default(''),
+  source: Id,
+  check: z.enum(['found', 'not-found', 'unreachable', 'unchecked']).default('unchecked'),
+  topic: z.string().default(''),
+  /** Figures that change (tax allowances, rates): the date they are true for, and where. */
+  as_of: z.string().default(''),
+  jurisdiction: z.string().default(''),
+  status: z.enum(['new', 'kept', 'dismissed']).default('new'),
+});
+export type Evidence = z.infer<typeof Evidence>;
+
+/** A book already on the shelf this one will sit on: what it promises, how it is built, what readers say. */
+export const CompTitle = z.object({
+  id: Id,
+  title: z.string().min(1),
+  authors: z.array(z.string()).default([]),
+  year: z.string().default(''),
+  /** The catalogue entry it came from. */
+  source: Id.nullable().default(null),
+  promise: z.string().default(''),
+  framework: z.string().default(''),
+  /** How its chapters are built, from its contents page where there is one. */
+  structure: z.string().default(''),
+  praise: z.array(z.string()).default([]),
+  complaints: z.array(z.string()).default([]),
+  /** How this book differs. The author's to edit. */
+  difference: z.string().default(''),
+  shelf: z.enum(['core', 'adjacent']).default('core'),
+  status: z.enum(['new', 'kept', 'dismissed']).default('new'),
+});
+export type CompTitle = z.infer<typeof CompTitle>;
+
+/** Something readers ask that the books on the shelf do not answer well: a question for the author. */
+export const ResearchGap = z.object({
+  id: Id,
+  question: z.string().min(1),
+  why: z.string().default(''),
+  kind: z.enum(['reader-question', 'uncovered', 'disagreement', 'check']).default('uncovered'),
+  evidence: z.array(Id).default([]),
+  status: z.enum(['open', 'queued', 'covered', 'dismissed']).default('open'),
+});
+export type ResearchGap = z.infer<typeof ResearchGap>;
+
+/** research/library.yaml: everything research has found, kept with the book. */
+export const ResearchLibrary = z.object({
+  /** What the author asked research to look into. */
+  brief: z.string().default(''),
+  /** Where the book sits among the others, in a paragraph. */
+  positioning: z.string().default(''),
+  sources: z.array(ResearchSource).default([]),
+  evidence: z.array(Evidence).default([]),
+  comps: z.array(CompTitle).default([]),
+  gaps: z.array(ResearchGap).default([]),
+  /** How the strongest books in the category are built (chapter openings, exercises, length). */
+  patterns: z.array(z.object({ text: z.string().min(1), from: z.array(Id).default([]) })).default([]),
+});
+export type ResearchLibrary = z.infer<typeof ResearchLibrary>;
+
+/** research/runs/<id>.yaml: one research run and what it did, step by step. */
+export const ResearchRun = z.object({
+  id: Id,
+  brief: z.string().default(''),
+  depth: z.enum(['quick', 'deep']).default('quick'),
+  started: z.string(),
+  ended: z.string().nullable().default(null),
+  status: z.enum(['running', 'done', 'failed', 'stopped']).default('running'),
+  log: z.array(z.object({ at: z.string(), kind: z.enum(['plan', 'catalogue', 'search', 'material', 'check', 'analyse', 'note', 'error']), text: z.string() })).default([]),
+  searches: z.number().int().nonnegative().default(0),
+  cost_usd: z.number().nonnegative().default(0),
+  found: z.object({ sources: z.number().int().default(0), evidence: z.number().int().default(0), comps: z.number().int().default(0), gaps: z.number().int().default(0) }).default({ sources: 0, evidence: 0, comps: 0, gaps: 0 }),
+  error: z.string().default(''),
+});
+export type ResearchRun = z.infer<typeof ResearchRun>;

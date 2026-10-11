@@ -37,3 +37,6 @@ export * from './life.js';
 export * from './engine/interview.js';
 export * from './engine/lifebook.js';
 export * from './eval-life.js';
+export * from './research.js';
+export * from './guide.js';
+export * from './engine/research.js';

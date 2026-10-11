@@ -1,6 +1,8 @@
 import type { AgentSuite, AuthorSignal, GhostTurnOutput, StoryBrief } from '../agents/contracts.js';
+import { researchPrompts } from '../research.js';
+import { isGuide } from '../schemas/index.js';
 import type { GraphStore } from '../store.js';
-import { EMPTY_LADDER, LADDER, type CharacterBio, type Ladder, type Session, type SessionTurn, type Story, type TalkChange, type TimelineEvent, type TurnRef } from '../schemas/index.js';
+import { emptyLadder, rungsOf, type CharacterBio, type Ladder, type Rung, type Session, type SessionTurn, type Story, type TalkChange, type TimelineEvent, type TurnRef } from '../schemas/index.js';
 import { enoughForScene, ladderScore, leadingQuestion, lifeGaps, nextRung, probesFor, RUNG_QUESTION, touchesOffLimits } from '../life.js';
 import { slugify } from '../util.js';
 
@@ -51,7 +53,8 @@ export class Interviews {
 
   /** Names the author's answers may mention: people, places, story titles. */
   private known(): string[] {
-    return [...this.p.characters.values()].flatMap((c) => [c.bio.name, ...c.bio.aliases]).concat(this.p.locations.locations.map((l) => l.name), [...this.p.stories.values()].map((s) => s.title));
+    // Research the ghostwriter may cite (attributed) is known material, not a detail it is planting.
+    return [...this.p.characters.values()].flatMap((c) => [c.bio.name, ...c.bio.aliases]).concat(this.p.locations.locations.map((l) => l.name), [...this.p.stories.values()].map((s) => s.title), researchPrompts(this.p, 12).map((r) => r.text));
   }
 
   /** The session in progress, if any. */
@@ -78,6 +81,8 @@ export class Interviews {
     const recent = [...this.p.sessions.values()].filter((s) => s.ended).sort((a, b) => b.started.localeCompare(a.started)).slice(0, 3);
     const minutes = opts.minutes ?? life.session_minutes;
     const plan = await this.agents.ghostPlan({
+      kind: this.p.book.kind,
+      research: researchPrompts(this.p),
       minutes,
       speaker: opts.speaker ?? '',
       narrator: this.narrator().name,
@@ -87,7 +92,8 @@ export class Interviews {
       chapters: this.p.structure.acts.flatMap((a) => a.chapters).map((c) => ({ id: c.id, title: c.title, stage: c.stage ?? 'gathering', stories: c.stories ?? [] })),
       stories: this.briefs(),
       people: this.people(),
-      gaps: lifeGaps(life.born, whens),
+      // A guide has no years to fill; its gaps come from research instead.
+      gaps: isGuide(this.p.book) ? [] : lifeGaps(life.born, whens),
       questions: queued.sort((a, b) => a.priority - b.priority).slice(0, 25).map((q) => ({ id: q.id, text: q.text, why: q.why, about: q.about, priority: q.priority })),
       promises: nb.promises,
       off_limits: nb.off_limits,
@@ -144,6 +150,8 @@ export class Interviews {
     const life = this.p.book.life;
     const history = s.turns.slice(-HISTORY - 1, -1).map((t) => ({ role: t.role, text: t.off_record ? '(off the record)' : t.text }));
     const base = {
+      kind: this.p.book.kind,
+      research: researchPrompts(this.p, 4),
       speaker: s.speaker,
       narrator: this.narrator().name,
       born: life.born,
@@ -248,7 +256,7 @@ export class Interviews {
       const id = existing ? existing.id : this.uniqueId(slugify(out.story.id || out.story.title), (x) => p.stories.has(x));
       const st: Story = existing
         ? structuredClone(existing)
-        : { id, title: out.story.title || out.story.id.replace(/-/g, ' '), summary: '', when: '', people: [], place: '', chapter: null, key: null, ladder: { ...EMPTY_LADDER }, quotes: [], details: [], versions: [], then: '', now: '', sensitive: false, status: 'gathering' };
+        : { id, title: out.story.title || out.story.id.replace(/-/g, ' '), summary: '', when: '', people: [], place: '', chapter: null, key: null, ladder: emptyLadder(this.p.book.kind), quotes: [], details: [], versions: [], then: '', now: '', sensitive: false, status: 'gathering' };
       const o = out.story;
       if (o.summary && !st.summary) st.summary = o.summary;
       if (o.when && !st.when) st.when = o.when;
@@ -320,9 +328,9 @@ export class Interviews {
   }
 
   private mergeIntoStory(st: Story, out: GhostTurnOutput, from: TurnRef, personIds: Map<string, string>, by: string) {
-    for (const r of LADDER) {
+    for (const r of rungsOf(st.ladder)) {
       const v = out.ladder[r];
-      if (v && RANK[v] > RANK[st.ladder[r]]) st.ladder[r] = v;
+      if (v && RANK[v] > RANK[st.ladder[r] ?? 'no']) st.ladder[r] = v;
     }
     const people = out.people.map((x) => personIds.get(x.id)).filter((x): x is string => !!x);
     st.people = [...new Set([...st.people, ...people])];
@@ -332,14 +340,14 @@ export class Interviews {
       if (text) st.versions.push({ text, from, by });
       return;
     }
-    for (const d of out.details) if (!st.details.some((x) => x.text === d.text)) st.details.push({ text: d.text, from, source: 'memory', certainty: d.certainty });
+    for (const d of out.details) if (!st.details.some((x) => x.text === d.text)) st.details.push({ text: d.text, from, source: 'memory', certainty: d.certainty, ...(d.part ? { part: d.part } : {}) });
     for (const q of out.quotes) if (!st.quotes.some((x) => x.text === q.text)) st.quotes.push({ text: q.text, who: q.who, from });
     if (out.then) st.then = st.then ? `${st.then} ${out.then}` : out.then;
     if (out.now) st.now = st.now ? `${st.now} ${out.now}` : out.now;
   }
 
   private climbed(a: Ladder, b: Ladder): string {
-    const up = LADDER.filter((r) => RANK[b[r]] > RANK[a[r]]);
+    const up = rungsOf(b).filter((r) => RANK[b[r] ?? 'no'] > RANK[a[r] ?? 'no']);
     return up.length ? up.map((r) => RUNG_SHORT[r]).join(', ') : '';
   }
 
@@ -416,7 +424,14 @@ const SIGNAL_TEXT: Record<AuthorSignal, string> = {
   hard: 'This is hard to talk about.',
 };
 
-const RUNG_SHORT: Record<(typeof LADDER)[number], string> = {
+const RUNG_SHORT: Record<Rung, string> = {
+  idea: 'the idea',
+  case: 'a real case',
+  when: 'when to use it',
+  steps: 'the steps',
+  mistakes: 'what goes wrong',
+  why: 'why it works',
+  practice: 'how to practise it',
   happened: 'what happened',
   instance: 'one particular time',
   people: 'who was there',

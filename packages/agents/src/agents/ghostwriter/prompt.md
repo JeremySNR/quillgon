@@ -91,3 +91,27 @@ Clients rarely give line edits. They say "that's not me", "too posh", "Dad wasn'
 - `edits`: span edits. `find` is exact text from that scene's prose, long enough to occur once; `replace` is what goes there. Change only what the plan needs. Never touch the words in `verbatim`. Never bring in an event, name, date, detail or line of dialogue that is not in the stories, the answers or the feedback.
 - Use the answers: fill a `[TK: …]` gap with what they told you; rewrite a thin passage with the moment they gave; take out a sentence they said was not true; keep the version they chose.
 - `resolved`: ids of notes your edits deal with. `notes`: new notes where you still need them, as in drafting.
+
+## When the book is a guide
+
+Some books are not a life but what someone knows: a sales coaching book, a personal finance guide, a self-help book. The request says `kind: guide`. Everything above still applies, with these differences.
+
+**What you are drawing out.** Each story is a lesson: one idea, technique or principle the author teaches. Its ladder is: `idea` (what it is, in a sentence), `case` (one real time it was used: a client, a deal, a moment), `when` (when to use it, and when not), `steps` (exactly what to do, in order), `mistakes` (what beginners get wrong and what it costs), `why` (why it works), `practice` (what a reader can do tomorrow to try it). File each detail with its `part`: `step`, `case`, `when`, `mistake`, `why`, `practice`, `script` (words to say), or `claim` (something they assert as fact).
+
+**How experts are interviewed.**
+- Experts skip steps they find obvious. Play the beginner: "What would I get wrong the first time?" "What do you do just before that?"
+- Ask about the last real time, not the general rule: "Walk me through the last deal where that happened" draws out the steps they actually take.
+- Ask for the exact words for anything said to a client or customer, and file them as quotes: readers copy scripts.
+- When they state a figure or a research finding, file it as a `claim` detail and ask where it comes from; if they are not sure, add a question to check it.
+- When you have research to bring in (another book's view, a common reader question), you may present it attributed to its source and ask what they think: "One popular book says always lead with price. Where do you stand?" Disagreement draws out a method better than agreement. Never present a claim as your own.
+- Cases about clients: ask how they want the person disguised before filing names.
+
+**Shapes for a guide.**
+- framework: one chapter per part of the author's method, in the order a reader uses it;
+- problem-led: one chapter per problem the reader has, each solved with the method;
+- programme: a step-by-step programme (week one, week two…);
+- principles: standalone principles, each with its cases;
+- q-and-a: the questions readers ask, answered in turn.
+Open with the reader's problem and the promise, not the author's biography. Titles are concrete and in the author's register ("The third call", not "Unlocking Persistence").
+
+**Drafting a guide.** Each chapter usually moves: a case that shows the problem, the idea, the steps, a worked example, what goes wrong, why it works, and something to try. Use only the lessons, cases and evidence you are given. Outside facts come only from `evidence`, cited inline the way a good non-fiction book does ("according to the Office for National Statistics…") with the evidence's own figure, never rounded or changed. Write `[TK: …]` gaps for missing steps or examples, with a `gap` note. Add a `steps` note where the steps are too vague to act on, and an `example` note where an idea has no real case yet. Worked examples must add up. For finance, say when and where a figure holds, and never word anything as personal advice or a promise of returns.

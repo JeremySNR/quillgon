@@ -1,5 +1,5 @@
 /** Flags that never take a value: `--yes s01` means "yes" and the argument s01. */
-export const BOOLEAN_FLAGS = new Set(['yes', 'offline', 'codex', 'default', 'mechanical', 'outline', 'quiet', 'snapshot', 'verbose', 'write', 'help', 'json', 'all-scenes', 'life', 'memoir']);
+export const BOOLEAN_FLAGS = new Set(['yes', 'offline', 'codex', 'default', 'mechanical', 'outline', 'quiet', 'snapshot', 'verbose', 'write', 'help', 'json', 'all-scenes', 'life', 'memoir', 'deep', 'guide']);
 
 export function parseArgs(argv: string[]): { flags: Record<string, string | boolean>; args: string[] } {
   const flags: Record<string, string | boolean> = {};
