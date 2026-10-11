@@ -95,7 +95,7 @@ export async function projectSnapshot(engine: Engine) {
     timeline: p.timeline,
     locations: p.locations.locations,
     facts: p.factGlossary.facts,
-    style: { samples: p.style.samples, banned: p.style.bannedRaw, sheet: p.style.sheet },
+    style: { samples: p.style.samples, banned: p.style.bannedRaw, sheet: p.style.sheet, humaniser: store.readHumaniser() },
     critique: critique ? { ran_at: critique.ran_at, findings: critique.findings.length + critique.mechanical.length } : null,
     issues: store.issues,
     continuity: { mechanical: mech, model: latestContinuity?.model ?? [], ran_at: latestContinuity?.ran_at ?? null },

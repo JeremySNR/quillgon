@@ -79,6 +79,33 @@ We can't fine-tune Claude, so we get as close as we can mechanically:
 - **Learn from the author's own edits.** Mine the diffs and propose new rules ("you always change 'gaze' to 'look'").
 - **A tic profiler for the whole book.** The Hachette title *Shy Girl* was pulled after readers counted "sharp" 159 times and "edge" 84 times. Track phrase frequency against genre baselines, lists of three, "not X — Y" constructions, and a slop rate per chapter, alongside the per-scene banned-pattern list.
 
+#### 4a. AI writing habits (October 2026)
+
+A second research pass looked at what currently makes prose read as machine-written, and what removes it. Sources:
+- Wikipedia's *Signs of AI writing* (WikiProject AI Cleanup).
+- The humanizer skill ([blader/humanizer](https://github.com/blader/humanizer), MIT) and [stop-slop](https://github.com/hardikpandya/stop-slop) (MIT).
+- Sam Paech's [slop-score](https://github.com/sam-paech/slop-score) and slop-forensics lists (MIT), and the *Antislop* paper (ICLR 2026).
+- Kobak et al. on excess vocabulary (Science Advances 2025).
+- Reinhart et al. on participial clauses (PNAS 2025).
+- LAMP (Chakrabarty et al., CHI 2025), StoryScope, and studies of expert detection and author imitation.
+
+Findings that shaped what was built:
+- **Structure outlasts vocabulary.** "Delve" has already faded. Staged contrasts ("It wasn't X. It was Y."), trailing "-ing" commentary, "serves as" for "is", inflated significance and summarising codas persist across models and years. They are strong signals; single words are weak ones that only count in clusters.
+- **Detect and repair, rather than ban in the prompt.** Naming banned words in a generation prompt can make them more likely, and over-banning swaps one cliché for its neighbour. Long lists belong in code. The prompt that writes gets a few positive rules with reasons.
+- **The author's writing wins.** Anything their samples do is their voice, not a tell.
+- **Do not over-correct.** Blanket rules (no adverbs, no passive voice, never three of anything) produce a new machine style. Flag rates and clusters, not every instance.
+- **True books cannot use a fiction humanizer as-is.** A humanizer fixes vagueness by adding concrete detail, which in a memoir or guide means inventing facts.
+- **Models are poor judges of writing quality.** Use them to find and fix patterns, and code to verify the fix.
+
+What was built:
+- **`packages/core/src/tells.ts`:** structures, stock phrases and names (fiction only), clustered vocabulary, repeated openers, and triad and sentence-length rates against the author's samples, plus an AI-habit score.
+- **The style check counts strong habits as enforced.** The existing repair loop therefore keeps edits that remove them and rejects edits that add them.
+- **Every generation path now runs the cleanup:** novel scenes, ripple rewrites, minimal regenerates, and life, memoir and guide drafts and revisions.
+- **In true books the line editor may only cut or reword.** Code refuses edits that change what was said, fill a `[TK]` gap, or add a name, figure or new content word. "Be more specific" becomes a question for the author.
+- **Prompts:** "Sound like a person" in the shared prompts. The line editor has the humanizer families and process.
+- **Per-book controls:** `style/humaniser.md` house rules, and a style-sheet `tells` mode and `allow` list.
+- **Measures:** an AI-habit rate per chapter in the voice report, and AI-habit, contrast, rider and triad rates in both eval harnesses.
+
 ### 5. Measure tension, not just engagement
 - **Predicted continuations.** After each scene the reader writes 3–5 continuations it expects. How much they disagree is the **uncertainty**; how far the real next scene lands from them is the **surprise** ([Fong & Gui](https://arxiv.org/abs/2412.15239), [Wilmot & Keller](https://arxiv.org/abs/2004.14905)). Chart both across the book and flag flat stretches and spoiled reveals.
 - **A threads × chapters grid** (like Dabble's Plot Grid). It shows escalation per thread, gaps in the middle, and relationships that move too fast (authors report the love interest arriving "within 3 pages").

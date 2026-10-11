@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import {
   AgentName,
   GuideSettings,
+  isLifeBook,
   analyseImpact,
   Engine,
   GraphStore,
@@ -625,7 +626,19 @@ export class NovelServer {
     r('POST', '/api/scenes/:id/mark-in-sync', ({ engine, params }) => (engine.store.markInSync(params.id), sceneDetail(engine.store, params.id)));
     r('POST', '/api/scenes/:id/write', ({ engine, params, server }) => server.job('write', (progress) => engine.pipeline.writeScene(params.id, { progress }).then((r) => ({ words: r.words, contradictions: r.extraction.contradictions, style: r.style }))));
     r('POST', '/api/scenes/:id/regenerate', ({ engine, params, body, server }) => server.job('regenerate', () => engine.pipeline.regenerate(params.id, body.mode === 'fresh' ? 'fresh' : 'minimal', body.change)));
-    r('POST', '/api/scenes/:id/accept-prose', ({ engine, params, body, server }) => server.job('accept-prose', () => engine.pipeline.acceptProse(params.id, String(body.body)).then((ex) => ({ contradictions: ex.contradictions }))));
+    r('POST', '/api/scenes/:id/accept-prose', ({ engine, params, body, server }) =>
+      server.job('accept-prose', async () => {
+        // A true book's facts live in its stories, not in an extractor's reading of the prose.
+        if (isLifeBook(engine.store.project.book)) {
+          engine.store.saveProse(params.id, String(body.body), 'generated');
+          engine.store.markInSync(params.id);
+          await engine.store.commit(`Clean up ${params.id}`);
+          return { contradictions: [] };
+        }
+        const ex = await engine.pipeline.acceptProse(params.id, String(body.body));
+        return { contradictions: ex.contradictions };
+      }),
+    );
     r('POST', '/api/scenes/:id/reconcile', ({ engine, params, server }) =>
       server.job('reconcile', async () => {
         const r = await engine.pipeline.reconcileProseEdit(params.id);
@@ -639,10 +652,12 @@ export class NovelServer {
     });
     r('POST', '/api/scenes/:id/style', ({ engine, params, server }) =>
       server.job('style', async (progress) => {
-        const { runStylePasses } = await import('@quillgon/core');
+        const { runStylePasses, truthGuard } = await import('@quillgon/core');
         const s = engine.store.scene(params.id);
         if (!s.prose) throw new Error('no prose yet');
-        const out = await runStylePasses(engine.store, engine.agents, params.id, s.prose.body, progress);
+        const p = engine.store.project;
+        // A true book's cleanup may only cut or reword what the author said.
+        const out = await runStylePasses(engine.store, engine.agents, params.id, s.prose.body, progress, isLifeBook(p.book) ? { voice: false, truth: truthGuard(p, s.card.stories ?? []) } : {});
         return { before: s.prose.body, after: out.prose, report: out.report };
       }),
     );
@@ -715,7 +730,12 @@ export class NovelServer {
     });
     r('PUT', '/api/intent', async ({ engine, body }) => (engine.store.saveIntent({ ...engine.store.project.intent, ...body.intent }), await engine.store.commit('Edit intent'), { ok: true }));
     r('PUT', '/api/book', async ({ engine, body }) => (engine.store.saveBook({ ...engine.store.book, ...body.book }), await engine.store.commit('Edit book settings'), { ok: true }));
-    r('PUT', '/api/style', async ({ engine, body }) => (engine.store.saveStyle(body), await engine.store.commit('Edit style'), { ok: true }));
+    r('PUT', '/api/style', async ({ engine, body }) => {
+      engine.store.saveStyle(body);
+      if (typeof body.humaniser === 'string') engine.store.saveHumaniser(body.humaniser);
+      await engine.store.commit('Edit style');
+      return { ok: true };
+    });
     r('POST', '/api/commit', async ({ engine, body }) => ({ hash: await engine.store.commit(body.message || 'Checkpoint') }));
 
     // --- impact & ripples

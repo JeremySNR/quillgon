@@ -95,6 +95,7 @@ function lifeMarkdown(r: LifeRun): string {
     `| Leading questions asked | ${s.leading_asked} | 0 |`,
     `| Off-limits questions asked | ${s.off_limits_asked} | 0 |`,
     `| Drafted sentences with no source | ${fmt(s.invented_rate)} | lower |`,
+    `| AI writing habits per 1,000 drafted words | ${fmt(s.ai_habits_per_1k)} | lower |`,
     '',
     '## Lives',
     '',

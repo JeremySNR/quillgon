@@ -7,6 +7,7 @@ import { mechanicalContinuity } from './quality/continuity.js';
 import { mechanicalShape, planText } from './engine/critics.js';
 import type { ReaderReport } from './quality/reader.js';
 import { wordCount } from './util.js';
+import { findTells, tellProfile, triadRate } from './tells.js';
 
 /**
  * Automatic metrics for the eval harness (docs/research.md §11). Deterministic and free:
@@ -30,8 +31,14 @@ export interface BookMetrics {
   words: number;
   /** Banned-pattern and stock-phrase hits per 1,000 words. */
   slop_per_1k: number;
-  /** Code-checked style sheet violations per 1,000 words. */
+  /** Code-checked style sheet violations per 1,000 words (AI habits are counted separately). */
   style_per_1k: number;
+  /** AI writing habits per 1,000 words (tells.ts: strong ×4, weak ×1). */
+  ai_habits_per_1k: number;
+  /** The structures that outlast vocabulary, per 1,000 words: staged contrasts, "-ing" riders, lists of three. */
+  contrasts_per_1k: number;
+  riders_per_1k: number;
+  triads_per_1k: number;
   continuity_errors: number;
   /** Structural tells in the plan (single track, sagging middle, tidy ending…). */
   shape_findings: number;
@@ -52,7 +59,10 @@ export function bookMetrics(p: Project, opts: { id: string; reader?: ReaderRepor
   const banned = p.style.banned.length ? p.style.banned : parseBannedPatterns('');
   const lower = text.toLowerCase();
   const stock = SLOP_PHRASES.reduce((n, phrase) => n + (lower.split(phrase).length - 1), 0);
-  const style = prose.reduce((n, t) => n + checkStyle(t, p.style.sheet, { book: p.book }).enforced, 0);
+  const style = prose.reduce((n, t) => n + checkStyle(t, p.style.sheet, { book: p.book, tells: false }).enforced, 0);
+  const tellOpts = { kind: p.book.kind === 'novel' ? ('fiction' as const) : ('true' as const) };
+  const tells = findTells(text, tellOpts);
+  const count = (rules: string[]) => tells.filter((t) => rules.includes(t.rule)).length;
   const twists = opts.reader?.twists ?? [];
   return {
     id: opts.id,
@@ -62,6 +72,10 @@ export function bookMetrics(p: Project, opts: { id: string; reader?: ReaderRepor
     words,
     slop_per_1k: per1k(findBannedPatterns(text, banned).length + stock),
     style_per_1k: per1k(style),
+    ai_habits_per_1k: tellProfile(text, tellOpts).score,
+    contrasts_per_1k: per1k(count(['not-x-but-y', 'no-longer', 'no-x-no-y'])),
+    riders_per_1k: per1k(count(['ing-rider'])),
+    triads_per_1k: triadRate(text),
     continuity_errors: mechanicalContinuity(p).length,
     shape_findings: mechanicalShape(p).length,
     twist_guess_rate: twists.length ? Math.round((twists.filter((t) => t.guessed).length / twists.length) * 100) / 100 : null,
@@ -74,7 +88,7 @@ export function bookMetrics(p: Project, opts: { id: string; reader?: ReaderRepor
 export interface RunMetrics {
   books: number;
   /** Means across books. */
-  mean: Pick<BookMetrics, 'slop_per_1k' | 'style_per_1k' | 'continuity_errors' | 'shape_findings'> & { twist_guess_rate: number | null; engagement: number | null };
+  mean: Pick<BookMetrics, 'slop_per_1k' | 'style_per_1k' | 'ai_habits_per_1k' | 'contrasts_per_1k' | 'riders_per_1k' | 'triads_per_1k' | 'continuity_errors' | 'shape_findings'> & { twist_guess_rate: number | null; engagement: number | null };
   /** Share of books that reuse a character first name from another book in the run ("Elara"). */
   shared_name_rate: number;
   /** Mean Jaccard overlap of prose word-trigrams between pairs of books (lower: less samey). */
@@ -119,6 +133,10 @@ export function runMetrics(books: { metrics: BookMetrics; project: Project }[]):
     mean: {
       slop_per_1k: mean(ms.map((m) => m.slop_per_1k)),
       style_per_1k: mean(ms.map((m) => m.style_per_1k)),
+      ai_habits_per_1k: mean(ms.map((m) => m.ai_habits_per_1k)),
+      contrasts_per_1k: mean(ms.map((m) => m.contrasts_per_1k)),
+      riders_per_1k: mean(ms.map((m) => m.riders_per_1k)),
+      triads_per_1k: mean(ms.map((m) => m.triads_per_1k)),
       continuity_errors: mean(ms.map((m) => m.continuity_errors)),
       shape_findings: mean(ms.map((m) => m.shape_findings)),
       twist_guess_rate: nullable(ms.map((m) => m.twist_guess_rate)),

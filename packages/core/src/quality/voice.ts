@@ -4,6 +4,7 @@ import type { GraphStore } from '../store.js';
 import { dialogue } from '../context.js';
 import { cosine, LocalEmbedder, tokens } from '../embed.js';
 import { findBannedPatterns } from '../style.js';
+import { tellProfile } from '../tells.js';
 import { timestamp } from '../util.js';
 
 export interface VoiceReport {
@@ -12,6 +13,8 @@ export interface VoiceReport {
   overused_openers: { opener: string; count: number; share: number }[];
   similar_voices: { a: string; b: string; similarity: number; lines: number }[];
   banned: { scene: string; label: string; match: string; line: number }[];
+  /** The habits of machine prose across the book: a score per chapter and the commonest habits. */
+  ai_habits: { score: number; chapters: { id: string; title: string; score: number; strong: number }[]; top: { rule: string; count: number; example: string }[]; rhythm: string[] };
   warnings: number;
 }
 
@@ -79,7 +82,19 @@ export function voiceReport(p: Project, opts: { ngram?: number; minRepeats?: num
 
   const banned = order.flatMap((sid) => findBannedPatterns(p.scenes.get(sid)!.prose!.body, p.style.banned).map((h) => ({ scene: sid, label: h.label, match: h.match, line: h.line })));
   const warnings = repeated_phrases.length + overused_openers.length + similar_voices.length + banned.length;
-  return { ran_at: new Date().toISOString(), repeated_phrases, overused_openers, similar_voices, banned, warnings };
+  // A tic profile: the habits per chapter, against the author's own samples.
+  const tellOpts = { samples: p.style.samples, kind: p.book.kind === 'novel' ? ('fiction' as const) : ('true' as const), allow: p.style.sheet.allow ?? [] };
+  const chapterText = (scenes: string[]) => scenes.map((sid) => p.scenes.get(sid)?.prose?.body ?? '').filter(Boolean).join('\n\n');
+  const chapters = p.structure.acts
+    .flatMap((a) => a.chapters)
+    .filter((c) => chapterText(c.scenes))
+    .map((c) => {
+      const t = tellProfile(chapterText(c.scenes), tellOpts);
+      return { id: c.id, title: c.title, score: t.score, strong: t.strong };
+    });
+  const whole = tellProfile(order.map((sid) => p.scenes.get(sid)!.prose!.body).join('\n\n'), tellOpts);
+  const ai_habits = { score: whole.score, chapters, top: whole.top, rhythm: whole.rhythm };
+  return { ran_at: new Date().toISOString(), repeated_phrases, overused_openers, similar_voices, banned, ai_habits, warnings };
 }
 
 export function runVoiceReport(store: GraphStore): VoiceReport {
@@ -101,6 +116,11 @@ export function runVoiceReport(store: GraphStore): VoiceReport {
       '',
       '## Banned patterns',
       ...(r.banned.length ? r.banned.map((x) => `- ${x.scene} line ${x.line}: ${x.label} ("${x.match}")`) : ['None.']),
+      '',
+      `## AI writing habits (${r.ai_habits.score} per 1,000 words)`,
+      ...(r.ai_habits.chapters.length ? r.ai_habits.chapters.map((c) => `- ${c.title || c.id}: ${c.score} per 1,000 (${c.strong} strong)`) : ['No prose yet.']),
+      ...(r.ai_habits.top.length ? ['', 'Commonest:', ...r.ai_habits.top.map((t) => `- ${t.rule} ×${t.count} ("${t.example}")`)] : []),
+      ...r.ai_habits.rhythm.map((x) => `- ${x}`),
     ].join('\n') + '\n',
   );
   store.updateBook({ health: { ...store.book.health, voice_warnings: r.warnings } });

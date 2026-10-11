@@ -53,7 +53,7 @@ So the main new piece is a **gathering stage** that turns conversations and dict
 | Scene cards | Kept. Add *then* (what I knew at the time) and *now* (what I understand looking back), plus the memories each card draws on. | `SceneCard` 269-293 |
 | Extraction and sync | Kept as is. It matters more here, because much of the prose is the author's own. | `engine/extraction.ts`, `sync.ts` |
 | Ripples and impact analysis | Kept. "Grandad's death was 1983, not 1981" should ripple through every scene that depends on it. | `impact`, `ripple` |
-| Style sheet, learned rules, both-orders judge | Kept. The voice is the author's own speech, so samples come from their transcripts. | `style.yaml`, `humaniser`, `judge` |
+| Style sheet, learned rules, both-orders judge | Kept. The voice is the author's own speech, so samples come from their transcripts. Since October 2026 every life, memoir and guide draft and revision runs the same style and AI-habit cleanup as a novel scene, in a true-book mode that may only cut or reword. | `style.yaml`, `humaniser`, `judge`, `tells.ts` |
 | Git history, what-if branches | Kept. Branches suit "the version for the family" against "the version for publication". | `git` |
 | Obligations ledger (clue, promise, Chekhov's gun) | **Themes and threads ledger**: a motif, an object or a question the book raises and returns to. Paying off a "clue" makes no sense in a life. | `Obligation` 303-316, `obligations.ts` |
 | Reader report: twist guessed early, twist fair | Drop twist scoring. Keep engagement, confusion and boredom, which matter just as much in memoir. | `quality/reader.ts` |

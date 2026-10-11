@@ -7,6 +7,7 @@
  *  C. An interview: a lesson filed by its parts on the lesson ladder.
  *  D. Shaping and drafting: guide shapes, chapters proposed and adopted, a chapter drafted with
  *     a gap for the missing example and a sum that does not add up flagged.
+ *     An AI-writing habit typed into the draft is underlined and cleaned up from the style panel.
  *  E. Before you publish: the sum listed, a note to the reader; the guide's settings.
  *
  *   pnpm build && pnpm tsx scripts/e2e-guide.ts [screenshot-dir]
@@ -142,6 +143,24 @@ try {
   await page.locator('.note-text', { hasText: /comes to 10, not 12/ }).waitFor();
   step('drafted: a gap where the example should be, and 20% of 50 flagged (10, not 12)');
   await shot('guide-draft');
+
+  // An AI-writing habit typed into the draft is underlined, and cleaned up from the style panel.
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('\n\nIt wasn’t the price. It was the timing.');
+  await page.locator('.cm-tell').first().waitFor();
+  step('an AI habit typed into the draft is underlined');
+  await page.locator('.style-chip').click();
+  await page.getByRole('button', { name: /Clean up 1 AI habit/ }).click();
+  await page.getByText(/AI habits: 1 → 0/).waitFor();
+  await page.waitForTimeout(400);
+  await shot('ai-habits');
+  await page.getByRole('button', { name: 'Accept' }).click();
+  await page.waitForFunction(() => {
+    const t = document.querySelector('.cm-content')?.textContent ?? '';
+    return !t.includes('wasn’t the price') && t.includes('It was the timing.');
+  });
+  step('cleaned up: the staged contrast is gone, the point kept');
 
   console.log('E. Before you publish');
   await nav('Before you publish').click();

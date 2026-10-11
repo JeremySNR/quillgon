@@ -832,3 +832,4 @@ del, .del { background: var(--danger-bg); color: inherit; opacity: .8; text-deco
   .review { grid-template-columns: 260px 1fr; }
   .review .origin { display: none; }
 }
+.cm-tell { text-decoration: underline wavy var(--warning, #b7791f); text-decoration-thickness: 1px; text-underline-offset: 3px; background: color-mix(in oklch, var(--warning, #b7791f) 10%, transparent); border-radius: 2px; }

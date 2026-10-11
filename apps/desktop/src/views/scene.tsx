@@ -99,7 +99,8 @@ export function SceneEditor({ id }: { id: string }) {
   useUnsavedChanges(prose.hasUnsaved, 'scene prose', { inApp: false, flush: prose.flush });
 
   const styleReport = useStyleCheck(prose.text, p?.style.sheet);
-  const styleMarks = useMemo<StyleMark[]>(() => (styleReport?.violations ?? []).filter((v) => v.end > v.start).map((v) => ({ from: v.start, to: v.end, kind: v.kind, message: v.message })), [styleReport]);
+  // AI-writing habits get their own underline; strong ones still count as rules to fix.
+  const styleMarks = useMemo<StyleMark[]>(() => (styleReport?.violations ?? []).filter((v) => v.end > v.start).map((v) => ({ from: v.start, to: v.end, kind: v.rule.startsWith('tell:') && v.kind === 'enforced' ? 'tell' : v.kind, message: v.rule.startsWith('tell:') ? `AI habit: ${v.message}` : v.message })), [styleReport]);
   // Life stories: the ghostwriter's margin notes and gap markers, underlined in the text.
   const notes = useMemo(() => detail?.notes ?? [], [detail?.notes]);
   const marks = useMemo<StyleMark[]>(() => {
@@ -233,7 +234,7 @@ export function SceneEditor({ id }: { id: string }) {
   const style = () =>
     withBusy('Style passes', async () => {
       await saveProseFirst();
-      const r = await runJob<{ before: string; after: string; report: { voiceFlags: unknown[]; autoFixes: number; enforcedBefore: number; enforcedAfter: number; rounds: { kept: boolean; applied: number; why: string }[] } }>(`/scenes/${id}/style`);
+      const r = await runJob<{ before: string; after: string; report: { voiceFlags: unknown[]; autoFixes: number; enforcedBefore: number; enforcedAfter: number; tellsBefore: number; tellsAfter: number; refused: unknown[]; asks: unknown[]; rounds: { kept: boolean; applied: number; why: string }[] } }>(`/scenes/${id}/style`);
       const kept = r.report.rounds.filter((x) => x.kept);
       setReview({
         title: 'Style passes',
@@ -244,6 +245,9 @@ export function SceneEditor({ id }: { id: string }) {
           r.report.autoFixes && `${plural(r.report.autoFixes, 'automatic fix', 'automatic fixes')}`,
           `${plural(kept.reduce((n, x) => n + x.applied, 0), 'line edit')} kept${r.report.rounds.some((x) => !x.kept) ? ` (${r.report.rounds.find((x) => !x.kept)!.why})` : ''}`,
           `style rules broken: ${r.report.enforcedBefore} → ${r.report.enforcedAfter}`,
+          `AI habits: ${r.report.tellsBefore} → ${r.report.tellsAfter}`,
+          r.report.refused.length && `${plural(r.report.refused.length, 'edit')} refused (it would have changed what you said)`,
+          r.report.asks.length && `${plural(r.report.asks.length, 'place')} that need your detail`,
         ]
           .filter(Boolean)
           .join(' · '),
@@ -552,7 +556,7 @@ export function SceneEditor({ id }: { id: string }) {
                 </div>
               </div>
             )}
-            {styleOpen && styleReport && <StylePanel report={styleReport} onJump={(v) => setJump({ from: v.start, to: v.end })} onClose={() => setStyleOpen(false)} onSettings={() => go('settings', 'style')} />}
+            {styleOpen && styleReport && <StylePanel report={styleReport} onJump={(v) => setJump({ from: v.start, to: v.end })} onClose={() => setStyleOpen(false)} onSettings={() => go('settings', 'style')} onCleanUp={proseLocked || busy ? undefined : () => (setStyleOpen(false), style())} />}
             <ProseEditor value={prose.text} onChange={prose.edit} banned={banned} readOnly={proseLocked} marks={marks} jump={jump} onReady={(api) => (editorApi.current = api)} placeholder={detail.prose ? undefined : 'Or start writing, or hold Alt+D and talk…'} />
           </div>
         </div>
@@ -792,6 +796,26 @@ export function ProseReviewDialog({ review, onClose, onDone }: { review: ProseRe
 export { CardDiff };
 
 const RULE: Record<string, string> = {
+  'tell:not-x-but-y': 'AI habit: staged contrast',
+  'tell:no-longer': 'AI habit: staged turn',
+  'tell:no-x-no-y': 'AI habit: list of negatives',
+  'tell:staged-question': 'AI habit: staged run-up',
+  'tell:ing-rider': 'AI habit: trailing “-ing” comment',
+  'tell:serves-as': 'AI habit: “serves as”',
+  'tell:testament': 'AI habit: “a testament to”',
+  'tell:vital-role': 'AI habit: inflated role',
+  'tell:legacy': 'AI habit: inflated legacy',
+  'tell:important-to-note': 'AI habit: didactic aside',
+  'tell:summary': 'AI habit: summary',
+  'tell:coda': 'AI habit: summing-up coda',
+  'tell:chat': 'AI habit: chat residue',
+  'tell:vague-attribution': 'AI habit: vague attribution',
+  'tell:adverb-tag': 'AI habit: adverb on a dialogue tag',
+  'tell:voice-laced': 'AI habit: stock voice description',
+  'tell:phrase': 'AI habit: stock phrases',
+  'tell:stock-name': 'AI habit: stock names',
+  'tell:word': 'AI habit: over-used words, clustered',
+  'tell:same-opener': 'AI habit: same sentence opener',
   never: 'Never list',
   prefer: 'Preferred word',
   banned: 'Banned pattern',
@@ -813,9 +837,12 @@ const RULE: Record<string, string> = {
 };
 
 /** Every style-sheet violation in the scene, grouped by rule; click one to jump to it. */
-function StylePanel({ report, onJump, onClose, onSettings }: { report: StyleReport; onJump: (v: StyleViolation) => void; onClose: () => void; onSettings: () => void }) {
+function StylePanel({ report, onJump, onClose, onSettings, onCleanUp }: { report: StyleReport; onJump: (v: StyleViolation) => void; onClose: () => void; onSettings: () => void; onCleanUp?: () => void }) {
   const groups = new Map<string, StyleViolation[]>();
-  for (const v of report.violations) groups.set(v.rule, [...(groups.get(v.rule) ?? []), v]);
+  // Stock phrases and over-used words group together; each structure is its own group.
+  const groupOf = (rule: string) => rule.replace(/^tell:(phrase|word):.*/, 'tell:$1');
+  for (const v of report.violations) groups.set(groupOf(v.rule), [...(groups.get(groupOf(v.rule)) ?? []), v]);
+  const tells = report.violations.filter((v) => v.rule.startsWith('tell:') && v.kind === 'enforced').length;
   const ordered = [...groups.entries()].sort((a, b) => Number(b[1][0].kind === 'enforced') - Number(a[1][0].kind === 'enforced'));
   return (
     <div className="style-panel">
@@ -824,6 +851,11 @@ function StylePanel({ report, onJump, onClose, onSettings }: { report: StyleRepo
           {report.enforced ? `${plural(report.enforced, 'rule')} broken` : 'Every enforced rule holds'}
           {report.guided > 0 && <span className="faint" style={{ fontWeight: 400 }}> · {plural(report.guided, 'softer note')}</span>}
         </strong>
+        {tells > 0 && onCleanUp && (
+          <Button size="sm" icon={<Sparkles />} onClick={onCleanUp}>
+            Clean up {plural(tells, 'AI habit')}
+          </Button>
+        )}
         <Button size="sm" variant="ghost" onClick={onSettings}>
           Style dials
         </Button>

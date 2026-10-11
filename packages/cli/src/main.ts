@@ -638,7 +638,7 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
   },
 
   voice: {
-    help: 'voice   Repetition, overused openers, indistinguishable voices, banned patterns',
+    help: 'voice   Repetition, overused openers, indistinguishable voices, banned patterns, AI writing habits per chapter',
     run() {
       const e = openEngine();
       const r = e.voice();
@@ -646,6 +646,10 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
       for (const x of r.overused_openers) say(`  opener "${x.opener}…" ×${x.count}`);
       for (const x of r.similar_voices) say(yellow(`  ${x.a} and ${x.b} sound alike (${x.similarity})`));
       for (const x of r.banned) say(red(`  ${x.scene}:${x.line} ${x.label} "${x.match}"`));
+      say(bold(`\nAI writing habits: ${r.ai_habits.score} per 1,000 words`));
+      for (const c of r.ai_habits.chapters) say(`  ${c.title || c.id}: ${c.score} ${dim(`(${c.strong} strong)`)}`);
+      for (const t of r.ai_habits.top.slice(0, 6)) say(dim(`  ${t.rule} ×${t.count}  "${t.example}"`));
+      for (const x of r.ai_habits.rhythm) say(yellow(`  ${x}`));
       say(`${r.warnings} warning(s)`);
     },
   },
@@ -736,7 +740,7 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
       });
       const s = run.summary;
       say(bold(`\nEval ${run.id}: ${s.books} of ${run.books.length} books, $${s.cost_usd}`));
-      say(`  slop/1k ${s.mean.slop_per_1k}  style/1k ${s.mean.style_per_1k}  continuity ${s.mean.continuity_errors}  tells ${s.mean.shape_findings}`);
+      say(`  slop/1k ${s.mean.slop_per_1k}  AI habits/1k ${s.mean.ai_habits_per_1k}  style/1k ${s.mean.style_per_1k}  continuity ${s.mean.continuity_errors}  plan tells ${s.mean.shape_findings}`);
       say(`  twists guessed ${s.mean.twist_guess_rate ?? '—'}  engagement ${s.mean.engagement ?? '—'}  shared names ${s.shared_name_rate}  trigram overlap ${s.trigram_overlap}  plan diversity ${s.plan_diversity}`);
       say(dim(`  ${path.join(dir, 'report.md')}`));
       if (run.books.some((b) => b.error)) process.exitCode = 1;
@@ -767,7 +771,7 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
       const s = run.summary;
       say(bold(`\nEval ${run.id}: ${s.lives} of ${run.lives.length} lives`));
       say(`  drawn out ${s.elicited ?? '—'}  depth ${s.depth ?? '—'}  follow-up ${s.followup_rate ?? '—'}  refused/turn ${s.refused_rate ?? '—'}`);
-      say(`  leading asked ${s.leading_asked}  off limits asked ${s.off_limits_asked}  unsourced sentences ${s.invented_rate ?? '—'}`);
+      say(`  leading asked ${s.leading_asked}  off limits asked ${s.off_limits_asked}  unsourced sentences ${s.invented_rate ?? '—'}  AI habits/1k ${s.ai_habits_per_1k ?? '—'}`);
       if (models === 'offline') say(yellow('  Offline runs check the plumbing; use live models to score the ghostwriter.'));
       say(dim(`  ${path.join(dir, 'report.md')}`));
       if (run.lives.some((l) => l.error) || s.leading_asked || s.off_limits_asked) process.exitCode = 1;

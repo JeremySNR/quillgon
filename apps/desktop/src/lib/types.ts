@@ -181,7 +181,7 @@ export interface Snapshot {
   timeline: Timeline;
   locations: { id: string; name: string; description: string; near: string[] }[];
   facts: { id: string; statement: string }[];
-  style: { samples: string; banned: string; sheet: StyleSheet };
+  style: { samples: string; banned: string; sheet: StyleSheet; humaniser: string };
   critique: { ran_at: string; findings: number } | null;
   issues: { severity: 'error' | 'warning'; file: string; path: string; message: string }[];
   continuity: { mechanical: ContinuityIssue[]; model: ContinuityIssue[]; ran_at: string | null };

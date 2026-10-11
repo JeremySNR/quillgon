@@ -151,6 +151,8 @@ function runMarkdown(r: EvalRun): string {
     '| --- | --- | --- |',
     `| Slop per 1k words | ${s.mean.slop_per_1k} | lower |`,
     `| Style violations per 1k words | ${s.mean.style_per_1k} | lower |`,
+    `| AI writing habits per 1k words | ${s.mean.ai_habits_per_1k} | lower |`,
+    `| Staged contrasts / "-ing" riders / lists of three per 1k | ${s.mean.contrasts_per_1k} / ${s.mean.riders_per_1k} / ${s.mean.triads_per_1k} | lower |`,
     `| Continuity errors per book | ${s.mean.continuity_errors} | lower |`,
     `| Structural tells per book | ${s.mean.shape_findings} | lower |`,
     `| Twists guessed early | ${fmt(s.mean.twist_guess_rate)} | lower |`,

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { LifeFact, type AgentSuite } from './agents/contracts.js';
 import type { Engine } from './engine/engine.js';
 import { leadingQuestion, touchesOffLimits, unsourced } from './life.js';
+import { tellScore } from './tells.js';
 
 /**
  * The ghostwriter's eval: invented lives with hidden facts, a simulated interviewee who reveals
@@ -44,6 +45,8 @@ export interface LifeMetrics {
   /** Drafted sentences nothing the interviewee said supports, per sentence drafted. */
   invented_rate: number;
   gaps_left: number;
+  /** AI writing habits per 1,000 drafted words (tells.ts). */
+  ai_habits_per_1k: number;
   notes: number;
   chapters: number;
   words: number;
@@ -112,6 +115,7 @@ export async function runLifeEval(engine: Engine, life: EvalLife, opts: { sessio
   let gaps = 0;
   let notes = 0;
   let wordsDrafted = 0;
+  const drafted: string[] = [];
   if (store.project.stories.size) {
     await engine.life.proposeShape();
     await engine.life.acceptShape();
@@ -123,6 +127,7 @@ export async function runLifeEval(engine: Engine, life: EvalLife, opts: { sessio
         const sc = store.project.scenes.get(id)!;
         const prose = sc.prose?.body ?? '';
         wordsDrafted += prose.split(/\s+/).filter(Boolean).length;
+        drafted.push(prose);
         sentences += prose.split(/(?<=[.!?])\s+/).filter((x) => x.split(/\s+/).length >= 4).length;
         invented += unsourced(prose, said, [], 100).length;
         gaps += (prose.match(/\[TK:/g) ?? []).length;
@@ -142,6 +147,7 @@ export async function runLifeEval(engine: Engine, life: EvalLife, opts: { sessio
     off_limits_asked: offLimits,
     invented_rate: round(invented / Math.max(1, sentences)),
     gaps_left: gaps,
+    ai_habits_per_1k: tellScore(drafted.join('\n\n'), { kind: 'true' }),
     notes,
     chapters,
     words: wordsDrafted,
@@ -163,5 +169,6 @@ export function lifeSummary(ms: LifeMetrics[]) {
     followup_rate: mean((m) => m.followup_rate),
     off_limits_asked: ms.reduce((n, m) => n + m.off_limits_asked, 0),
     invented_rate: mean((m) => m.invented_rate),
+    ai_habits_per_1k: mean((m) => m.ai_habits_per_1k),
   };
 }

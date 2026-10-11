@@ -18,11 +18,13 @@ export function StyleSettings() {
   const sheetDraft = useDraft<StyleSheet>(p!.style.sheet);
   const samplesDraft = useDraft(p!.style.samples);
   const bannedDraft = useDraft(p!.style.banned);
+  const houseDraft = useDraft(p!.style.humaniser ?? '');
   const { value: sheet, set: setSheet, dirty } = sheetDraft;
   const { value: samples, set: setSamples } = samplesDraft;
   const { value: banned, set: setBanned } = bannedDraft;
+  const { value: house, set: setHouse } = houseDraft;
   useUnsavedChanges(dirty, 'style dials');
-  useUnsavedChanges(samplesDraft.dirty || bannedDraft.dirty, 'voice samples and banned patterns');
+  useUnsavedChanges(samplesDraft.dirty || bannedDraft.dirty || houseDraft.dirty, 'voice samples, banned patterns and house rules');
   const [fit, setFit] = useState<{ fingerprint: Fingerprint; suggested: StyleSheet } | null>(null);
   const [learned, setLearned] = useState<{ edits: number; suggestions: RuleSuggestion[] } | null>(null);
   useEffect(() => {
@@ -94,6 +96,12 @@ export function StyleSettings() {
           </Dial>
           <Dial label="Longest sentence" enforced>
             <Num value={sheet.sentence_words.max} onChange={(v) => set('sentence_words', { ...sheet.sentence_words, max: v })} suffix="words" />
+          </Dial>
+          <Dial label="AI writing habits" enforced hint="Staged contrasts, “-ing” riders, “serves as”, stock phrases: found by code after every draft. Repair edits them out; Flag only underlines them.">
+            <Segmented value={sheet.tells ?? 'repair'} onChange={(v) => set('tells', v)} options={[{ value: 'repair', label: 'Repair' }, { value: 'flag', label: 'Flag' }, { value: 'off', label: 'Off' }]} />
+          </Dial>
+          <Dial label="Allowed anyway" hint="Words or phrases that are your voice, not a habit (comma-separated). Anything your voice samples use is allowed already.">
+            <input className="input" value={(sheet.allow ?? []).join(', ')} onChange={(e) => set('allow', e.target.value.split(',').map((x) => x.trim()).filter(Boolean))} placeholder="whispered, a sense of" aria-label="Allowed words" />
           </Dial>
           <Dial label="Contractions in narration">
             <Segmented value={sheet.contractions} onChange={(v) => set('contractions', v)} options={[{ value: 'any', label: 'Fine' }, { value: 'avoid-in-narration', label: 'Avoid' }]} />
@@ -198,13 +206,18 @@ export function StyleSettings() {
         </p>
         <textarea className="textarea mono" rows={14} value={banned} onChange={(e) => setBanned(e.target.value)} style={{ fontSize: 12.5 }} />
       </div>
+      <div className="card stack">
+        <h3>House rules for the line editor</h3>
+        <p className="muted">After every draft a line editor removes the habits of machine prose. These are your rules for it, and they win over its own: what you never want to see, and what to keep even though it looks like a habit.</p>
+        <textarea className="textarea" rows={8} value={house} onChange={(e) => setHouse(e.target.value)} aria-label="House rules" />
+      </div>
       <div>
         <Button
           variant="primary"
           icon={<Check />}
           onClick={async () => {
             try {
-              await put('/style', { samples, banned });
+              await put('/style', { samples, banned, humaniser: house });
             } catch (e) {
               toast({ kind: 'error', message: 'Samples and patterns not saved', detail: (e as Error).message });
               return;

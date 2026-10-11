@@ -89,7 +89,7 @@ A simulated **reader report** charts engagement, confusion and boredom, and judg
 <td width="33%" valign="top">
 
 ### ✍️ Your voice, enforced
-A style sheet of dials checks **every word** against your rules as you type. Deterministic fixes happen automatically. Edits you keep making by hand become rules you can accept.
+A style sheet of dials checks **every word** against your rules as you type. The habits that give machine prose away ("It wasn't X. It was Y.", "…, highlighting her resolve", "a testament to") are found by code and edited out of every draft. Edits you keep making by hand become rules you can accept.
 
 </td>
 <td width="33%" valign="top">
@@ -253,6 +253,17 @@ flowchart LR
 7. **Reader report:** an engagement curve, confusion, runs of boredom, and every twist judged from both sides: was it guessed early, and did it feel fair looking back? Read the **outline** before any prose exists to catch a guessable twist when it's cheap to fix. The **plan check** runs the structural critic on the whole book.
 8. **Book covers:** generate a front cover from your story (title, genre, intent, characters, locations, opening scene cards; no finished draft needed), or pick an art style and add creative direction. Keep every version, check thumbnail readability, and download a 1600 × 2560 PNG sized for ebook stores. Uses OpenAI's GPT Image 2.5 Sunburst with separate API billing; see the [cover workflow, research and setup](docs/book-covers.md).
 9. **Settings → Style:** the style sheet (`style/style.yaml`) as dials. **Enforced** rules (spelling, quotes, dialogue tags, em dashes, semicolons, never-words, preferred words, sentence length) are checked by code on every word after every draft; deterministic ones are fixed outright, the rest go to a line editor that proposes span-level edits, and an edit is kept only if code confirms it fixed something without breaking anything, or a judge prefers it in **both** orders. **Guided** rules (rhythm, dialogue share, adverbs, filter words) are measured and nudged. **Set the dials from these** measures your voice samples; **Learned from your edits** turns changes you keep making by hand into rules you can accept.
+
+   **AI writing habits** are found by code after every draft, for every kind of book. They include:
+   - staged contrasts and lists of negatives;
+   - trailing "-ing" commentary;
+   - "serves as" and "a testament to";
+   - summarising codas and didactic asides;
+   - stock phrases and character names;
+   - over-used words when they cluster;
+   - sentence-length and list-of-three rates, compared with your own samples.
+
+   Strong habits are underlined in the editor and edited out by the line editor. An edit that adds a new habit is refused. In life stories, memoirs and guides the line editor may only cut or reword, never add a detail; a vague passage becomes a question for you. Anything your voice samples do counts as your voice. You can choose **Repair**, **Flag** or **Off**, list words to keep anyway, and write **house rules** for the line editor (`style/humaniser.md`). `quillgon voice` and the eval harnesses report an AI-habit rate per chapter. The sources are in [docs/research.md](docs/research.md) §4a.
 
 ### ⌨️ Keyboard first
 
