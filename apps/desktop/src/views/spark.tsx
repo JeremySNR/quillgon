@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { ArrowRight, Check, Eraser, Lightbulb, MessageCircle, MessagesSquare, Plus, RefreshCw, SendHorizontal, Sparkles, ThumbsDown, ThumbsUp, TriangleAlert, Undo2, Users, X } from 'lucide-react';
 import { post } from '../lib/api';
 import { useApp } from '../lib/app';
@@ -380,8 +380,12 @@ function TalkPanel({ board, onBoard, beforeSend, focus, setFocus, inputRef }: { 
   const [text, setText] = useState('');
   const textRef = useRef(text);
   textRef.current = text;
+  const putText = useCallback((v: string) => {
+    textRef.current = v;
+    setText(v);
+  }, []);
   // Talk instead of typing: long takes are cut at pauses and land in the box as you go.
-  const dictation = useDictation({ target: useMemo(() => fieldTarget(() => inputRef.current, () => textRef.current, setText), [inputRef]), long: true });
+  const dictation = useDictation({ target: useMemo(() => fieldTarget(() => inputRef.current, () => textRef.current, putText), [inputRef, putText]), long: true });
   const [pending, setPending] = useState<string | null>(null);
   const log = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -389,16 +393,19 @@ function TalkPanel({ board, onBoard, beforeSend, focus, setFocus, inputRef }: { 
   }, [board.talk.length, pending]);
 
   const send = async () => {
-    const message = text.trim();
-    if (!message || pending) return;
+    if (pending) return;
+    // Everything said before pressing send is part of the message: wait for the last piece to land.
+    await dictation.stop();
+    const message = textRef.current.trim();
+    if (!message) return;
     setPending(message);
-    setText('');
+    putText('');
     try {
       await beforeSend();
       onBoard(await run<IdeaBoard>('/idea/talk', { message, focus }, 'Thinking partner'));
       setFocus(null);
     } catch {
-      setText(message); // Nothing typed is lost to a failed call.
+      putText(message); // Nothing typed is lost to a failed call.
     } finally {
       setPending(null);
       inputRef.current?.focus();

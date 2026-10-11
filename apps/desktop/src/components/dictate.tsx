@@ -29,26 +29,37 @@ export type DictationState = 'idle' | 'listening' | 'tidying';
 
 /** A textarea or input as a dictation target (controlled by React state). */
 export function fieldTarget(el: () => HTMLTextAreaElement | HTMLInputElement | null, value: () => string, set: (v: string) => void): DictationTarget {
+  // React applies `set` on its next render, so until it does, read back what was just written:
+  // the next piece of a long take needs the text and cursor as they are after this one.
+  let written: { from: string; to: string; at: number } | null = null;
+  const read = () => {
+    const v = value();
+    if (written && v === written.from) return { v: written.to, start: written.at, end: written.at };
+    written = null;
+    const node = el();
+    const start = node?.selectionStart ?? v.length;
+    return { v, start, end: node?.selectionEnd ?? start };
+  };
+  const write = (from: string, to: string, at: number) => {
+    written = { from, to, at };
+    set(to);
+  };
   return {
     context() {
-      const node = el();
-      const v = value();
-      const at = node?.selectionStart ?? v.length;
-      return { before: v.slice(0, at), after: v.slice(node?.selectionEnd ?? at) };
+      const { v, start, end } = read();
+      return { before: v.slice(0, start), after: v.slice(end) };
     },
     insert(text) {
+      const { v, start, end } = read();
+      write(v, v.slice(0, start) + text + v.slice(end), start + text.length);
       const node = el();
-      const v = value();
-      const start = node?.selectionStart ?? v.length;
-      const end = node?.selectionEnd ?? start;
-      set(v.slice(0, start) + text + v.slice(end));
       requestAnimationFrame(() => node?.setSelectionRange(start + text.length, start + text.length));
       let current = text;
       return (replacement) => {
-        const now = value();
+        const { v: now } = read();
         const at = now.indexOf(current, Math.max(0, start - 2));
         if (at < 0) return;
-        set(now.slice(0, at) + replacement + now.slice(at + current.length));
+        write(now, now.slice(0, at) + replacement + now.slice(at + current.length), at + replacement.length);
         current = replacement;
       };
     },
@@ -116,15 +127,16 @@ export function useDictation({ target, scene = null, long = false, session, onTe
     }
   }, [ready, long, send, fail]);
 
+  /** Stop listening, and resolve once every piece said so far has landed in the target. */
   const stop = useCallback(async () => {
     const r = rec.current;
-    if (!r) return;
-    rec.current = null;
-    const last = await r.stop();
-    if (last) {
-      setState('tidying');
-      send(last.wav);
-    } else if (!pending.current) setState('idle');
+    if (r) {
+      rec.current = null;
+      const last = await r.stop();
+      if (last) send(last.wav);
+      setState(pending.current ? 'tidying' : 'idle');
+    }
+    await chain.current;
   }, [send]);
 
   const toggle = useCallback(() => (rec.current ? stop() : start()), [start, stop]);

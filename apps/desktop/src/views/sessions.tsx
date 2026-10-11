@@ -165,39 +165,53 @@ function QuestionQueue({ questions }: { questions: Question[] }) {
 
 // ------------------------------------------------------------------ a session
 
+type Heard = { raw: string[]; audio: string[]; seconds: number };
+const NOTHING_HEARD: Heard = { raw: [], audio: [], seconds: 0 };
+
 function SessionView({ id }: { id: string }) {
   const { project: p, go, job, refresh, fail } = useApp();
   const [s, setS] = useState<Session | null>(null);
   const [text, setText] = useState('');
   const [pending, setPending] = useState<string | null>(null);
-  const [heard, setHeard] = useState<{ raw: string[]; audio: string[]; seconds: number }>({ raw: [], audio: [], seconds: 0 });
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const textRef = useRef(text);
   textRef.current = text;
+  // What dictation heard for the answer being composed. A ref, not state: send reads it right
+  // after the last piece lands, before React has rendered.
+  const heard = useRef<Heard>(NOTHING_HEARD);
+  const putText = useCallback((v: string) => {
+    textRef.current = v;
+    setText(v);
+  }, []);
   const log = useRef<HTMLDivElement>(null);
 
   const load = useCallback(() => get<Session>(`/sessions/${id}`).then(setS, fail('Could not load the session')), [id, fail]);
   useEffect(() => void load(), [load]);
   useEffect(() => log.current?.scrollTo({ top: log.current.scrollHeight, behavior: 'smooth' }), [s?.turns.length, pending]);
 
-  const onText = useCallback((r: DictateResponse) => setHeard((h) => ({ raw: [...h.raw, r.raw], audio: r.audio ? [...h.audio, r.audio] : h.audio, seconds: h.seconds + r.seconds })), []);
+  const onText = useCallback((r: DictateResponse) => {
+    const h = heard.current;
+    heard.current = { raw: [...h.raw, r.raw], audio: r.audio ? [...h.audio, r.audio] : h.audio, seconds: h.seconds + r.seconds };
+  }, []);
   const ended = !!s?.ended;
-  const target = useMemo(() => fieldTarget(() => inputRef.current, () => textRef.current, setText), []);
+  const target = useMemo(() => fieldTarget(() => inputRef.current, () => textRef.current, putText), [putText]);
   const dictation = useDictation({ target: ended ? null : target, long: true, session: id, onText });
 
   const send = async (signal: string | null = null) => {
-    const message = text.trim();
-    if ((!message && !signal) || pending || !s) return;
-    if (dictation.state === 'listening') await dictation.stop();
+    if (pending || !s) return;
+    // Everything said before pressing send is part of the answer: wait for the last piece to land.
+    await dictation.stop();
+    const message = textRef.current.trim();
+    if (!message && !signal) return;
     setPending(message || SIGNALS.find((x) => x.signal === signal)?.label || '');
-    setText('');
-    const h = heard;
-    setHeard({ raw: [], audio: [], seconds: 0 });
+    putText('');
+    const h = heard.current;
+    heard.current = NOTHING_HEARD;
     try {
       setS(await job<Session>(`/sessions/${id}/answer`, { text: message, signal, raw: h.raw.join(' ') || null, audio: h.audio, seconds: h.seconds }, 'The ghostwriter'));
     } catch {
-      setText(message); // nothing said is lost to a failed call
-      setHeard(h);
+      putText(message); // nothing said is lost to a failed call
+      heard.current = h;
     } finally {
       setPending(null);
       inputRef.current?.focus();
@@ -205,7 +219,7 @@ function SessionView({ id }: { id: string }) {
   };
   const undo = (turn: number) => post<Session>(`/sessions/${id}/undo`, { turn }).then((x) => (setS(x), refresh()), fail('Could not undo'));
   const end = async () => {
-    if (dictation.state === 'listening') await dictation.stop();
+    await dictation.stop();
     setS(await job<Session>(`/sessions/${id}/end`, {}, 'Closing the session'));
   };
 
@@ -260,7 +274,9 @@ function SessionView({ id }: { id: string }) {
               </div>
             ) : (
               <div key={i} className={cx('author-turn', t.off_record && 'off')}>
-                {t.audio.length > 0 && <audio controls preload="none" src={audioUrl(s.id, t.audio[0])} aria-label="Your recording" />}
+                {t.audio.map((a, k) => (
+                  <audio key={a} controls preload="none" src={audioUrl(s.id, a)} aria-label={t.audio.length > 1 ? `Your recording, part ${k + 1} of ${t.audio.length}` : 'Your recording'} />
+                ))}
                 <div>{t.off_record ? <em className="faint">Off the record.</em> : t.text}</div>
                 {t.seconds > 0 && <div className="faint small">{Math.round(t.seconds)} s recorded</div>}
               </div>
