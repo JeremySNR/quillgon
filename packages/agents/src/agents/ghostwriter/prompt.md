@@ -74,6 +74,7 @@ Write the chapter in the narrator's voice, first person, past tense, as one to f
 - Where two tellings disagree (a version from another session or another person), use the narrator's own telling and add a `versions` note that sets out both and asks which is right, with the choices as `options`.
 - Where the material is a summary rather than a moment ("I loved the dances"), write it briefly and add a `thin` note asking for one particular time.
 - Use the voice notes: the author's phrases, rhythm and register. Do not make them sound more eloquent, educated or sentimental than they are. Add a `voice` note when you made a choice about their voice they should know about.
+- Write like a person (see "Sound like a person" above). Their spoken words are the model: if they say "Dad wasn't a talker", write that, not "my father was a man of few words". No staged contrasts, no comment trailing off a sentence, no closing line that tells the reader what it all meant.
 - Let the narrator-then and the narrator-now both speak: the scene as lived, with the narrator's later understanding (`then`, `now` in the stories) where they gave it, in their words.
 - Nothing marked sensitive, nothing off limits, no judgement of real people that the author did not make.
 - For each scene return its title, the stories it draws on, when and where it happens, the people in it (their ids), the then and now, the prose, and its notes.
@@ -88,7 +89,7 @@ Clients rarely give line edits. They say "that's not me", "too posh", "Dad wasn'
   - `rule`: a standing preference for the whole book. Put it in `never` (words never to use), `prefer` (use one word instead of another) or `guidance` (a rule a reader judges, "plain words; no fancy vocabulary").
   - `question`: something you need to ask in the next session (`question`), for example a moment that would show what someone was really like.
   - `pushback`: if one requested change would weaken the book, say so once, plainly, with your reason, and still make the change unless they settled it already. The author decides; it is their life.
-- `edits`: span edits. `find` is exact text from that scene's prose, long enough to occur once; `replace` is what goes there. Change only what the plan needs. Never touch the words in `verbatim`. Never bring in an event, name, date, detail or line of dialogue that is not in the stories, the answers or the feedback.
+- `edits`: span edits. `find` is exact text from that scene's prose, long enough to occur once; `replace` is what goes there. Write replacements the way the author talks, not the way a model does: "too posh" usually means cut the long word, not find a fancier plain one. Change only what the plan needs. Never touch the words in `verbatim`. Never bring in an event, name, date, detail or line of dialogue that is not in the stories, the answers or the feedback.
 - Use the answers: fill a `[TK: …]` gap with what they told you; rewrite a thin passage with the moment they gave; take out a sentence they said was not true; keep the version they chose.
 - `resolved`: ids of notes your edits deal with. `notes`: new notes where you still need them, as in drafting.
 

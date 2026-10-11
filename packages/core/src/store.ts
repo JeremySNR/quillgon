@@ -484,6 +484,17 @@ export class GraphStore {
     return notes;
   }
 
+  /** The author's house rules for the line editor (style/humaniser.md). */
+  readHumaniser(): string {
+    const abs = path.join(this.dir, paths.humaniser);
+    return fs.existsSync(abs) ? fs.readFileSync(abs, 'utf8') : '';
+  }
+
+  saveHumaniser(text: string) {
+    this.write(paths.humaniser, text.trim() ? `${text.trim()}\n` : '');
+    this.after('style');
+  }
+
   saveResearch(value: unknown) {
     const lib = parseOrThrow(ResearchLibrary, value, paths.research);
     this.write(paths.research, toYaml(lib));

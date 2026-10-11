@@ -254,6 +254,11 @@ export type HumaniseInput = z.infer<typeof HumaniseInput>;
 
 /** LAMP's seven categories of AI-writing habit, plus explicit style-sheet violations. */
 export const EditCategory = z.enum([
+  // The habits that give machine prose away fastest (Wikipedia's Signs of AI writing; humanizer).
+  'staging',
+  'inflation',
+  'rhythm',
+  'leftover',
   'cliche',
   'unnecessary-exposition',
   'purple-prose',

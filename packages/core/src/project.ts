@@ -121,6 +121,8 @@ export const paths = {
   /** The author's own material (notes, talks, course pages), as text. */
   upload: (file: string) => `research/uploads/${file}`,
   samples: 'style/samples.md',
+  /** The author's own rules for the line editor ("never tidy my dialect"); they win over the built-in ones. */
+  humaniser: 'style/humaniser.md',
   banned: 'style/banned-patterns.md',
   reports: 'reports',
   engine: '.engine',

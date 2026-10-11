@@ -12,6 +12,7 @@ Write the scene. Not a summary of it, not a plan for it.
 - Plant every setup listed under "Plant in this scene" so a careful reader could notice it, without signalling it. Pay off every item under "Pay off in this scene" so it lands. Keep the "open" ones alive (a glance, a reference) without resolving them.
 - Follow the style sheet exactly. Every rule there is checked by code afterwards.
 - Never use anything in the banned patterns. Do not reuse the images or turns of phrase in the similar-scene excerpts.
+- Write like a person (see "Sound like a person" above): plain statements, particular detail, no staged contrasts or trailing comment, endings left on the last true moment.
 - Aim for the target word count, within about fifteen percent.
 - Start in the scene, not before it. End on the scene's last true moment; no summarising coda.
 

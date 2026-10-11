@@ -24,6 +24,37 @@ Add "(max N per scene)" to allow a few.
 - em-dash: /—/ (max 3 per scene)
 `;
 
+/**
+ * The author's house rules for the line editor, written at creation and theirs to change. The
+ * built-in checks (tells.ts) find the habits; these say what this author wants kept or cut.
+ */
+export function defaultHouseRules(kind: BookKind): string {
+  const head = `# House rules for the line editor
+
+These win over the line editor's own rules. Change them freely: add what you never want to see,
+and what you want kept even though it looks like a habit ("I use dashes", "keep my dialect").
+`;
+  if (kind === 'guide')
+    return `${head}
+- Keep my way of talking to clients: direct, informal, plain words.
+- Keep my scripts exactly as I say them, even when they are not grammatical.
+- No motivational sign-offs, no "you've got this", no promises of results.
+- Cut any sentence that only says how important the next thing is.
+`;
+  if (kind !== 'novel')
+    return `${head}
+- Keep my dialect and the way I say things, even when it is not standard English.
+- Do not make me sound more educated, more eloquent or more sentimental than I am.
+- No lessons at the end of a story: let it stop where it stopped.
+- Short and plain beats long and lovely.
+`;
+  return `${head}
+- Keep each character's way of talking, even when it is ungrammatical.
+- No sentence that explains what a scene meant.
+- Endings stop on an action or an image, not a reflection.
+`;
+}
+
 export const DEFAULT_SAMPLES = `# Voice samples
 
 Paste a few paragraphs written the way you want the book to sound. The writer matches
@@ -86,6 +117,7 @@ export async function initProject(dir: string, opts: InitOptions) {
   store.saveTimeline({ events: [] });
   store.saveStyle({ samples: DEFAULT_SAMPLES, banned: DEFAULT_BANNED });
   store.saveStyleSheet({});
+  store.saveHumaniser(defaultHouseRules(kind));
   for (const d of dirs.filter((x) => x !== 'style')) {
     const keep = path.join(root, d, '.gitkeep');
     if (!fs.readdirSync(path.join(root, d)).length) fs.writeFileSync(keep, '');

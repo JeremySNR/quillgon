@@ -9,6 +9,7 @@ export const humaniser = defineAgent({
   maxTokens: 16000,
   render: (i) =>
     [
+      i.mode === 'true' ? '## mode: true\nA true book: only cut or reword. Never add a detail, a feeling, a name or a figure; never touch quoted words or [TK: …] gaps.' : '',
       i.skill ? `## The author's humaniser instructions (these win)\n${i.skill}` : '',
       i.style_rules.length ? `## Style sheet\n${i.style_rules.map((r) => `- ${r}`).join('\n')}` : '',
       i.violations.length ? json('Style violations found by code (fix these first)', i.violations) : '',
