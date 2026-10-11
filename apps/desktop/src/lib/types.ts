@@ -112,9 +112,19 @@ export interface CharacterEntry {
   state: Record<string, StateSnapshot>;
 }
 
+/** Which speech recogniser dictation would use (packages/server/src/dictation.ts). */
+export interface DictationStatus {
+  ready: boolean;
+  provider: 'openai' | 'local' | 'offline' | null;
+  model: string;
+  local: boolean;
+  reason?: string;
+}
+
 export interface Snapshot {
   dir: string;
   mode: 'offline' | 'live';
+  dictation: DictationStatus;
   book: Book;
   intent: Intent;
   structure: Structure;

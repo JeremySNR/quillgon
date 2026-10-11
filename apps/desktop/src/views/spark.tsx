@@ -5,6 +5,7 @@ import { useApp } from '../lib/app';
 import type { IdeaBoard, IdeaItem } from '../lib/types';
 import { cx, plural } from '../lib/util';
 import { Avatar, Badge, Button, Empty, Field, ListEditor, Segmented, Working } from '../components/ui';
+import { fieldTarget, MicButton, useDictation } from '../components/dictate';
 
 const KIND: Record<IdeaItem['kind'], string> = {
   'what-if': 'What if',
@@ -377,6 +378,10 @@ const STARTERS = [
 function TalkPanel({ board, onBoard, beforeSend, focus, setFocus, inputRef }: { board: IdeaBoard; onBoard: (b: IdeaBoard) => void; beforeSend: () => Promise<void>; focus: string | null; setFocus: (f: string | null) => void; inputRef: RefObject<HTMLTextAreaElement | null> }) {
   const { job: run } = useApp();
   const [text, setText] = useState('');
+  const textRef = useRef(text);
+  textRef.current = text;
+  // Talk instead of typing: long takes are cut at pauses and land in the box as you go.
+  const dictation = useDictation({ target: useMemo(() => fieldTarget(() => inputRef.current, () => textRef.current, setText), [inputRef]), long: true });
   const [pending, setPending] = useState<string | null>(null);
   const log = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -502,6 +507,7 @@ function TalkPanel({ board, onBoard, beforeSend, focus, setFocus, inputRef }: { 
           <span className="faint grow" style={{ fontSize: 'var(--fs-caption)' }}>
             Enter to send · Shift+Enter for a new line
           </span>
+          <MicButton dictation={dictation} label="Talk" compact />
           <Button variant="primary" size="sm" icon={<SendHorizontal />} onClick={send} disabled={!text.trim() || !!pending}>
             Send
           </Button>

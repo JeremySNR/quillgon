@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, Check, Cpu, Download, Palette, RotateCcw, ScrollText, Type, Waves, FolderOpen } from 'lucide-react';
+import { BookOpen, Check, Cpu, Download, Mic, Palette, RotateCcw, ScrollText, Type, Waves, FolderOpen } from 'lucide-react';
 import { get, put } from '../lib/api';
 import { useApp } from '../lib/app';
 import type { Book } from '../lib/types';
 import { loadPref, money, savePref } from '../lib/util';
 import { Badge, Button, Field, Segmented } from '../components/ui';
 import { StyleSettings } from './style-settings';
+import { VoiceSettings } from './voice-settings';
 import { DEFAULT_MODELS, CODEX_MODELS } from '@quillgon/core/schemas';
 
 const TABS = [
   { id: 'book', label: 'Book', icon: BookOpen },
   { id: 'models', label: 'Models and cost', icon: Cpu },
   { id: 'style', label: 'Style', icon: Type },
+  { id: 'voice', label: 'Voice', icon: Mic },
   { id: 'prompts', label: 'Agent prompts', icon: ScrollText },
   { id: 'appearance', label: 'Appearance', icon: Palette },
 ] as const;
@@ -41,6 +43,7 @@ export function SettingsView({ tab }: { tab?: string }) {
             {current === 'book' && <BookSettings />}
             {current === 'models' && <ModelSettings />}
             {current === 'style' && <StyleSettings />}
+            {current === 'voice' && <VoiceSettings />}
             {current === 'prompts' && <PromptSettings />}
             {current === 'appearance' && <Appearance />}
           </div>

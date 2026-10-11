@@ -62,4 +62,5 @@ export class ModelSuite implements AgentSuite {
   diverge: AgentSuite['diverge'] = (i) => this.run(A.museDiverge, i);
   expand: AgentSuite['expand'] = (i) => this.run(A.museExpand, i);
   talk: AgentSuite['talk'] = (i) => this.run(A.museTalk, i);
+  scribe: AgentSuite['scribe'] = (i) => this.run(A.scribe, i);
 }

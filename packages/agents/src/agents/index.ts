@@ -10,4 +10,5 @@ export { continuity } from './continuity/index.js';
 export { museDiverge, museExpand, museTalk } from './muse/index.js';
 export { critic, sampler } from './critic/index.js';
 export { judge } from './judge/index.js';
+export { scribe } from './scribe/index.js';
 export { builtinPrompt, loadPrompt, intentBlock, type AgentDef } from './define.js';

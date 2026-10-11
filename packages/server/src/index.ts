@@ -35,6 +35,7 @@ import { builtinPrompt, createSuite, loadPrompt } from '@quillgon/agents';
 import { projectSnapshot, sceneDetail } from './snapshot.js';
 import { exportManuscript } from './export.js';
 import { coverAvailability, coverImage, CoverOptions, generateCover, listCovers } from './covers.js';
+import { DictateRequest, dictate, voiceStatus } from './dictation.js';
 
 type Handler = (ctx: Ctx) => Promise<unknown> | unknown;
 interface Ctx {
@@ -398,6 +399,15 @@ export class NovelServer {
       const project = structuredClone(engine.store.project);
       // Reads a snapshot and writes only covers/: it need not wait for (or hold up) store jobs.
       return server.job('cover', progress => generateCover(project, parsed.data, progress), { queue: false });
+    });
+
+    // --- dictation
+    r('GET', '/api/voice', ({ engine }) => voiceStatus(engine.store.project));
+    r('POST', '/api/dictate', ({ engine, body }) => {
+      const parsed = DictateRequest.safeParse(body);
+      if (!parsed.success) throw new HttpError(422, 'Invalid dictation request', parsed.error.issues);
+      // Not a queued job: it writes nothing, and the author is waiting with the cursor in place.
+      return dictate(engine.store.project, engine.agents, parsed.data);
     });
 
     // --- scenes

@@ -32,3 +32,4 @@ export * from './style-report.js';
 export * from './engine/judge.js';
 export * from './engine/critics.js';
 export * from './engine/ideation.js';
+export * from './dictation.js';

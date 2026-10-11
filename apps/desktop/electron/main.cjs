@@ -9,8 +9,8 @@
 //
 // The window may only ever show the server's origin: other navigations are blocked, new windows
 // are refused (http, https and mailto links open in the default browser), and every permission
-// request is denied.
-const { app, BrowserWindow, dialog, ipcMain, session, shell, nativeTheme } = require('electron');
+// request is denied except the microphone, for dictation, from the app's own pages.
+const { app, BrowserWindow, dialog, ipcMain, session, shell, nativeTheme, systemPreferences } = require('electron');
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -33,6 +33,13 @@ function sameOrigin(url) {
   } catch {
     return false;
   }
+}
+
+/** Microphone only: audio (never video or screen), asked for by the app's own pages. */
+function micAllowed(permission, url, mediaTypes) {
+  if (permission !== 'media' || !sameOrigin(url)) return false;
+  const types = mediaTypes ?? [];
+  return types.length > 0 && types.every((t) => t === 'audio');
 }
 
 function openExternal(url) {
@@ -176,9 +183,15 @@ function createWindow() {
 }
 
 async function start() {
-  // Deny every permission (camera, microphone, notifications, geolocation…); the UI needs none.
-  session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) => callback(false));
-  session.defaultSession.setPermissionCheckHandler(() => false);
+  // Deny every permission (camera, notifications, geolocation…) except the microphone, which
+  // dictation needs, and only for audio from the app's own pages.
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback, details) => {
+    if (!micAllowed(permission, details.requestingUrl, details.mediaTypes)) return callback(false);
+    // macOS asks the user once per app; elsewhere the OS has no per-app prompt.
+    if (process.platform === 'darwin') systemPreferences.askForMediaAccess('microphone').then(callback, () => callback(false));
+    else callback(true);
+  });
+  session.defaultSession.setPermissionCheckHandler((_wc, permission, origin, details) => micAllowed(permission, details.requestingUrl || origin, details.mediaType ? [details.mediaType] : ['audio']));
 
   await show(process.env.VITE_DEV_SERVER_URL || (await startServer()));
 

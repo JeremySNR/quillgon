@@ -16,7 +16,7 @@ import type {
   StructureAlternative,
   StructureOutput,
 } from '@quillgon/core';
-import { slugify } from '@quillgon/core';
+import { cleanDictation, slugify } from '@quillgon/core';
 
 /**
  * A deterministic, model-free stand-in for every agent. It makes the whole app usable
@@ -26,6 +26,10 @@ import { slugify } from '@quillgon/core';
 const STOP = new Set('nobody somebody someone everyone anyone nothing everything never always about above after again against around because before being below between could every first other their there these thing those through under until where which while whose would should'.split(' '));
 
 export class OfflineSuite implements AgentSuite {
+  async scribe({ raw, before, dictionary }: Parameters<AgentSuite['scribe']>[0]) {
+    return { text: cleanDictation(raw, { level: 'light', before, names: dictionary }) };
+  }
+
   async interview({ premise, answers, known }: Parameters<AgentSuite['interview']>[0]): Promise<InterviewOutput> {
     // Only what is not already settled is asked; answers are matched back by question.
     const asked = INTERVIEW.filter((q) => !known[q.key]?.length);
@@ -495,7 +499,7 @@ export class ScriptedSuite extends OfflineSuite {
   constructor(overrides: Partial<AgentSuite> = {}) {
     super();
     const self = this as unknown as Record<string, (i: unknown) => Promise<unknown>>;
-    for (const m of ['interview', 'plotPoints', 'structures', 'cards', 'write', 'voice', 'reviseLines', 'humanise', 'extract', 'reviseCard', 'reviseProse', 'read', 'continuity', 'judge', 'critique', 'sampleTurns', 'diverge', 'expand', 'talk'] as const) {
+    for (const m of ['interview', 'plotPoints', 'structures', 'cards', 'write', 'voice', 'reviseLines', 'humanise', 'extract', 'reviseCard', 'reviseProse', 'read', 'continuity', 'judge', 'critique', 'sampleTurns', 'diverge', 'expand', 'talk', 'scribe'] as const) {
       const base = (overrides[m] as ((i: unknown) => Promise<unknown>) | undefined) ?? self[m].bind(this);
       self[m] = (i: unknown) => {
         this.calls.push({ method: m, input: i });

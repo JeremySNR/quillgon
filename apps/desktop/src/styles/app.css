@@ -170,6 +170,15 @@ p { margin: 0; }
 .btn .kbd { margin-left: 2px; }
 .btn-row { display: flex; gap: var(--s-2); flex-wrap: wrap; align-items: center; }
 
+/* Dictation: a red pill with a live level meter while listening. */
+.btn.mic { gap: 6px; }
+.btn .spin { animation: spin .8s linear infinite; }
+.btn.mic.on { background: var(--danger-bg); border-color: transparent; color: var(--danger); }
+.btn.mic.on.icon { width: auto; padding: 0 var(--s-2); }
+.mic-level { width: 22px; height: 4px; border-radius: 2px; background: color-mix(in oklab, var(--danger) 25%, transparent); position: relative; overflow: hidden; }
+.mic-level::after { content: ''; position: absolute; inset: 0; transform-origin: left; transform: scaleX(var(--level, 0)); background: var(--danger); transition: transform 60ms linear; }
+@media (prefers-reduced-motion: reduce) { .mic-level::after { transition: none; } }
+
 .kbd {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 18px; height: 18px; padding: 0 4px;

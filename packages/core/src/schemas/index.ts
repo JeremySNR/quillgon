@@ -57,6 +57,8 @@ export const AgentName = z.enum([
   'continuity',
   'critic',
   'judge',
+  'scribe',
+  'ghostwriter',
 ]);
 export type AgentName = z.infer<typeof AgentName>;
 
@@ -85,10 +87,28 @@ export const DEFAULT_AGENT_TIERS: Record<AgentName, ModelTier> = {
   humaniser: 'mid',
   reader: 'reader',
   continuity: 'small',
+  scribe: 'small',
+  ghostwriter: 'frontier',
 };
 
 export const PipelineStage = z.enum(['idea', 'intent', 'plot-points', 'structure', 'cards', 'prose', 'complete']);
 export type PipelineStage = z.infer<typeof PipelineStage>;
+
+/**
+ * Dictation. `auto` uses a local whisper.cpp when one is configured (QUILLGON_WHISPER_CMD), else
+ * OpenAI when its key is set. The transcript is tidied by the scribe at the chosen level.
+ */
+export const VoiceSettings = z.object({
+  provider: z.enum(['auto', 'openai', 'local', 'offline']).default('auto'),
+  /** Empty: the provider's default (gpt-4o-mini-transcribe for OpenAI). */
+  model: z.string().default(''),
+  /** ISO 639-1 code, or empty to detect. */
+  language: z.string().default(''),
+  cleanup: z.enum(['verbatim', 'light', 'polished']).default('light'),
+  /** Words the recogniser should spell right, beyond the book's people and places. */
+  dictionary: z.array(z.string()).default([]),
+});
+export type VoiceSettings = z.infer<typeof VoiceSettings>;
 
 export const Book = z.object({
   title: z.string().min(1),
@@ -121,6 +141,7 @@ export const Book = z.object({
       voice_warnings: z.number().int().default(0),
     })
     .default({ last_reader_run: null, reader_mean_engagement: null, open_continuity_issues: 0, voice_warnings: 0 }),
+  voice: VoiceSettings.default({ provider: 'auto', model: '', language: '', cleanup: 'light', dictionary: [] }),
 });
 export type Book = z.infer<typeof Book>;
 

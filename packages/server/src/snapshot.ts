@@ -15,6 +15,7 @@ import {
   type GraphStore,
 } from '@quillgon/core';
 import { suiteMode } from '@quillgon/agents';
+import { voiceStatus } from './dictation.js';
 
 export function excerpt(text: string, n = 220): string {
   const t = text.replace(/\s+/g, ' ').trim();
@@ -61,6 +62,7 @@ export async function projectSnapshot(engine: Engine) {
   return {
     dir: store.dir,
     mode: suiteMode(store),
+    dictation: voiceStatus(p),
     book: p.book,
     intent: p.intent,
     structure: p.structure,

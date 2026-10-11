@@ -513,6 +513,25 @@ export const TalkOutput = z.object({
 });
 export type TalkOutput = z.infer<typeof TalkOutput>;
 
+// ------------------------------------------------------------------ scribe (dictation clean-up)
+
+export const ScribeInput = z.object({
+  /** What the recogniser heard. */
+  raw: z.string().min(1),
+  /** The text just before the cursor, so the dictation joins it (capitals, spacing). */
+  before: z.string().default(''),
+  after: z.string().default(''),
+  /** How the names in this book are spelled. */
+  dictionary: z.array(z.string()).default([]),
+  level: z.enum(['light', 'polished']).default('light'),
+  /** House style: spelling variant and quote marks. */
+  style: z.object({ spelling: z.string().default('any'), quotes: z.string().default('any') }).default({ spelling: 'any', quotes: 'any' }),
+});
+export type ScribeInput = z.infer<typeof ScribeInput>;
+
+export const ScribeOutput = z.object({ text: z.string() });
+export type ScribeOutput = z.infer<typeof ScribeOutput>;
+
 // ------------------------------------------------------------------ the suite the core calls
 
 export interface CallInfo {
@@ -546,6 +565,8 @@ export interface AgentSuite {
   expand(input: ExpandInput): Promise<ExpandOutput>;
   /** One turn of the thinking-partner conversation: a reply, and the edits it makes to the board. */
   talk(input: TalkInput): Promise<TalkOutput>;
+  /** Tidy dictated speech into text: fillers and false starts out, nothing added. */
+  scribe(input: ScribeInput): Promise<ScribeOutput>;
 }
 
 export const Contracts = {
@@ -570,4 +591,5 @@ export const Contracts = {
   extractor: { input: ExtractInput, output: ExtractOutput },
   reader: { input: ReaderInput, output: ReaderOutput },
   continuity: { input: ContinuityInput, output: ContinuityOutput },
+  scribe: { input: ScribeInput, output: ScribeOutput },
 };

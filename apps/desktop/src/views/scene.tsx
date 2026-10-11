@@ -34,7 +34,8 @@ import { useStyleCheck } from '../hooks/use-style-check';
 import type { ExtractionResult, Fact, ImpactResult, SceneCard, SceneDetail, StyleReport, StyleViolation } from '../lib/types';
 import { factLabel, firstName, keys, loadPref, plural, savePref } from '../lib/util';
 import { Avatar, Badge, Button, Chip, Dialog, Empty, Field, ListEditor, StatusBadge, SyncBadge, TagSelect, Working } from '../components/ui';
-import { ProseEditor, bannedRegexes, type StyleMark } from '../components/prose-editor';
+import { ProseEditor, bannedRegexes, type EditorApi, type StyleMark } from '../components/prose-editor';
+import { MicButton, useDictation, useHoldToTalk, type DictationTarget } from '../components/dictate';
 import { PredictabilityCheck } from './critique';
 import { OBLIGATION_KIND } from './ledger';
 import { CardDiff, ProseDiff, ProseSideBySide } from '../components/diff';
@@ -52,6 +53,7 @@ export function SceneEditor({ id }: { id: string }) {
   const [inspector, setInspector] = useState(() => loadPref('sceneInspector', false));
   useEffect(() => { if (p) savePref(`lastScene:${p.dir}`, id); }, [p?.dir, id]);
   const [jump, setJump] = useState<{ from: number; to: number } | null>(null);
+  const editorApi = useRef<EditorApi | null>(null);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -126,6 +128,18 @@ export function SceneEditor({ id }: { id: string }) {
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, [saveCard, flushProse]);
+
+  const dictationOff = !card || card.lock === 'prose' || card.lock === 'both';
+  // Dictation goes in at the cursor, as an ordinary edit (autosaved, undoable).
+  const dictationTarget = useMemo<DictationTarget>(
+    () => ({
+      context: () => editorApi.current?.context() ?? { before: '', after: '' },
+      insert: (text) => editorApi.current?.insert(text) ?? (() => undefined),
+    }),
+    [],
+  );
+  const dictation = useDictation({ target: dictationOff ? null : dictationTarget, scene: id });
+  useHoldToTalk(dictation, !dictationOff);
 
   if (!p) return null;
   if (!detail || !card)
@@ -400,6 +414,7 @@ export function SceneEditor({ id }: { id: string }) {
             </button>
           )}
           <span className="grow" />
+          {!proseLocked && <MicButton dictation={dictation} hint="hold Alt+D" />}
           {detail.prose ? (
             <>
               <Button size="sm" variant="ghost" icon={<ScanText />} onClick={readBack} disabled={!!busy} tip="Extract facts from my edit">
@@ -493,7 +508,7 @@ export function SceneEditor({ id }: { id: string }) {
               </div>
             )}
             {styleOpen && styleReport && <StylePanel report={styleReport} onJump={(v) => setJump({ from: v.start, to: v.end })} onClose={() => setStyleOpen(false)} onSettings={() => go('settings', 'style')} />}
-            <ProseEditor value={prose.text} onChange={prose.edit} banned={banned} readOnly={proseLocked} marks={marks} jump={jump} placeholder={detail.prose ? undefined : 'Or start writing here…'} />
+            <ProseEditor value={prose.text} onChange={prose.edit} banned={banned} readOnly={proseLocked} marks={marks} jump={jump} onReady={(api) => (editorApi.current = api)} placeholder={detail.prose ? undefined : 'Or start writing, or hold Alt+D and talk…'} />
           </div>
         </div>
       </section>

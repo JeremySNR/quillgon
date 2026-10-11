@@ -44,6 +44,7 @@ export function ProseEditor({
   readOnly,
   marks = [],
   jump,
+  onReady,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -53,11 +54,15 @@ export function ProseEditor({
   marks?: StyleMark[];
   /** Select and scroll to a range; change the object to jump again. */
   jump?: { from: number; to: number } | null;
+  /** Receives a handle for inserting text at the cursor (dictation). */
+  onReady?: (api: EditorApi | null) => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
 
   useEffect(() => {
     if (!host.current) return;
@@ -102,7 +107,11 @@ export function ProseEditor({
       }),
     });
     view.current = v;
-    return () => v.destroy();
+    onReadyRef.current?.(readOnly ? null : editorApi(v));
+    return () => {
+      onReadyRef.current?.(null);
+      v.destroy();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readOnly, banned.map((b) => b.source).join('|')]);
 
@@ -123,6 +132,34 @@ export function ProseEditor({
   }, [jump]);
 
   return <div ref={host} />;
+}
+
+export interface EditorApi {
+  context(): { before: string; after: string };
+  /** Insert at the cursor (replacing a selection); returns a function that swaps the inserted text. */
+  insert(text: string): (replacement: string) => void;
+}
+
+function editorApi(v: EditorView): EditorApi {
+  return {
+    context() {
+      const { from, to } = v.state.selection.main;
+      return { before: v.state.sliceDoc(Math.max(0, from - 1200), from), after: v.state.sliceDoc(to, to + 300) };
+    },
+    insert(text) {
+      const { from, to } = v.state.selection.main;
+      v.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length }, scrollIntoView: true, userEvent: 'input.dictate' });
+      // Swapped only while the inserted text is still where it went.
+      let range = { from, to: from + text.length };
+      return (replacement) => {
+        const current = v.state.sliceDoc(range.from, range.to);
+        if (current !== text && current !== replacement) return;
+        v.dispatch({ changes: { from: range.from, to: range.to, insert: replacement }, userEvent: 'input.dictate' });
+        range = { from: range.from, to: range.from + replacement.length };
+        text = replacement;
+      };
+    },
+  };
 }
 
 /** Parse banned-patterns.md into regexes the editor can underline (mirrors the core parser). */
