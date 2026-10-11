@@ -1,6 +1,6 @@
 import type { AgentSuite, GhostReviseOutput, GhostShapeOutput } from '../agents/contracts.js';
 import type { GraphStore } from '../store.js';
-import type { Chapter, ChapterStage, LifeShape, MarginNote, Story, Structure } from '../schemas/index.js';
+import type { Chapter, ChapterStage, LifeShape, MarginNote, Story, Structure, TimelineEvent } from '../schemas/index.js';
 import { enoughForScene, gapMarkers, ladderScore, touchesOffLimits, unsourced } from '../life.js';
 import { styleRules } from '../style-sheet.js';
 import { slugify, uniq } from '../util.js';
@@ -17,6 +17,18 @@ export const STAGES: ChapterStage[] = ['gathering', 'ready', 'draft', 'notes', '
 
 export interface ShapeProposal extends GhostShapeOutput {
   shape: LifeShape;
+}
+
+/** Before the book goes to anyone: what is unsourced, unanswered, unconsented or sensitive. */
+export interface ShareReview {
+  /** Sentences nothing the author said covers, and quotes that are not word for word, still in the text. */
+  unsourced: { scene: string; title: string; text: string; reason: 'no-source' | 'quote-changed' }[];
+  gaps: { scene: string; title: string; marker: string }[];
+  open_notes: { scene: string; title: string; count: number }[];
+  people: { id: string; name: string; relationship: string; living: boolean | null; consent: string; naming: string; scenes: number; flag: 'high' | 'note' | null; why: string }[];
+  sensitive: { story: string; title: string; scenes: string[] }[];
+  unapproved: { id: string; title: string; stage: ChapterStage }[];
+  authors_note: string;
 }
 
 /** One proposed change in a revision round, reviewed passage by passage like a ripple. */
@@ -469,6 +481,121 @@ export class LifeBook {
     this.proposals.delete(`revision-${id}`);
     const ch = this.chapter(id);
     if (ch.stage === 'revising') this.setStage(id, 'notes');
+  }
+
+  // ---------------------------------------------------------------- the timeline
+
+  /**
+   * Correct a dated event. A new date carries into the stories filed with it and the scenes told
+   * from them, and each affected scene gets a note to check its text still fits: a life story's
+   * version of a ripple.
+   */
+  updateEvent(id: string, patch: Partial<TimelineEvent>): { affected: string[] } {
+    const events = structuredClone(this.p.timeline.events);
+    const e = events.find((x) => x.id === id);
+    if (!e) throw new Error(`no event "${id}"`);
+    const before = e.when;
+    Object.assign(e, patch, { id });
+    this.store.saveTimeline({ events });
+    const affected: string[] = [];
+    if (patch.when && patch.when !== before) {
+      for (const sid of e.stories ?? []) {
+        const st = this.p.stories.get(sid);
+        if (st && (st.when === before || !st.when)) this.store.saveStory({ ...st, when: patch.when });
+        for (const sc of this.p.scenes.values()) {
+          if (!sc.card.stories?.includes(sid) || affected.includes(sc.id)) continue;
+          if (sc.card.time === before) this.store.saveCard({ ...sc.card, time: patch.when }, { adoptIntoProse: true });
+          if (sc.prose) {
+            const notes = sc.notes?.notes ?? [];
+            this.store.saveNotes(sc.id, { notes: [...notes, { id: `date-${notes.length + 1}`, kind: 'source', quote: '', text: `The date changed from ${before || 'unknown'} to ${patch.when}. Does the text still fit?`, options: ['It still fits'], status: 'open', answer: '', round: 0 }] });
+          }
+          affected.push(sc.id);
+        }
+      }
+    }
+    return { affected };
+  }
+
+  addEvent(e: Omit<TimelineEvent, 'id' | 'scenes'> & { id?: string }): TimelineEvent {
+    const events = structuredClone(this.p.timeline.events);
+    let id = slugify(e.id || e.description).slice(0, 40) || 'event';
+    for (let n = 2; events.some((x) => x.id === id); n++) id = `${slugify(e.description).slice(0, 36)}-${n}`;
+    const ev: TimelineEvent = { ...e, id, scenes: [] };
+    events.push(ev);
+    this.store.saveTimeline({ events });
+    return ev;
+  }
+
+  deleteEvent(id: string) {
+    this.store.saveTimeline({ events: this.p.timeline.events.filter((x) => x.id !== id) });
+  }
+
+  // ---------------------------------------------------------------- before you share
+
+  shareReview(): ShareReview {
+    const p = this.p;
+    const chapters = this.chapters();
+    const sceneIds = chapters.flatMap((c) => c.scenes).filter((s) => p.scenes.get(s)?.prose);
+    const title = (sid: string) => p.scenes.get(sid)?.card.title || sid;
+    const confirmed = (sid: string) =>
+      new Set((p.scenes.get(sid)?.notes?.notes ?? []).filter((n) => n.kind === 'source' && (n.status === 'resolved' || (n.status === 'answered' && !/take it out|exact words/i.test(n.answer)) || n.status === 'dismissed')).map((n) => n.quote));
+    const unsourcedList: ShareReview['unsourced'] = [];
+    const gaps: ShareReview['gaps'] = [];
+    const open: ShareReview['open_notes'] = [];
+    for (const sid of sceneIds) {
+      const sc = p.scenes.get(sid)!;
+      const ok = confirmed(sid);
+      const stories = sc.card.stories?.length ? sc.card.stories : [];
+      if (stories.length) {
+        const m = this.material(stories);
+        for (const u of unsourced(sc.prose!.body, m.text, m.quotes, 20)) if (!ok.has(u.text)) unsourcedList.push({ scene: sid, title: title(sid), text: u.text, reason: u.reason });
+      }
+      for (const g of gapMarkers(sc.prose!.body)) gaps.push({ scene: sid, title: title(sid), marker: g });
+      const n = (sc.notes?.notes ?? []).filter((x) => x.status === 'open').length;
+      if (n) open.push({ scene: sid, title: title(sid), count: n });
+    }
+    const publicBook = p.book.life.audience === 'public';
+    const appearances = new Map<string, number>();
+    for (const sid of sceneIds) for (const c of new Set(p.scenes.get(sid)!.card.characters)) appearances.set(c, (appearances.get(c) ?? 0) + 1);
+    const people: ShareReview['people'] = [...p.characters.values()]
+      .filter((c) => c.id !== p.book.life.narrator)
+      .map((c) => {
+        const scenes = appearances.get(c.id) ?? 0;
+        const consent = c.bio.consent ?? 'not-asked';
+        const living = c.bio.living ?? null;
+        let flag: 'high' | 'note' | null = null;
+        let why = '';
+        if (scenes && consent === 'objected') (flag = 'high'), (why = 'They have objected to being in the book.');
+        else if (scenes && living !== false && !['approved', 'not-needed'].includes(consent))
+          (flag = publicBook ? 'high' : 'note'), (why = publicBook ? 'Living, in a published book, and has not agreed. Consider asking, a pseudonym, or a signed release.' : 'Living and not yet asked. Family books are often shared further than planned.');
+        else if (c.bio.sensitive && scenes) (flag = 'note'), (why = 'Marked sensitive.');
+        return { id: c.id, name: c.bio.name, relationship: c.bio.relationship ?? '', living, consent, naming: c.bio.naming ?? 'real', scenes, flag, why };
+      })
+      .sort((a, b) => (b.flag === 'high' ? 2 : b.flag ? 1 : 0) - (a.flag === 'high' ? 2 : a.flag ? 1 : 0) || b.scenes - a.scenes);
+    const sensitive = [...p.stories.values()]
+      .filter((s) => s.sensitive)
+      .map((s) => ({ story: s.id, title: s.title, scenes: sceneIds.filter((sid) => p.scenes.get(sid)!.card.stories?.includes(s.id)) }))
+      .filter((s) => s.scenes.length);
+    const unapproved = chapters.filter((c) => c.scenes.length && this.stageOf(c.id) !== 'approved').map((c) => ({ id: c.id, title: c.title, stage: this.stageOf(c.id) }));
+    return { unsourced: unsourcedList, gaps, open_notes: open, people, sensitive, unapproved, authors_note: this.authorsNote() };
+  }
+
+  /** A short author's note from the choices made: memory, reconstructed dialogue, changed names, other versions. */
+  authorsNote(): string {
+    const p = this.p;
+    const people = [...p.characters.values()];
+    const changed = people.some((c) => c.bio.naming === 'pseudonym');
+    const composite = people.some((c) => c.bio.naming === 'composite');
+    const versions = [...p.stories.values()].some((s) => s.versions.length);
+    const reconstructed = [...p.scenes.values()].some((sc) => (sc.notes?.notes ?? []).some((n) => /reconstruct/i.test(n.answer)));
+    const lines = [p.book.life.subject === 'self' ? 'This is a true story, told as I remember it.' : 'This is a true story, told as it was told to me, in the words of the person who lived it.'];
+    lines.push('Memory is not a recording. Where I was sure, I have said so plainly; where I was not, I have said that too.');
+    lines.push(reconstructed ? 'Some conversations are written as they are remembered rather than word for word. Where the exact words survived, they are the words that were said.' : 'Where the book quotes someone, those are the words as they were remembered and told.');
+    if (versions) lines.push('Where others remember things differently, I have said so.');
+    if (changed) lines.push('Some names have been changed to protect the privacy of the people involved.');
+    if (composite) lines.push('One or two people are composites of several real people.');
+    if (p.book.life.audience === 'family') lines.push('It was written for my family.');
+    return lines.join(' ');
   }
 
   // ---------------------------------------------------------------- sign-off

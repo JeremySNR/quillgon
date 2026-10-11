@@ -509,6 +509,24 @@ export class NovelServer {
       return engine.store.project.book.life;
     });
 
+    r('GET', '/api/life/share', ({ engine }) => ({ ...lb(engine).shareReview(), saved_note: engine.store.readReport('authors-note.md') }));
+    r('PUT', '/api/life/authors-note', async ({ engine, body }) => {
+      engine.store.writeReport('authors-note.md', String(body.text ?? '').trim() + '\n');
+      await engine.store.commit("Author's note");
+      return { ok: true };
+    });
+    r('POST', '/api/timeline/events', async ({ engine, body }) => {
+      const ev = lb(engine).addEvent(body.event);
+      await engine.store.commit(`Timeline: ${ev.description}`);
+      return ev;
+    });
+    r('PUT', '/api/timeline/events/:id', async ({ engine, params, body }) => {
+      const out = lb(engine).updateEvent(params.id, body.event ?? {});
+      await engine.store.commit(`Timeline: edit ${params.id}`);
+      return out;
+    });
+    r('DELETE', '/api/timeline/events/:id', async ({ engine, params }) => (lb(engine).deleteEvent(params.id), await engine.store.commit(`Timeline: remove ${params.id}`), { ok: true }));
+
     r('PUT', '/api/questions', async ({ engine, body }) => (engine.store.saveQuestions({ questions: body.questions }), await engine.store.commit('Edit questions'), engine.store.project.questions));
     r('PUT', '/api/notebook', async ({ engine, body }) => (engine.store.saveNotebook({ ...engine.store.project.notebook, ...body.notebook }), await engine.store.commit('Edit the ghostwriter’s notebook'), engine.store.project.notebook));
     r('PUT', '/api/stories/:id', async ({ engine, params, body }) => {
@@ -522,7 +540,8 @@ export class NovelServer {
     r('GET', '/api/scenes/:id', ({ engine, params }) => sceneDetail(engine.store, params.id));
     r('PUT', '/api/scenes/:id/card', async ({ engine, params, body }) => {
       const before = structuredClone(engine.store.scene(params.id).card);
-      const entry = engine.store.saveCard({ ...body.card, id: params.id });
+      // In a life story the prose is the truth and the card describes it: a card edit never makes the prose stale.
+      const entry = engine.store.saveCard({ ...body.card, id: params.id }, { adoptIntoProse: engine.store.book.kind !== 'novel' });
       const change: Change = { kind: 'card', scene: params.id, before, after: entry.card };
       const impact = analyseImpact(engine.store.project, change, engine.store.index);
       return { scene: sceneDetail(engine.store, params.id), change, impact };
@@ -530,6 +549,8 @@ export class NovelServer {
     r('PUT', '/api/scenes/:id/prose', ({ engine, params, body }) => {
       const before = engine.store.scene(params.id).prose?.body;
       engine.store.saveProse(params.id, String(body.body ?? ''), 'author');
+      // The author's own words are the source in a life story: nothing to read back.
+      if (engine.store.book.kind !== 'novel') engine.store.markInSync(params.id);
       // Every hand edit teaches the style sheet (see style-learn.ts).
       if (before) recordEdit(engine.store, params.id, before, String(body.body ?? ''));
       return sceneDetail(engine.store, params.id);

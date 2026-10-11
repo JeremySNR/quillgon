@@ -106,6 +106,7 @@ function BookSettings() {
           </Button>
         </div>
       </div>
+      {p!.life && <LifeSettingsCard />}
       <div className="card stack">
         <div className="card-head">
           <Waves size={16} />
@@ -381,6 +382,55 @@ function Appearance() {
       </Field>
       <div className="prose-readonly" style={{ maxWidth: `${measure}ch` }}>
         <p>The water below them made small sounds against the wall, nothing more. She found she was crying, and that she did not mind.</p>
+      </div>
+    </div>
+  );
+}
+
+/** A life story's own settings: whose life, when they were born, who the book is for, how long sessions run. */
+function LifeSettingsCard() {
+  const { project: p } = useApp();
+  const save = useSaver();
+  const saved = p!.book.life;
+  const [l, setL] = useState(saved);
+  const savedKey = JSON.stringify(saved);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setL(saved), [savedKey]);
+  return (
+    <div className="card stack">
+      <div className="card-head">
+        <h3>Life story</h3>
+      </div>
+      <div className="grid-2">
+        <Field label="Year of birth" hint="For ages on the timeline.">
+          <input className="input" value={l.born} placeholder="1948" onChange={(e) => setL({ ...l, born: e.target.value.trim() })} />
+        </Field>
+        <Field label="Who it is for">
+          <select className="select" value={l.audience} onChange={(e) => setL({ ...l, audience: e.target.value as typeof l.audience })}>
+            <option value="family">Family and friends</option>
+            <option value="public">Publishing it</option>
+          </select>
+        </Field>
+        <Field label="Interview sessions">
+          <select className="select" value={l.session_minutes} onChange={(e) => setL({ ...l, session_minutes: Number(e.target.value) })}>
+            {[15, 20, 30, 45, 60].map((m) => (
+              <option key={m} value={m}>
+                About {m} minutes
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Follow-up questions">
+          <select className="select" value={l.push} onChange={(e) => setL({ ...l, push: e.target.value as typeof l.push })}>
+            <option value="gentle">Gentle</option>
+            <option value="thorough">Thorough</option>
+          </select>
+        </Field>
+      </div>
+      <div>
+        <Button icon={<Check />} onClick={() => save(() => put('/life/settings', { life: l }))}>
+          Save
+        </Button>
       </div>
     </div>
   );

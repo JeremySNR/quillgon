@@ -118,7 +118,7 @@ export class OfflineSuite implements AgentSuite {
     const scenes = i.stories.slice(0, 4).map((st) => {
       const notes: GhostDraftOutput['scenes'][number]['notes'] = [];
       const paras: string[] = [];
-      const open = st.place ? `${st.when ? `In ${st.when}` : 'Then'}, at ${st.place}.` : `${st.when ? `In ${st.when}` : 'Then'}, at [TK: where this happened].`;
+      const open = st.place ? `${st.when ? `In ${st.when}` : 'Then'}, at ${st.place}.` : `${st.when ? `In ${st.when}` : 'Then'}, [TK: where this happened].`;
       if (!st.place) notes.push({ kind: 'gap', quote: '[TK: where this happened]', text: 'Where did this happen? I left it blank rather than guess.', options: [] });
       paras.push([open, st.summary].filter(Boolean).join(' '));
       const details = st.details.map((d) => d.text.replace(/[.!?]*$/, '.')).filter((d) => !st.summary.includes(d.replace(/\.$/, '')));

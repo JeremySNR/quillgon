@@ -218,7 +218,7 @@ describe('revision rounds', () => {
     expect(r.plan.map((p) => p.kind)).toEqual(['edit', 'rule']);
     await engine.life.applyRevision('the-1950s');
     const scene = store.project.scenes.get(id)!;
-    expect(scene.prose!.body).toContain('at the station at Leeds');
+    expect(scene.prose!.body).toContain('In 1955, the station at Leeds.');
     expect(scene.prose!.body).not.toContain('[TK:');
     expect(scene.notes!.notes.find((n) => n.id === gap.id)?.status).toBe('resolved');
   });
@@ -230,5 +230,46 @@ describe('revision rounds', () => {
     await engine.life.reopen('the-1960s');
     store.updateBook({ life: { ...store.project.book.life, pen: 'interviewer' } });
     await expect(engine.life.revise('the-1960s', 'x')).rejects.toThrow(/holding the pen/);
+  });
+});
+
+describe('the timeline and the pre-sharing check', () => {
+  it('carries a corrected date into the stories and scenes it belongs to, with a note to check', async () => {
+    const { store, engine } = await bookWithStories();
+    const ev = engine.life.addEvent({ when: '1955', description: 'Scarborough trip', stories: ['scarborough'] });
+    await engine.life.proposeShape();
+    await engine.life.acceptShape();
+    const [id] = await engine.life.draftChapter('the-1950s');
+    const out = engine.life.updateEvent(ev.id, { when: '1956' });
+    expect(out.affected).toEqual([id]);
+    expect(store.project.stories.get('scarborough')?.when).toBe('1956');
+    expect(store.project.scenes.get(id)?.card.time).toBe('1956');
+    expect(store.project.scenes.get(id)?.notes?.notes.at(-1)?.text).toMatch(/changed from 1955 to 1956/);
+    expect(store.sceneSync(id).state).toBe('in_sync');
+  });
+
+  it('lists what to settle before the book is shared, and writes an author’s note from the choices made', async () => {
+    const { store, engine } = await bookWithStories({
+      ghostDraft: async () => ({
+        scenes: [{ title: 'The belt', stories: ['the-belt'], when: '1962', place: "Burton's", people: ['jean-pickles'], then: '', now: '', prose: 'The belt came off the big machine with a crack like a gun. The foreman docked a penny for every crooked seam, and the women whispered about his temper. [TK: what happened next]', notes: [] }],
+        needs_decision: [],
+      }),
+    });
+    store.updateBook({ life: { ...store.project.book.life, audience: 'public' } });
+    store.saveCharacter({ bio: { ...store.project.characters.get('jean-pickles')!.bio, living: true, naming: 'pseudonym' } });
+    await engine.life.proposeShape();
+    await engine.life.acceptShape();
+    await engine.life.draftChapter('the-1960s');
+    const r = engine.life.shareReview();
+    expect(r.unsourced.map((u) => u.text)).toEqual([expect.stringContaining('foreman docked a penny')]);
+    expect(r.gaps.map((g) => g.marker)).toEqual(['[TK: what happened next]']);
+    expect(r.people[0]).toMatchObject({ id: 'jean-pickles', flag: 'high', scenes: 1 });
+    expect(r.unapproved.map((c) => c.id)).toEqual(['the-1960s']);
+    expect(r.authors_note).toMatch(/Some names have been changed/);
+    expect(r.authors_note).not.toMatch(/written for my family/);
+    // Confirming the sentence is true clears it from the check.
+    const note = store.project.scenes.get('the-1960s-s1')!.notes!.notes.find((n) => n.kind === 'source')!;
+    engine.life.answerNote('the-1960s-s1', note.id, { answer: 'It’s true', status: 'answered' });
+    expect(engine.life.shareReview().unsourced).toEqual([]);
   });
 });

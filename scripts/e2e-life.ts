@@ -7,6 +7,8 @@
  *     its stories with margin notes; a gap answered in the editor.
  *  D. A revision round: feedback in the author's words, the plan read back, a change reviewed
  *     and applied; the gap filled, "whilst" a rule for the whole book; the chapter approved.
+ *  E. The rest of the book: the timeline (a date corrected), people (consent), the notebook,
+ *     before you share (an author's note saved and exported), and the writing desk.
  *
  *   pnpm build && pnpm tsx scripts/e2e-life.ts [screenshot-dir]
  */
@@ -143,6 +145,56 @@ try {
   await r1950.getByText('Signed off').waitFor();
   step('the chapter is signed off');
   await shot('shaping-approved');
+
+  console.log('E. The rest of the book');
+  await page.locator('nav .nav-item', { hasText: 'Timeline' }).click();
+  await page.getByRole('heading', { name: 'Timeline', exact: true }).waitFor();
+  await page.locator('.timeline-card svg').waitFor();
+  await page.getByRole('button', { name: /Ask me about these years/ }).first().click();
+  await page.getByText('Added to your next session').waitFor();
+  step('the timeline shows the life by year; a gap became a question');
+  await shot('timeline');
+  await page.locator('.timeline-lower .list-item').filter({ hasText: '1955' }).first().click();
+  const editor = page.locator('.timeline-lower .card');
+  if (await editor.count()) {
+    await editor.getByLabel('When').fill('1956');
+    await editor.getByRole('button', { name: 'Save' }).click();
+    await page.getByText('Saved').first().waitFor();
+    step('corrected a date');
+  }
+
+  await page.locator('nav .nav-item', { hasText: 'People' }).click();
+  await page.getByRole('heading', { name: 'People', exact: true }).waitFor();
+  await page.locator('.char-card', { hasText: 'Peter Ellis' }).click();
+  await page.getByText('In your stories').waitFor();
+  step('people show how they relate to the narrator and the stories they are in');
+  await shot('people');
+
+  await page.locator('nav .nav-item', { hasText: 'Ghostwriter’s notebook' }).click();
+  await page.getByRole('heading', { name: 'Ghostwriter’s notebook' }).waitFor();
+  const offLimits = page.locator('.card', { hasText: 'Off limits' });
+  await offLimits.locator('textarea').first().fill('The divorce');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await page.getByText('Notebook saved').waitFor();
+  step('put a topic off limits in the notebook');
+
+  await page.locator('nav .nav-item', { hasText: 'Before you share' }).click();
+  await page.getByRole('heading', { name: 'Before you share' }).waitFor();
+  await page.getByText('The people in the book').waitFor();
+  await page.getByRole('button', { name: 'Save the note' }).click();
+  await page.getByText('it opens the exported book').waitFor();
+  await page.getByRole('button', { name: 'Export' }).click();
+  await page.getByText('Exported').first().waitFor();
+  const exported = fs.readdirSync(path.join(bookDir, 'export')).find((f) => f.endsWith('.md'))!;
+  if (!fs.readFileSync(path.join(bookDir, 'export', exported), 'utf8').includes('A note from the author')) throw new Error('author’s note not in the export');
+  step('saved the author’s note; the exported book opens with it');
+  await shot('share');
+
+  await page.locator('nav .nav-item', { hasText: 'Writing desk' }).click();
+  await page.getByText('NEXT IN YOUR PROCESS').waitFor();
+  await page.getByText(/stories gathered/).waitFor();
+  step('the writing desk counts stories and sessions, and suggests the next step');
+  await shot('desk');
 
   if (errors.length) throw new Error(`page errors:\n${errors.join('\n')}`);
   console.log('\nLife story e2e passed.');

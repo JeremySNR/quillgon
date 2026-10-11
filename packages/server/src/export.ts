@@ -8,6 +8,9 @@ import type { GraphStore } from '@quillgon/core';
 export function manuscriptMarkdown(store: GraphStore): string {
   const p = store.project;
   const out: string[] = [`% ${p.book.title}`, ''];
+  // A life story opens with its author's note, when there is one.
+  const note = p.book.kind !== 'novel' ? store.readReport('authors-note.md')?.trim() : null;
+  if (note) out.push("## A note from the author", '', note, '');
   for (const act of p.structure.acts) {
     if (p.structure.acts.length > 1) out.push(`# ${act.title || act.id}`, '');
     for (const ch of act.chapters) {

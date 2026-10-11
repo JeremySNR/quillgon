@@ -19,7 +19,9 @@ export function VoiceSettings() {
   const { project: p, toast, refresh, markSaved } = useApp();
   const saved = p!.book.voice;
   const [v, setV] = useState<Voice>(saved);
-  useEffect(() => setV(saved), [saved]);
+  const savedKey = JSON.stringify(saved);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setV(saved), [savedKey]);
   const status = p!.dictation;
   const people = useMemo(() => p!.characters.flatMap((c) => [c.bio.name, ...c.bio.aliases]).length + p!.locations.length, [p]);
   const save = async () => {
@@ -93,7 +95,7 @@ export function VoiceSettings() {
           <span className="faint">plus {people} names from your book</span>
         </div>
         <p className="muted">Everyone in the book and every place is already on the list. Add family names, nicknames and words a recogniser would get wrong.</p>
-        <ListEditor items={v.dictionary} onChange={(dictionary) => setV({ ...v, dictionary: dictionary.map((d) => d.trim()).filter((d, i, a) => d || i === a.length - 1) })} placeholder="Siobhan, Harehills, the felling…" numbered={false} />
+        <ListEditor items={v.dictionary} onChange={(dictionary) => setV({ ...v, dictionary: dictionary.map((d) => d.trim()).filter((d, i, a) => d || i === a.length - 1) })} placeholder="Add a word" numbered={false} />
       </div>
 
       <div>

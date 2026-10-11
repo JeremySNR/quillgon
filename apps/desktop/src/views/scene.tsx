@@ -372,7 +372,7 @@ export function SceneEditor({ id }: { id: string }) {
             <textarea className="textarea" rows={2} value={card.outcome} onChange={(e) => set('outcome', e.target.value)} style={{ minHeight: 0, fieldSizing: 'content' } as React.CSSProperties} />
           </Field>
 
-          <LedgerFields card={card} onChange={(k, v) => set(k, v)} />
+          {!p.life && <LedgerFields card={card} onChange={(k, v) => set(k, v)} />}
 
           <details className="more">
             <summary>
@@ -421,8 +421,8 @@ export function SceneEditor({ id }: { id: string }) {
             </div>
           </details>
 
-          <KnowledgePanel detail={detail} name={name} facts={p.facts} onOpen={(c) => go('characters', c)} />
-          {card.beats.length > 1 && <PredictabilityCheck scene={id} />}
+          {!p.life && <KnowledgePanel detail={detail} name={name} facts={p.facts} onOpen={(c) => go('characters', c)} />}
+          {!p.life && card.beats.length > 1 && <PredictabilityCheck scene={id} />}
 
           {cardDirty && (
             <div className="decision-bar">
@@ -455,7 +455,7 @@ export function SceneEditor({ id }: { id: string }) {
           )}
           <span className="grow" />
           {!proseLocked && <MicButton dictation={dictation} hint="hold Alt+D" />}
-          {detail.prose ? (
+          {detail.prose && !p.life ? (
             <>
               <Button size="sm" variant="ghost" icon={<ScanText />} onClick={readBack} disabled={!!busy} tip="Extract facts from my edit">
                 <span className="btn-text">Read back</span>
@@ -500,7 +500,7 @@ export function SceneEditor({ id }: { id: string }) {
             </div>
 
             {busy && <div style={{ marginBottom: 20 }}><Working job={job} fallback={busy} /></div>}
-            <SyncBanner state={sync} busy={!!busy} onReadBack={readBack} onRevise={() => regenerate('minimal')} onFresh={() => regenerate('fresh')} onKeep={() => withBusy('Marking', async () => void (await post(`/scenes/${id}/mark-in-sync`)))} cardDirty={cardDirty} />
+            {!p.life && <SyncBanner state={sync} busy={!!busy} onReadBack={readBack} onRevise={() => regenerate('minimal')} onFresh={() => regenerate('fresh')} onKeep={() => withBusy('Marking', async () => void (await post(`/scenes/${id}/mark-in-sync`)))} cardDirty={cardDirty} />}
             {detail.facts?.contradictions.length ? (
               <div className="banner warning">
                 <AlertTriangle />

@@ -19,6 +19,7 @@ export function Welcome() {
   const [subject, setSubject] = useState<'self' | 'other'>('self');
   const [subjectName, setSubjectName] = useState('');
   const [audience, setAudience] = useState<'family' | 'public'>('family');
+  const [born, setBorn] = useState('');
   const [title, setTitle] = useState('');
   const [dir, setDir] = useState('');
   const [words, setWords] = useState(12000);
@@ -55,7 +56,7 @@ export function Welcome() {
         offline: provider === 'offline',
         codex: provider === 'codex',
         kind,
-        ...(life ? { subject, subject_name: subject === 'other' ? subjectName.trim() : '', audience } : {}),
+        ...(life ? { subject, subject_name: subject === 'other' ? subjectName.trim() : '', audience, born: born.trim() } : {}),
       });
       go(life ? 'sessions' : 'build');
       await refresh();
@@ -116,9 +117,14 @@ export function Welcome() {
                       <input className="input" value={subjectName} onChange={(e) => setSubjectName(e.target.value)} placeholder="Margaret Ellis" />
                     </Field>
                   )}
-                  <Field label="Who is it for?">
-                    <Segmented value={audience} options={[{ value: 'family', label: 'Family and friends' }, { value: 'public', label: 'Publishing it' }]} onChange={setAudience} />
-                  </Field>
+                  <div className="grid-2">
+                    <Field label="Who is it for?">
+                      <Segmented value={audience} options={[{ value: 'family', label: 'Family' }, { value: 'public', label: 'Publishing it' }]} onChange={setAudience} />
+                    </Field>
+                    <Field label="Year of birth" hint="Optional; for ages on the timeline.">
+                      <input className="input" value={born} onChange={(e) => setBorn(e.target.value)} placeholder="1948" inputMode="numeric" />
+                    </Field>
+                  </div>
                 </>
               )}
               <Field label="Title">

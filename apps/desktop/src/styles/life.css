@@ -112,3 +112,39 @@
 .change-text ins { background: var(--success-bg); color: var(--success); text-decoration: none; }
 .warning { color: var(--warning); }
 @media (max-width: 1100px) { .revision-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------------------------------------------------------------- timeline */
+.timeline-card { padding: var(--s-4); }
+.timeline-card svg text { font-family: var(--font-ui); }
+.tl-axis { stroke: var(--border-strong); stroke-width: 1; }
+.tl-tick { fill: var(--text-3); font-size: 11px; }
+.tl-age { fill: var(--text-3); font-size: 10px; }
+.tl-gap { fill: var(--warning-bg); }
+.tl-gap-label { fill: var(--warning); font-size: 11px; font-weight: 600; }
+.tl-dot { fill: var(--accent); }
+.tl-item.key .tl-dot { fill: var(--surface); stroke: var(--accent); stroke-width: 2.5; }
+.tl-item.low .tl-dot { stroke: var(--danger); }
+.tl-item.selected .tl-dot { stroke: var(--text); stroke-width: 3; }
+.tl-fuzzy { fill: var(--accent); opacity: .45; }
+.tl-stem { stroke: var(--border-strong); }
+.tl-label { fill: var(--text); font-size: 11px; }
+.tl-item.key .tl-label { font-weight: 600; }
+.tl-key { fill: var(--text-3); font-size: 10px; }
+.tl-item { cursor: pointer; }
+.tl-chapter { fill: var(--accent-subtle); }
+.tl-chapter-label { fill: var(--text-2); font-size: 10px; }
+.gap-row { display: flex; flex-wrap: wrap; gap: var(--s-4); margin: var(--s-3) 0; }
+.timeline-lower { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: var(--s-5); margin-top: var(--s-4); align-items: start; }
+.timeline-lower .list-item.active { background: var(--surface-hover); }
+.tl-when { width: 72px; flex: none; }
+.chip-toggle { border: 1px solid var(--border); background: var(--surface); border-radius: var(--r-pill); padding: 2px 10px; font-size: var(--fs-label); cursor: pointer; color: var(--text-2); }
+.chip-toggle.on { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+
+/* ---------------------------------------------------------------- notebook, before you share */
+.notebook-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-4); }
+.share-section { margin-top: var(--s-5); }
+.people-table { width: 100%; border-collapse: collapse; font-size: var(--fs-ui); }
+.people-table th { text-align: left; font-size: var(--fs-caption); text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); font-weight: 600; padding: var(--s-2); border-bottom: 1px solid var(--border); }
+.people-table td { padding: var(--s-2); border-bottom: 1px solid var(--border); vertical-align: top; }
+.people-table .select { min-width: 140px; }
+@media (max-width: 1100px) { .timeline-lower, .notebook-grid { grid-template-columns: minmax(0, 1fr); } }
