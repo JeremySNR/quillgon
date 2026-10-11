@@ -35,6 +35,7 @@ import { builtinPrompt, createSuite, loadPrompt } from '@quillgon/agents';
 import { projectSnapshot, sceneDetail } from './snapshot.js';
 import { exportManuscript } from './export.js';
 import { coverAvailability, coverImage, CoverOptions, generateCover, listCovers } from './covers.js';
+import { DictateRequest, dictate, voiceStatus } from './dictation.js';
 
 type Handler = (ctx: Ctx) => Promise<unknown> | unknown;
 interface Ctx {
@@ -54,6 +55,11 @@ interface Job {
   result?: unknown;
   error?: string;
   started: number;
+}
+
+/** A non-JSON response body (a recording). */
+class Binary {
+  constructor(public type: string, public data: Buffer) {}
 }
 
 export class HttpError extends Error {
@@ -142,7 +148,7 @@ export class NovelServer {
       this.broadcast('store', e);
     });
     this.watch(abs);
-    rememberRecent(abs, store.book.title);
+    rememberRecent(abs, store.book.title, store.book.kind);
     this.broadcast('reloaded', { opened: abs });
     return engine;
   }
@@ -150,7 +156,7 @@ export class NovelServer {
   private watch(dir: string) {
     try {
       this.watcher = fs.watch(dir, { recursive: true }, (_ev, file) => {
-        if (!file || /^(\.engine|\.git|reports)[\\/]?/.test(String(file))) return;
+        if (!file || /^(\.engine|\.git|reports|audio)[\\/]?/.test(String(file))) return;
         if (Date.now() < this.quietUntil) return;
         if (this.reloadTimer) clearTimeout(this.reloadTimer);
         this.reloadTimer = setTimeout(() => this.externalReload(String(file)), 300);
@@ -269,7 +275,7 @@ export class NovelServer {
     const given = req.headers[TOKEN_HEADER];
     // EventSource, <img> and download links cannot set headers, so the event stream and
     // cover images (read-only GETs) also accept ?token=.
-    const queryToken = req.method === 'GET' && (url.pathname === '/api/events' || /^\/api\/covers\/[^/]+\/image$/.test(url.pathname));
+    const queryToken = req.method === 'GET' && (url.pathname === '/api/events' || /^\/api\/covers\/[^/]+\/image$/.test(url.pathname) || /^\/api\/sessions\/[^/]+\/audio\/[^/]+$/.test(url.pathname));
     const token = typeof given === 'string' ? given : queryToken ? url.searchParams.get('token') : null;
     if (!this.tokenMatches(token)) return send(res, 401, { error: 'missing or invalid API token' });
 
@@ -300,6 +306,10 @@ export class NovelServer {
         if (Buffer.isBuffer(out)) {
           res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'no-store', ...(url.searchParams.has('download') ? { 'content-disposition': 'attachment; filename="book-cover.png"' } : {}) });
           return void res.end(out);
+        }
+        if (out instanceof Binary) {
+          res.writeHead(200, { 'content-type': out.type, 'cache-control': 'no-store' });
+          return void res.end(out.data);
         }
         return send(res, 200, out === undefined ? { ok: true } : out);
       } catch (e) {
@@ -352,7 +362,21 @@ export class NovelServer {
       '/api/init',
       async ({ body, server }) => {
         const dir = path.resolve(expandHome(body.dir));
-        const store = await initProject(dir, { title: body.title, genre: body.genre, target_words: Number(body.target_words) || 12000, offline: !!body.offline, codex: !!body.codex });
+        const kind = ['novel', 'life-story', 'memoir'].includes(body.kind) ? body.kind : 'novel';
+        const store = await initProject(dir, {
+          title: body.title,
+          genre: body.genre,
+          target_words: Number(body.target_words) || undefined,
+          offline: !!body.offline,
+          codex: !!body.codex,
+          kind,
+          subject_name: typeof body.subject_name === 'string' ? body.subject_name : undefined,
+          life: {
+            ...(body.subject === 'self' || body.subject === 'other' ? { subject: body.subject } : {}),
+            ...(body.audience === 'family' || body.audience === 'public' ? { audience: body.audience } : {}),
+            ...(typeof body.born === 'string' ? { born: body.born } : {}),
+          },
+        });
         store.close();
         server.open(dir);
         return { ok: true, dir };
@@ -400,11 +424,124 @@ export class NovelServer {
       return server.job('cover', progress => generateCover(project, parsed.data, progress), { queue: false });
     });
 
+    // --- dictation
+    r('GET', '/api/voice', ({ engine }) => voiceStatus(engine.store.project));
+    r('POST', '/api/dictate', async ({ engine, body }) => {
+      const parsed = DictateRequest.safeParse(body);
+      if (!parsed.success) throw new HttpError(422, 'Invalid dictation request', parsed.error.issues);
+      // Not a queued job: the author is waiting with the cursor in place. It writes only a
+      // recording, and only for an interview session (git-ignored).
+      const keep = parsed.data.session;
+      if (keep && !engine.store.project.sessions.has(keep)) throw new HttpError(404, `no session "${keep}"`);
+      const out = await dictate(engine.store.project, engine.agents, parsed.data);
+      if (!keep || !out.raw) return out;
+      const file = engine.store.saveAudio(keep, `a-${Date.now()}.wav`, Buffer.from(parsed.data.audio, 'base64'));
+      return { ...out, audio: path.basename(file) };
+    });
+
+    // --- interviews (life stories)
+    const iv = (e: Engine) => e.interviews;
+    r('GET', '/api/sessions/:id', ({ engine, params }) => iv(engine).session(params.id));
+    r('POST', '/api/sessions/start', ({ engine, body, server }) =>
+      server.job('interview', () => iv(engine).start({ minutes: Number(body.minutes) || undefined, speaker: typeof body.speaker === 'string' ? body.speaker : undefined })),
+    );
+    r('POST', '/api/sessions/:id/answer', ({ engine, params, body, server }) =>
+      server.job('interview', () =>
+        iv(engine).answer(params.id, {
+          text: String(body.text ?? ''),
+          raw: typeof body.raw === 'string' ? body.raw : null,
+          audio: Array.isArray(body.audio) ? body.audio.filter((a: unknown) => typeof a === 'string' && /^[a-z0-9-]+\.wav$/.test(a)) : [],
+          seconds: Number(body.seconds) || 0,
+          signal: ['dont-remember', 'move-on', 'off-record', 'hard'].includes(body.signal) ? body.signal : null,
+        }),
+      ),
+    );
+    r('POST', '/api/sessions/:id/undo', ({ engine, params, body }) => iv(engine).undo(params.id, Number(body.turn)));
+    r('POST', '/api/sessions/:id/end', ({ engine, params, server }) => server.job('interview', () => iv(engine).end(params.id)));
+    r('GET', '/api/sessions/:id/audio/:file', ({ engine, params }) => {
+      const data = engine.store.readAudio(params.id, params.file);
+      if (!data) throw new HttpError(404, 'recording not found');
+      return new Binary('audio/wav', data);
+    });
+    // --- a life story's chapters
+    const lb = (e: Engine) => e.life;
+    const chapterView = (e: Engine) =>
+      lb(e).chapters().map((c) => ({
+        ...c,
+        stage: lb(e).stageOf(c.id),
+        stories: lb(e).storiesOf(c.id).map((st) => st.id),
+        open_notes: lb(e).openNotes(c.id).length,
+        words: c.scenes.reduce((n, sid) => n + (e.store.project.scenes.get(sid)?.prose?.meta.word_count ?? 0), 0),
+      }));
+    r('GET', '/api/life/chapters', ({ engine }) => ({ chapters: chapterView(engine), proposal: lb(engine).proposals.get('shape') }));
+    r('POST', '/api/life/shape/propose', ({ engine, body, server }) => server.job('shape', () => lb(engine).proposeShape(body.shape || undefined)));
+    r('POST', '/api/life/shape/accept', async ({ engine }) => (await lb(engine).acceptShape(), { chapters: chapterView(engine) }));
+    r('POST', '/api/life/shape/discard', ({ engine }) => (lb(engine).proposals.delete('shape'), { ok: true }));
+    r('POST', '/api/life/stories/:id/assign', async ({ engine, params, body }) => {
+      lb(engine).assignStory(params.id, body.chapter || null);
+      await engine.store.commit(`Move story ${params.id}`);
+      return { chapters: chapterView(engine) };
+    });
+    r('POST', '/api/life/chapters/:id/draft', ({ engine, params, server }) => server.job('draft', (progress) => lb(engine).draftChapter(params.id, progress)));
+    r('POST', '/api/life/chapters/:id/approve', async ({ engine, params }) => (await lb(engine).approve(params.id), { chapters: chapterView(engine) }));
+    r('POST', '/api/life/chapters/:id/reopen', async ({ engine, params }) => (await lb(engine).reopen(params.id), { chapters: chapterView(engine) }));
+    r('POST', '/api/life/chapters/:id/revise', ({ engine, params, body, server }) => server.job('revise', (progress) => lb(engine).revise(params.id, String(body.feedback ?? ''), progress)));
+    r('GET', '/api/life/chapters/:id/revision', ({ engine, params }) => lb(engine).revision(params.id));
+    r('POST', '/api/life/chapters/:id/revision/decide', ({ engine, params, body }) =>
+      lb(engine).decide(params.id, {
+        item: typeof body.item === 'string' ? body.item : undefined,
+        decision: ['accepted', 'rejected', 'proposed'].includes(body.decision) ? body.decision : undefined,
+        overrule: Number.isInteger(body.overrule) ? body.overrule : undefined,
+        keep: typeof body.keep === 'boolean' ? body.keep : undefined,
+      }),
+    );
+    r('POST', '/api/life/chapters/:id/revision/apply', ({ engine, params, server }) => server.job('revise', () => lb(engine).applyRevision(params.id)));
+    r('POST', '/api/life/chapters/:id/revision/discard', ({ engine, params }) => (lb(engine).discardRevision(params.id), { ok: true }));
+    r('POST', '/api/scenes/:id/notes/:note', async ({ engine, params, body }) => {
+      const note = lb(engine).answerNote(params.id, params.note, { answer: typeof body.answer === 'string' ? body.answer : undefined, status: body.status });
+      await engine.store.commit(`Answer a note on ${params.id}`);
+      return note;
+    });
+    r('PUT', '/api/life/settings', async ({ engine, body }) => {
+      const life = engine.store.project.book.life;
+      engine.store.updateBook({ life: { ...life, ...body.life, narrator: life.narrator } });
+      await engine.store.commit('Edit life-story settings');
+      return engine.store.project.book.life;
+    });
+
+    r('GET', '/api/life/share', ({ engine }) => ({ ...lb(engine).shareReview(), saved_note: engine.store.readReport('authors-note.md') }));
+    r('PUT', '/api/life/authors-note', async ({ engine, body }) => {
+      engine.store.writeReport('authors-note.md', String(body.text ?? '').trim() + '\n');
+      await engine.store.commit("Author's note");
+      return { ok: true };
+    });
+    r('POST', '/api/timeline/events', async ({ engine, body }) => {
+      const ev = lb(engine).addEvent(body.event);
+      await engine.store.commit(`Timeline: ${ev.description}`);
+      return ev;
+    });
+    r('PUT', '/api/timeline/events/:id', async ({ engine, params, body }) => {
+      const out = lb(engine).updateEvent(params.id, body.event ?? {});
+      await engine.store.commit(`Timeline: edit ${params.id}`);
+      return out;
+    });
+    r('DELETE', '/api/timeline/events/:id', async ({ engine, params }) => (lb(engine).deleteEvent(params.id), await engine.store.commit(`Timeline: remove ${params.id}`), { ok: true }));
+
+    r('PUT', '/api/questions', async ({ engine, body }) => (engine.store.saveQuestions({ questions: body.questions }), await engine.store.commit('Edit questions'), engine.store.project.questions));
+    r('PUT', '/api/notebook', async ({ engine, body }) => (engine.store.saveNotebook({ ...engine.store.project.notebook, ...body.notebook }), await engine.store.commit('Edit the ghostwriter’s notebook'), engine.store.project.notebook));
+    r('PUT', '/api/stories/:id', async ({ engine, params, body }) => {
+      const st = engine.store.saveStory({ ...(engine.store.project.stories.get(params.id) ?? {}), ...body.story, id: params.id });
+      await engine.store.commit(`Story: ${st.title}`);
+      return st;
+    });
+    r('DELETE', '/api/stories/:id', async ({ engine, params }) => (engine.store.deleteStory(params.id), await engine.store.commit(`Remove story ${params.id}`), { ok: true }));
+
     // --- scenes
     r('GET', '/api/scenes/:id', ({ engine, params }) => sceneDetail(engine.store, params.id));
     r('PUT', '/api/scenes/:id/card', async ({ engine, params, body }) => {
       const before = structuredClone(engine.store.scene(params.id).card);
-      const entry = engine.store.saveCard({ ...body.card, id: params.id });
+      // In a life story the prose is the truth and the card describes it: a card edit never makes the prose stale.
+      const entry = engine.store.saveCard({ ...body.card, id: params.id }, { adoptIntoProse: engine.store.book.kind !== 'novel' });
       const change: Change = { kind: 'card', scene: params.id, before, after: entry.card };
       const impact = analyseImpact(engine.store.project, change, engine.store.index);
       return { scene: sceneDetail(engine.store, params.id), change, impact };
@@ -412,6 +549,8 @@ export class NovelServer {
     r('PUT', '/api/scenes/:id/prose', ({ engine, params, body }) => {
       const before = engine.store.scene(params.id).prose?.body;
       engine.store.saveProse(params.id, String(body.body ?? ''), 'author');
+      // The author's own words are the source in a life story: nothing to read back.
+      if (engine.store.book.kind !== 'novel') engine.store.markInSync(params.id);
       // Every hand edit teaches the style sheet (see style-learn.ts).
       if (before) recordEdit(engine.store, params.id, before, String(body.body ?? ''));
       return sceneDetail(engine.store, params.id);
@@ -827,16 +966,16 @@ function expandHome(p: string) {
   return p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p;
 }
 
-function recent(): { dir: string; title: string; opened: string }[] {
+function recent(): { dir: string; title: string; opened: string; kind?: string }[] {
   try {
-    return (JSON.parse(fs.readFileSync(RECENT, 'utf8')) as { dir: string; title: string; opened: string }[]).filter((r) => fs.existsSync(path.join(r.dir, 'book.yaml')));
+    return (JSON.parse(fs.readFileSync(RECENT, 'utf8')) as { dir: string; title: string; opened: string; kind?: string }[]).filter((r) => fs.existsSync(path.join(r.dir, 'book.yaml')));
   } catch {
     return [];
   }
 }
 
-function rememberRecent(dir: string, title: string) {
-  const list = [{ dir, title, opened: new Date().toISOString() }, ...recent().filter((r) => r.dir !== dir)].slice(0, 12);
+function rememberRecent(dir: string, title: string, kind: string) {
+  const list = [{ dir, title, kind, opened: new Date().toISOString() }, ...recent().filter((r) => r.dir !== dir)].slice(0, 12);
   try {
     fs.mkdirSync(path.dirname(RECENT), { recursive: true });
     fs.writeFileSync(RECENT, JSON.stringify(list, null, 2));

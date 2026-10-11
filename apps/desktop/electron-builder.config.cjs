@@ -42,6 +42,11 @@ module.exports = {
     // electron-builder's default entitlements include disable-library-validation, which an
     // ad-hoc signed app needs to load better_sqlite3.node.
     identity: hasMacCert ? undefined : '-',
+    // Dictation: the hardened runtime needs the audio-input entitlement, and macOS shows this
+    // text when it asks the user for the microphone.
+    entitlements: 'build-resources/entitlements.mac.plist',
+    entitlementsInherit: 'build-resources/entitlements.mac.plist',
+    extendInfo: { NSMicrophoneUsageDescription: 'Quillgon uses the microphone when you dictate or record a memory.' },
   },
   dmg: { writeUpdateInfo: false },
   win: { target: ['nsis'] },

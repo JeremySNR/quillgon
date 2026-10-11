@@ -131,13 +131,23 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
   },
 
   init: {
-    help: 'init <dir> [--title T] [--words 12000] [--offline | --codex]   Create a new book (OpenAI API by default)',
+    help: 'init <dir> [--title T] [--words 12000] [--offline | --codex] [--life | --memoir] [--about "Name"] [--born 1948]   Create a new book (OpenAI API by default); --life or --memoir for a true story, --about for someone else\'s life',
     async run() {
       const dir = args[0] ?? (await ask('Folder for the new book:', 'my-book'));
       const title = (flags.title as string) ?? (await ask('Title:', path.basename(dir)));
-      const store = await initProject(dir, { title, target_words: Number(flags.words) || 12000, offline: !!flags.offline, codex: !!flags.codex });
+      const kind = flags.memoir ? 'memoir' : flags.life ? 'life-story' : 'novel';
+      const store = await initProject(dir, {
+        title,
+        target_words: Number(flags.words) || undefined,
+        offline: !!flags.offline,
+        codex: !!flags.codex,
+        kind,
+        subject_name: typeof flags.about === 'string' ? flags.about : undefined,
+        life: typeof flags.born === 'string' ? { born: flags.born } : {},
+      });
       say(green(`Created ${store.dir}`));
-      say(`Next: ${cyan(`quillgon spark --dir ${dir}`)} to develop an idea, or ${cyan(`quillgon intent --dir ${dir}`)} if you have a premise.`);
+      if (kind === 'novel') say(`Next: ${cyan(`quillgon spark --dir ${dir}`)} to develop an idea, or ${cyan(`quillgon intent --dir ${dir}`)} if you have a premise.`);
+      else say(`Next: ${cyan(`quillgon session --dir ${dir}`)} to start the first interview with your ghostwriter.`);
       store.close();
     },
   },
@@ -259,6 +269,43 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
       for (const [label, v] of [['One sentence', b.logline], ['Tone', b.tone], ['Ending', b.ending], ['Cast', b.cast.map((c) => c.name).join(', ')]] as const) if (v) say(`${bold(label)}  ${v}`);
       for (const q of b.open) say(yellow(`? ${q}`));
       say(dim(`\nNext: ${cyan('quillgon spark')} to grow it, or open the Idea step in the app.`));
+    },
+  },
+
+  session: {
+    help: 'session [--minutes 30] [--speaker Name]   Life stories: an interview with your ghostwriter. Commands: /move, /forget, /off <answer>, /hard, /undo, /end',
+    async run() {
+      const e = openEngine();
+      const I = e.interviews;
+      if (e.store.book.kind === 'novel') return void say(yellow('Interviews are for life stories. Start one with quillgon init <dir> --life.'));
+      const s0 = await I.start({ minutes: Number(flags.minutes) || undefined, speaker: typeof flags.speaker === 'string' ? flags.speaker : undefined });
+      const show = (s: typeof s0) => {
+        const t = s.turns[s.turns.length - 1];
+        say(`\n${cyan('ghostwriter')} ${t.text}${t.technique ? dim(`  (${t.technique})`) : ''}`);
+        for (const ch of t.changes) say(dim(`  · ${ch.label}`));
+      };
+      say(bold(`\n${s0.title}`));
+      for (const a of s0.agenda) say(dim(`  ${a.done ? '✓' : '·'} ${a.topic}${a.why ? ` — ${a.why}` : ''}`));
+      show(s0);
+      say(dim('\nAnswer in your own words. /move to move on, /forget for "that\'s all I remember", /off <answer> to say something off the record, /hard if it is hard to talk about, /undo, /end (or a blank line) to finish.'));
+      let s = s0;
+      for (;;) {
+        const m = await ask(`\n${bold('you')}`);
+        if (!m || m === '/end') break;
+        if (m === '/undo') {
+          const turn = s.turns.findLastIndex((t) => t.role === 'ghostwriter' && !t.undone && t.changes.length);
+          if (turn < 0) say(dim('Nothing to undo.'));
+          else (s = I.undo(s.id, turn)), say(dim(`Undone: ${s.turns[turn].changes.map((c) => c.label).join('; ')}`));
+          continue;
+        }
+        const [, cmd, rest] = m.match(/^\/(move|forget|off|hard)\b\s*(.*)$/) ?? [];
+        const signal = cmd ? ({ move: 'move-on', forget: 'dont-remember', off: 'off-record', hard: 'hard' } as const)[cmd as 'move'] : null;
+        s = await I.answer(s.id, { text: cmd ? rest : m, signal });
+        show(s);
+      }
+      const done = await I.end(s.id);
+      say(`\n${bold(done.title)}\n${done.summary}`);
+      say(dim(`${e.store.project.stories.size} stories, ${e.store.project.questions.questions.filter((q) => q.status === 'queued').length} questions queued for next time.`));
     },
   },
 
@@ -652,6 +699,37 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
       say(`  twists guessed ${s.mean.twist_guess_rate ?? '—'}  engagement ${s.mean.engagement ?? '—'}  shared names ${s.shared_name_rate}  trigram overlap ${s.trigram_overlap}  plan diversity ${s.plan_diversity}`);
       say(dim(`  ${path.join(dir, 'report.md')}`));
       if (run.books.some((b) => b.error)) process.exitCode = 1;
+    },
+  },
+
+  'eval-life': {
+    help: 'eval-life [--offline|--codex] [--limit N] [--only a,b] [--sessions N] [--turns N]   Interview the frozen lives (evals/lives.yaml) and score the ghostwriter',
+    async run() {
+      const { runLifeEvals } = await import('./eval-life.js');
+      const { loadLives } = await import('@quillgon/core');
+      const here = path.dirname(fileURLToPath(import.meta.url));
+      const models = flags.offline ? 'offline' : flags.codex ? 'codex' : 'openai';
+      const lives = (flags.lives as string) ?? path.resolve(here, '../../../evals/lives.yaml');
+      const only = flags.only ? String(flags.only).split(',') : undefined;
+      const n = Math.min(Number(flags.limit) || Infinity, loadLives(lives).filter((l) => !only || only.includes(l.id)).length);
+      if (models !== 'offline' && !yes && !(await confirm(`Interview ${n} simulated life/lives with live models (${models})? Each one runs sessions, then drafts every chapter.`, false))) return;
+      const { dir, run } = await runLifeEvals({
+        lives,
+        out: (flags.out as string) ?? path.resolve(here, '../../../evals/runs'),
+        models,
+        only,
+        limit: Number(flags.limit) || undefined,
+        sessions: Number(flags.sessions) || undefined,
+        turns: Number(flags.turns) || undefined,
+        progress: (l) => say(dim(l)),
+      });
+      const s = run.summary;
+      say(bold(`\nEval ${run.id}: ${s.lives} of ${run.lives.length} lives`));
+      say(`  drawn out ${s.elicited ?? '—'}  depth ${s.depth ?? '—'}  follow-up ${s.followup_rate ?? '—'}  refused/turn ${s.refused_rate ?? '—'}`);
+      say(`  leading asked ${s.leading_asked}  off limits asked ${s.off_limits_asked}  unsourced sentences ${s.invented_rate ?? '—'}`);
+      if (models === 'offline') say(yellow('  Offline runs check the plumbing; use live models to score the ghostwriter.'));
+      say(dim(`  ${path.join(dir, 'report.md')}`));
+      if (run.lives.some((l) => l.error) || s.leading_asked || s.off_limits_asked) process.exitCode = 1;
     },
   },
 

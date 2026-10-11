@@ -19,7 +19,8 @@ export class ModelSuite implements AgentSuite {
   ) {}
 
   private system(def: AgentDef<unknown, unknown>): string {
-    return [builtinPrompt('shared'), intentBlock(this.ctx.intent()), loadPrompt(def.name, this.ctx.projectDir)].join('\n\n---\n\n');
+    const book = this.ctx.book();
+    return [builtinPrompt(book.kind === 'novel' ? 'shared' : 'shared-life'), intentBlock(this.ctx.intent(), book), loadPrompt(def.name, this.ctx.projectDir)].join('\n\n---\n\n');
   }
 
   private async run<I, O>(def: AgentDef<I, O>, input: I, scene?: string): Promise<O> {
@@ -62,4 +63,12 @@ export class ModelSuite implements AgentSuite {
   diverge: AgentSuite['diverge'] = (i) => this.run(A.museDiverge, i);
   expand: AgentSuite['expand'] = (i) => this.run(A.museExpand, i);
   talk: AgentSuite['talk'] = (i) => this.run(A.museTalk, i);
+  scribe: AgentSuite['scribe'] = (i) => this.run(A.scribe, i);
+  ghostPlan: AgentSuite['ghostPlan'] = (i) => this.run(A.ghostPlan, i);
+  ghostTurn: AgentSuite['ghostTurn'] = (i) => this.run(A.ghostTurn, i);
+  ghostWrap: AgentSuite['ghostWrap'] = (i) => this.run(A.ghostWrap, i);
+  ghostShape: AgentSuite['ghostShape'] = (i) => this.run(A.ghostShape, i);
+  ghostDraft: AgentSuite['ghostDraft'] = (i) => this.run(A.ghostDraft, i);
+  ghostRevise: AgentSuite['ghostRevise'] = (i) => this.run(A.ghostRevise, i);
+  interviewee: AgentSuite['interviewee'] = (i) => this.run(A.interviewee, i);
 }

@@ -7,6 +7,7 @@ import '@fontsource/jetbrains-mono/400.css';
 import './styles/tokens.css';
 import './styles/app.css';
 import './styles/workspace.css';
+import './styles/life.css';
 import { App } from './App';
 
 createRoot(document.getElementById('root')!).render(

@@ -9,6 +9,11 @@ import {
   IdeaBoard,
   IdeaItem,
   Intent,
+  KeyMoment,
+  DatePrecision,
+  Certainty,
+  Ladder,
+  Story,
   Obligation,
   PlotPoint,
   SceneCard,
@@ -513,6 +518,303 @@ export const TalkOutput = z.object({
 });
 export type TalkOutput = z.infer<typeof TalkOutput>;
 
+// ------------------------------------------------------------------ scribe (dictation clean-up)
+
+export const ScribeInput = z.object({
+  /** What the recogniser heard. */
+  raw: z.string().min(1),
+  /** The text just before the cursor, so the dictation joins it (capitals, spacing). */
+  before: z.string().default(''),
+  after: z.string().default(''),
+  /** How the names in this book are spelled. */
+  dictionary: z.array(z.string()).default([]),
+  level: z.enum(['light', 'polished']).default('light'),
+  /** House style: spelling variant and quote marks. */
+  style: z.object({ spelling: z.string().default('any'), quotes: z.string().default('any') }).default({ spelling: 'any', quotes: 'any' }),
+});
+export type ScribeInput = z.infer<typeof ScribeInput>;
+
+export const ScribeOutput = z.object({ text: z.string() });
+export type ScribeOutput = z.infer<typeof ScribeOutput>;
+
+// ------------------------------------------------------------------ ghostwriter (life stories)
+
+const PersonRef = z.object({ id: Id, name: z.string(), relationship: z.string().default('') });
+const StoryBrief = z.object({
+  id: Id,
+  title: z.string(),
+  when: z.string().default(''),
+  chapter: Id.nullable().default(null),
+  /** 0..1, how far it has been drawn out. */
+  depth: z.number(),
+  next: z.string().nullable().default(null),
+  status: Story.shape.status,
+  sensitive: z.boolean().default(false),
+});
+export type StoryBrief = z.infer<typeof StoryBrief>;
+
+export const GhostPlanInput = z.object({
+  minutes: z.number(),
+  /** Who is answering: empty for the narrator. */
+  speaker: z.string().default(''),
+  narrator: z.string(),
+  born: z.string().default(''),
+  about: z.string().default(''),
+  push: z.enum(['gentle', 'thorough']).default('thorough'),
+  chapters: z.array(z.object({ id: Id, title: z.string(), stage: z.string(), stories: z.array(Id) })).default([]),
+  stories: z.array(StoryBrief).default([]),
+  people: z.array(PersonRef).default([]),
+  /** Stretches of the life with nothing in them yet ("1984 to 1993"). */
+  gaps: z.array(z.string()).default([]),
+  questions: z.array(z.object({ id: Id, text: z.string(), why: z.string(), about: z.string(), priority: z.number() })).default([]),
+  promises: z.array(z.string()).default([]),
+  off_limits: z.array(z.string()).default([]),
+  recent: z.array(z.object({ title: z.string(), summary: z.string() })).default([]),
+});
+export type GhostPlanInput = z.infer<typeof GhostPlanInput>;
+
+export const GhostPlanOutput = z.object({
+  title: z.string(),
+  agenda: z.array(z.object({ topic: z.string(), why: z.string(), question: z.string(), story: Id.nullable().default(null), question_id: Id.nullable().default(null) })).min(1).max(5),
+  /** The first thing the ghostwriter says: a short warm opening and one question. */
+  opening: z.string().min(1),
+  technique: z.string().default(''),
+});
+export type GhostPlanOutput = z.infer<typeof GhostPlanOutput>;
+
+/** What the author pressed instead of (or as well as) answering. */
+export const AuthorSignal = z.enum(['dont-remember', 'move-on', 'off-record', 'hard']);
+export type AuthorSignal = z.infer<typeof AuthorSignal>;
+
+export const GhostTurnInput = z.object({
+  speaker: z.string().default(''),
+  narrator: z.string(),
+  born: z.string().default(''),
+  push: z.enum(['gentle', 'thorough']).default('thorough'),
+  agenda: z.array(z.object({ topic: z.string(), question: z.string(), done: z.boolean() })),
+  /** The story being drawn out, in full; null when the conversation is not on one yet. */
+  story: Story.nullable().default(null),
+  /** The ladder rung to climb next, worked out in code. */
+  next_rung: z.string().nullable().default(null),
+  stories: z.array(StoryBrief).default([]),
+  people: z.array(PersonRef).default([]),
+  history: z.array(z.object({ role: z.enum(['ghostwriter', 'author']), text: z.string() })).default([]),
+  answer: z.string(),
+  signal: AuthorSignal.nullable().default(null),
+  /** Follow-up triggers found in code ("vague answer: ask for one particular time"). */
+  probes: z.array(z.string()).default([]),
+  off_limits: z.array(z.string()).default([]),
+  /** Feedback when the last proposed question was refused (a leading question, an off-limits topic). */
+  retry: z.string().nullable().default(null),
+});
+export type GhostTurnInput = z.infer<typeof GhostTurnInput>;
+
+export const GhostTurnOutput = z.object({
+  /** The next thing to say: at most a short acknowledgement, then one open question (or a check-in). */
+  reply: z.string().min(1),
+  technique: z.string().default(''),
+  why: z.string().default(''),
+  /** Which story this exchange is about: an existing id, or a new one with a title. Null: none. */
+  story: z
+    .object({
+      id: Id,
+      title: z.string().default(''),
+      summary: z.string().nullable().default(null),
+      when: z.string().nullable().default(null),
+      precision: DatePrecision.nullable().default(null),
+      place: z.string().nullable().default(null),
+      key: KeyMoment.nullable().default(null),
+    })
+    .nullable()
+    .default(null),
+  /** Rungs the answer climbed. */
+  ladder: Ladder.partial().default({}),
+  details: z.array(z.object({ text: z.string().min(1), certainty: Certainty.default('sure') })).default([]),
+  quotes: z.array(z.object({ text: z.string().min(1), who: z.string().default('') })).default([]),
+  then: z.string().nullable().default(null),
+  now: z.string().nullable().default(null),
+  people: z.array(z.object({ id: Id, name: z.string().min(1), relationship: z.string().default('') })).default([]),
+  events: z.array(z.object({ when: z.string().min(1), description: z.string().min(1), precision: DatePrecision.nullable().default(null), key: KeyMoment.nullable().default(null) })).default([]),
+  /** For later: gaps, other stories mentioned in passing, people to ask. */
+  questions: z.array(z.object({ text: z.string().min(1), why: z.string().default(''), about: z.string().default('book'), ask: z.string().default(''), priority: z.number().int().min(1).max(3).default(2) })).default([]),
+  promises: z.array(z.string()).default([]),
+  /** How the author talks, if this answer showed something new. */
+  voice: z.array(z.string()).default([]),
+  /** Agenda items now covered (indexes). */
+  agenda_done: z.array(z.number().int().nonnegative()).default([]),
+});
+export type GhostTurnOutput = z.infer<typeof GhostTurnOutput>;
+
+export const GhostWrapInput = z.object({
+  narrator: z.string(),
+  agenda: z.array(z.object({ topic: z.string(), done: z.boolean() })),
+  history: z.array(z.object({ role: z.enum(['ghostwriter', 'author']), text: z.string() })),
+  stories: z.array(StoryBrief).default([]),
+});
+export type GhostWrapInput = z.infer<typeof GhostWrapInput>;
+
+export const GhostWrapOutput = z.object({
+  title: z.string(),
+  summary: z.string(),
+  questions: z.array(z.object({ text: z.string().min(1), why: z.string().default(''), about: z.string().default('book'), ask: z.string().default(''), priority: z.number().int().min(1).max(3).default(2) })).default([]),
+  promises: z.array(z.string()).default([]),
+  voice: z.array(z.string()).default([]),
+});
+export type GhostWrapOutput = z.infer<typeof GhostWrapOutput>;
+
+export const GhostShapeInput = z.object({
+  narrator: z.string(),
+  born: z.string().default(''),
+  about: z.string().default(''),
+  shape: z.string().nullable().default(null),
+  target_words: z.number(),
+  stories: z.array(z.object({ id: Id, title: z.string(), summary: z.string(), when: z.string(), key: z.string().nullable(), depth: z.number(), sensitive: z.boolean() })),
+  /** Chapters the author already has; keep their ids. */
+  chapters: z.array(z.object({ id: Id, title: z.string(), stories: z.array(Id) })).default([]),
+});
+export type GhostShapeInput = z.infer<typeof GhostShapeInput>;
+
+export const GhostShapeOutput = z.object({
+  rationale: z.string(),
+  chapters: z.array(z.object({ id: Id, title: z.string().min(1), summary: z.string().default(''), stories: z.array(Id).default([]) })).min(1).max(40),
+  /** Stories the shape leaves out: kept, not cut (a family edition may want them). */
+  left_out: z.array(z.object({ id: Id, why: z.string() })).default([]),
+});
+export type GhostShapeOutput = z.infer<typeof GhostShapeOutput>;
+
+export const NoteDraft = z.object({
+  kind: z.enum(['gap', 'versions', 'thin', 'voice']),
+  /** Exact text in the scene's prose the note is about ("[TK: the street]"). Empty: the whole scene. */
+  quote: z.string().default(''),
+  text: z.string().min(1),
+  options: z.array(z.string()).default([]),
+});
+export type NoteDraft = z.infer<typeof NoteDraft>;
+
+export const GhostDraftInput = z.object({
+  narrator: z.string(),
+  born: z.string().default(''),
+  pen: z.string(),
+  chapter: z.object({ id: Id, title: z.string(), summary: z.string(), number: z.number().int() }),
+  /** Everything the chapter may draw on: the stories, as filed from the interviews. */
+  stories: z.array(Story),
+  people: z.array(z.object({ id: Id, name: z.string(), relationship: z.string(), naming: z.string() })),
+  /** How the author talks: the notebook, and passages of their own spoken words. */
+  voice_notes: z.array(z.string()).default([]),
+  voice_samples: z.string().default(''),
+  /** The chapter that set the voice, when this is not it. */
+  voice_chapter: z.string().default(''),
+  previous_ending: z.string().default(''),
+  style_rules: z.array(z.string()).default([]),
+  words: z.number(),
+  hard_rules: z.array(z.string()).default([]),
+});
+export type GhostDraftInput = z.infer<typeof GhostDraftInput>;
+
+export const GhostDraftOutput = z.object({
+  scenes: z
+    .array(
+      z.object({
+        title: z.string().min(1),
+        stories: z.array(Id).default([]),
+        when: z.string().default(''),
+        place: z.string().default(''),
+        people: z.array(Id).default([]),
+        then: z.string().default(''),
+        now: z.string().default(''),
+        prose: z.string().min(1),
+        notes: z.array(NoteDraft).default([]),
+      }),
+    )
+    .min(1)
+    .max(8),
+  needs_decision: NeedsDecision,
+});
+export type GhostDraftOutput = z.infer<typeof GhostDraftOutput>;
+
+export const GhostReviseInput = z.object({
+  narrator: z.string(),
+  chapter: z.object({ id: Id, title: z.string(), round: z.number().int() }),
+  scenes: z.array(
+    z.object({
+      id: Id,
+      title: z.string(),
+      prose: z.string(),
+      /** Notes with the author's answers, and ones still open. */
+      notes: z.array(z.object({ id: z.string(), kind: z.string(), quote: z.string(), text: z.string(), answer: z.string(), status: z.string() })),
+    }),
+  ),
+  /** What the author said about the draft, in their words. Empty: revise with the answers to the notes. */
+  feedback: z.string().default(''),
+  stories: z.array(Story),
+  voice_notes: z.array(z.string()).default([]),
+  /** Words that were said, kept word for word: never change these. */
+  verbatim: z.array(z.string()).default([]),
+  /** Arguments the author has already settled ("keep the last line"): do not reopen them. */
+  decisions: z.array(z.string()).default([]),
+  style_rules: z.array(z.string()).default([]),
+  hard_rules: z.array(z.string()).default([]),
+});
+export type GhostReviseInput = z.infer<typeof GhostReviseInput>;
+
+export const GhostReviseOutput = z.object({
+  /** What the ghostwriter understood, as a numbered plan the author can check. */
+  plan: z
+    .array(
+      z.object({
+        text: z.string().min(1),
+        kind: z.enum(['edit', 'rule', 'question', 'pushback']).default('edit'),
+        /** kind rule: a standing preference for the whole book. */
+        never: z.array(z.string()).default([]),
+        prefer: z.array(z.object({ avoid: z.string(), use: z.string() })).default([]),
+        guidance: z.array(z.string()).default([]),
+        /** kind question: something to ask in the next session. */
+        question: z.string().default(''),
+      }),
+    )
+    .min(1),
+  /** Span edits: exact text from one scene's prose, and what replaces it. */
+  edits: z.array(z.object({ scene: Id, find: z.string().min(1), replace: z.string(), reason: z.string().default(''), plan: z.array(z.number().int().nonnegative()).default([]) })).max(80).default([]),
+  /** Notes the answers resolved. */
+  resolved: z.array(z.string()).default([]),
+  /** New notes where the revision still needs the author. */
+  notes: z.array(NoteDraft.extend({ scene: Id })).default([]),
+});
+export type GhostReviseOutput = z.infer<typeof GhostReviseOutput>;
+
+// ------------------------------------------------------------------ simulated interviewee (evals)
+
+export const LifeFact = z.object({
+  id: Id,
+  /** In the person's own words. */
+  text: z.string(),
+  /** What it is about, for the interviewer's first broad questions ("work", "childhood"). */
+  topic: z.string(),
+  /** How deep it sits: the gist comes out first; the rest only to a good follow-up. */
+  tier: z.enum(['gist', 'instance', 'people', 'senses', 'words', 'feeling', 'meaning']),
+  /** Words that show the fact was drawn out (any half of them in what was filed). */
+  keywords: z.array(z.string()).min(1),
+  when: z.string().default(''),
+  /** Said in passing: a good interviewer follows it up. */
+  surprising: z.boolean().default(false),
+});
+export type LifeFact = z.infer<typeof LifeFact>;
+
+export const IntervieweeInput = z.object({
+  narrator: z.string(),
+  born: z.string().default(''),
+  /** The hidden life. The person reveals facts only when asked about them. */
+  facts: z.array(LifeFact),
+  /** Facts already told. */
+  told: z.array(Id).default([]),
+  history: z.array(z.object({ role: z.enum(['ghostwriter', 'author']), text: z.string() })).default([]),
+  question: z.string(),
+});
+export type IntervieweeInput = z.infer<typeof IntervieweeInput>;
+
+export const IntervieweeOutput = z.object({ answer: z.string().min(1), told: z.array(Id).default([]) });
+export type IntervieweeOutput = z.infer<typeof IntervieweeOutput>;
+
 // ------------------------------------------------------------------ the suite the core calls
 
 export interface CallInfo {
@@ -546,6 +848,22 @@ export interface AgentSuite {
   expand(input: ExpandInput): Promise<ExpandOutput>;
   /** One turn of the thinking-partner conversation: a reply, and the edits it makes to the board. */
   talk(input: TalkInput): Promise<TalkOutput>;
+  /** Tidy dictated speech into text: fillers and false starts out, nothing added. */
+  scribe(input: ScribeInput): Promise<ScribeOutput>;
+  /** Life stories: plan an interview session from the gaps in the book. */
+  ghostPlan(input: GhostPlanInput): Promise<GhostPlanOutput>;
+  /** Life stories: one exchange of an interview: what to file, and the next question. */
+  ghostTurn(input: GhostTurnInput): Promise<GhostTurnOutput>;
+  /** Life stories: close a session: a summary, and what to ask next time. */
+  ghostWrap(input: GhostWrapInput): Promise<GhostWrapOutput>;
+  /** Life stories: propose chapters for a shape, from the stories gathered. */
+  ghostShape(input: GhostShapeInput): Promise<GhostShapeOutput>;
+  /** Life stories: draft a chapter from its stories only, with margin notes where it is thin. */
+  ghostDraft(input: GhostDraftInput): Promise<GhostDraftOutput>;
+  /** Life stories: a revision round: the author's feedback and answers, as a plan and span edits. */
+  ghostRevise(input: GhostReviseInput): Promise<GhostReviseOutput>;
+  /** Evals: a simulated person answering the ghostwriter from a hidden life. */
+  interviewee(input: IntervieweeInput): Promise<IntervieweeOutput>;
 }
 
 export const Contracts = {
@@ -570,4 +888,14 @@ export const Contracts = {
   extractor: { input: ExtractInput, output: ExtractOutput },
   reader: { input: ReaderInput, output: ReaderOutput },
   continuity: { input: ContinuityInput, output: ContinuityOutput },
+  scribe: { input: ScribeInput, output: ScribeOutput },
+  interviewee: { input: IntervieweeInput, output: IntervieweeOutput },
+  ghostwriter: {
+    plan: { input: GhostPlanInput, output: GhostPlanOutput },
+    turn: { input: GhostTurnInput, output: GhostTurnOutput },
+    wrap: { input: GhostWrapInput, output: GhostWrapOutput },
+    shape: { input: GhostShapeInput, output: GhostShapeOutput },
+    draft: { input: GhostDraftInput, output: GhostDraftOutput },
+    revise: { input: GhostReviseInput, output: GhostReviseOutput },
+  },
 };

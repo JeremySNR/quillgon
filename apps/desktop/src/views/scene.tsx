@@ -23,6 +23,7 @@ import {
   Link2,
   SpellCheck,
   PanelRight,
+  MessageSquareText,
 } from 'lucide-react';
 import { del, post, put, runJob } from '../lib/api';
 import { errorMessage, useApp } from '../lib/app';
@@ -34,7 +35,9 @@ import { useStyleCheck } from '../hooks/use-style-check';
 import type { ExtractionResult, Fact, ImpactResult, SceneCard, SceneDetail, StyleReport, StyleViolation } from '../lib/types';
 import { factLabel, firstName, keys, loadPref, plural, savePref } from '../lib/util';
 import { Avatar, Badge, Button, Chip, Dialog, Empty, Field, ListEditor, StatusBadge, SyncBadge, TagSelect, Working } from '../components/ui';
-import { ProseEditor, bannedRegexes, type StyleMark } from '../components/prose-editor';
+import { ProseEditor, bannedRegexes, type EditorApi, type StyleMark } from '../components/prose-editor';
+import { MicButton, useDictation, useHoldToTalk, type DictationTarget } from '../components/dictate';
+import { NotesPanel, NOTE_KIND, ReviseBox } from '../components/notes-panel';
 import { PredictabilityCheck } from './critique';
 import { OBLIGATION_KIND } from './ledger';
 import { CardDiff, ProseDiff, ProseSideBySide } from '../components/diff';
@@ -52,6 +55,7 @@ export function SceneEditor({ id }: { id: string }) {
   const [inspector, setInspector] = useState(() => loadPref('sceneInspector', false));
   useEffect(() => { if (p) savePref(`lastScene:${p.dir}`, id); }, [p?.dir, id]);
   const [jump, setJump] = useState<{ from: number; to: number } | null>(null);
+  const editorApi = useRef<EditorApi | null>(null);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -95,7 +99,26 @@ export function SceneEditor({ id }: { id: string }) {
   useUnsavedChanges(prose.hasUnsaved, 'scene prose', { inApp: false, flush: prose.flush });
 
   const styleReport = useStyleCheck(prose.text, p?.style.sheet);
-  const marks = useMemo<StyleMark[]>(() => (styleReport?.violations ?? []).filter((v) => v.end > v.start).map((v) => ({ from: v.start, to: v.end, kind: v.kind, message: v.message })), [styleReport]);
+  const styleMarks = useMemo<StyleMark[]>(() => (styleReport?.violations ?? []).filter((v) => v.end > v.start).map((v) => ({ from: v.start, to: v.end, kind: v.kind, message: v.message })), [styleReport]);
+  // Life stories: the ghostwriter's margin notes and gap markers, underlined in the text.
+  const notes = useMemo(() => detail?.notes ?? [], [detail?.notes]);
+  const marks = useMemo<StyleMark[]>(() => {
+    if (!p?.life) return styleMarks;
+    const text = prose.text;
+    const out: StyleMark[] = [...styleMarks];
+    for (const n of notes) {
+      if (n.status !== 'open' || !n.quote) continue;
+      const at = text.indexOf(n.quote);
+      if (at >= 0) out.push({ from: at, to: at + n.quote.length, kind: n.kind === 'source' ? 'source' : n.kind === 'gap' ? 'gap' : 'note', message: `${NOTE_KIND[n.kind].label}: ${n.text}` });
+    }
+    for (const m of text.matchAll(/\[TK:[^\]]*\]/g)) if (!out.some((x) => x.from === m.index)) out.push({ from: m.index!, to: m.index! + m[0].length, kind: 'gap', message: 'A gap the ghostwriter left for you' });
+    return out;
+  }, [styleMarks, notes, prose.text, p?.life]);
+  const [notesOpen, setNotesOpen] = useState(true);
+  const jumpTo = (quote: string) => {
+    const at = prose.text.indexOf(quote);
+    if (at >= 0) setJump({ from: at, to: at + quote.length });
+  };
   const banned = useMemo(() => bannedRegexes(p?.style.banned ?? ''), [p?.style.banned]);
   const words = useMemo(() => (prose.text.trim() ? prose.text.trim().split(/\s+/).length : 0), [prose.text]);
 
@@ -126,6 +149,18 @@ export function SceneEditor({ id }: { id: string }) {
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, [saveCard, flushProse]);
+
+  const dictationOff = !card || card.lock === 'prose' || card.lock === 'both';
+  // Dictation goes in at the cursor, as an ordinary edit (autosaved, undoable).
+  const dictationTarget = useMemo<DictationTarget>(
+    () => ({
+      context: () => editorApi.current?.context() ?? { before: '', after: '' },
+      insert: (text) => editorApi.current?.insert(text) ?? (() => undefined),
+    }),
+    [],
+  );
+  const dictation = useDictation({ target: dictationOff ? null : dictationTarget, scene: id });
+  useHoldToTalk(dictation, !dictationOff);
 
   if (!p) return null;
   if (!detail || !card)
@@ -268,7 +303,7 @@ export function SceneEditor({ id }: { id: string }) {
   const pov = chars.find((c) => c.id === card.pov);
 
   return (
-    <div className={`editor ${focus ? 'focus' : ''} ${inspector ? 'inspector-open' : ''}`}>
+    <div className={`editor ${focus ? 'focus' : ''} ${inspector ? 'inspector-open' : ''} ${p.life && detail.prose && notesOpen && !focus ? 'notes-open' : ''}`}>
       {/* ---------------- card */}
       <aside className="card-pane" id="scene-inspector" aria-label="Scene card" hidden={!inspector || focus}>
         <div className="inspector-title"><span>Scene details</span><Button size="sm" variant="ghost" iconOnly icon={<X />} tip="Close scene details" onClick={() => { setInspector(false); savePref('sceneInspector', false); }} /></div>
@@ -280,6 +315,25 @@ export function SceneEditor({ id }: { id: string }) {
             <Button size="sm" variant="ghost" iconOnly icon={<Trash2 />} tip="Delete scene" onClick={remove} />
           </div>
           <input className="input title" value={card.title} onChange={(e) => set('title', e.target.value)} aria-label="Scene title" placeholder="Untitled scene" />
+          {p.life && (
+            <>
+              <Field label="Then" hint="What you knew and felt at the time.">
+                <textarea className="textarea" rows={2} value={card.then ?? ''} onChange={(e) => set('then', e.target.value)} />
+              </Field>
+              <Field label="Now" hint="What you understand looking back.">
+                <textarea className="textarea" rows={2} value={card.now ?? ''} onChange={(e) => set('now', e.target.value)} />
+              </Field>
+              {(card.stories ?? []).length > 0 && (
+                <Field label="From the stories">
+                  <div className="row wrap">
+                    {(card.stories ?? []).map((sid) => (
+                      <Badge key={sid} kind="outline">{p.life!.stories.find((x) => x.id === sid)?.title ?? sid}</Badge>
+                    ))}
+                  </div>
+                </Field>
+              )}
+            </>
+          )}
           <div className="grid-2">
             <Field label="Point of view">
               <select className="select" value={card.pov} onChange={(e) => set('pov', e.target.value)}>
@@ -318,7 +372,7 @@ export function SceneEditor({ id }: { id: string }) {
             <textarea className="textarea" rows={2} value={card.outcome} onChange={(e) => set('outcome', e.target.value)} style={{ minHeight: 0, fieldSizing: 'content' } as React.CSSProperties} />
           </Field>
 
-          <LedgerFields card={card} onChange={(k, v) => set(k, v)} />
+          {!p.life && <LedgerFields card={card} onChange={(k, v) => set(k, v)} />}
 
           <details className="more">
             <summary>
@@ -367,8 +421,8 @@ export function SceneEditor({ id }: { id: string }) {
             </div>
           </details>
 
-          <KnowledgePanel detail={detail} name={name} facts={p.facts} onOpen={(c) => go('characters', c)} />
-          {card.beats.length > 1 && <PredictabilityCheck scene={id} />}
+          {!p.life && <KnowledgePanel detail={detail} name={name} facts={p.facts} onOpen={(c) => go('characters', c)} />}
+          {!p.life && card.beats.length > 1 && <PredictabilityCheck scene={id} />}
 
           {cardDirty && (
             <div className="decision-bar">
@@ -400,7 +454,8 @@ export function SceneEditor({ id }: { id: string }) {
             </button>
           )}
           <span className="grow" />
-          {detail.prose ? (
+          {!proseLocked && <MicButton dictation={dictation} hint="hold Alt+D" />}
+          {detail.prose && !p.life ? (
             <>
               <Button size="sm" variant="ghost" icon={<ScanText />} onClick={readBack} disabled={!!busy} tip="Extract facts from my edit">
                 <span className="btn-text">Read back</span>
@@ -417,6 +472,11 @@ export function SceneEditor({ id }: { id: string }) {
             {card.status === 'approved' ? 'Approved' : 'Approve'}
           </Button>
           <Button size="sm" variant="ghost" iconOnly icon={card.lock === 'none' ? <LockOpen /> : <Lock />} tip={card.lock === 'none' ? 'Lock card and prose' : 'Unlock'} onClick={() => setLock(card.lock === 'none' ? 'both' : 'none')} disabled={!!busy} />
+          {p.life && detail.prose && (
+            <Button size="sm" variant="ghost" icon={<MessageSquareText />} aria-expanded={notesOpen && !focus} onClick={() => setNotesOpen(!notesOpen)}>
+              Notes{notes.some((n) => n.status === 'open') ? ` (${notes.filter((n) => n.status === 'open').length})` : ''}
+            </Button>
+          )}
           <Button size="sm" variant="ghost" icon={<PanelRight />} aria-expanded={inspector && !focus} aria-controls="scene-inspector" onClick={() => { const next = focus || !inspector; if (focus) setFocus(false); setInspector(next); savePref('sceneInspector', next); }}>Scene details{cardDirty ? ' •' : ''}</Button>
           <Button size="sm" variant="ghost" iconOnly icon={focus ? <Minimize2 /> : <Maximize2 />} tip="Focus mode" kbd={keys('.')} onClick={() => setFocus(!focus)} />
         </div>
@@ -440,7 +500,7 @@ export function SceneEditor({ id }: { id: string }) {
             </div>
 
             {busy && <div style={{ marginBottom: 20 }}><Working job={job} fallback={busy} /></div>}
-            <SyncBanner state={sync} busy={!!busy} onReadBack={readBack} onRevise={() => regenerate('minimal')} onFresh={() => regenerate('fresh')} onKeep={() => withBusy('Marking', async () => void (await post(`/scenes/${id}/mark-in-sync`)))} cardDirty={cardDirty} />
+            {!p.life && <SyncBanner state={sync} busy={!!busy} onReadBack={readBack} onRevise={() => regenerate('minimal')} onFresh={() => regenerate('fresh')} onKeep={() => withBusy('Marking', async () => void (await post(`/scenes/${id}/mark-in-sync`)))} cardDirty={cardDirty} />}
             {detail.facts?.contradictions.length ? (
               <div className="banner warning">
                 <AlertTriangle />
@@ -493,10 +553,11 @@ export function SceneEditor({ id }: { id: string }) {
               </div>
             )}
             {styleOpen && styleReport && <StylePanel report={styleReport} onJump={(v) => setJump({ from: v.start, to: v.end })} onClose={() => setStyleOpen(false)} onSettings={() => go('settings', 'style')} />}
-            <ProseEditor value={prose.text} onChange={prose.edit} banned={banned} readOnly={proseLocked} marks={marks} jump={jump} placeholder={detail.prose ? undefined : 'Or start writing here…'} />
+            <ProseEditor value={prose.text} onChange={prose.edit} banned={banned} readOnly={proseLocked} marks={marks} jump={jump} onReady={(api) => (editorApi.current = api)} placeholder={detail.prose ? undefined : 'Or start writing, or hold Alt+D and talk…'} />
           </div>
         </div>
       </section>
+      {p.life && detail.prose && notesOpen && !focus && <NotesPanel scene={id} notes={notes} onJump={jumpTo} onChanged={() => (load(), refresh())} footer={!proseLocked && <ReviseBox scene={id} />} />}
 
       {impact && (
         <Dialog

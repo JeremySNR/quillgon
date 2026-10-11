@@ -32,3 +32,8 @@ export * from './style-report.js';
 export * from './engine/judge.js';
 export * from './engine/critics.js';
 export * from './engine/ideation.js';
+export * from './dictation.js';
+export * from './life.js';
+export * from './engine/interview.js';
+export * from './engine/lifebook.js';
+export * from './eval-life.js';

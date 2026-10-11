@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { ArrowRight, Check, Eraser, Lightbulb, MessageCircle, MessagesSquare, Plus, RefreshCw, SendHorizontal, Sparkles, ThumbsDown, ThumbsUp, TriangleAlert, Undo2, Users, X } from 'lucide-react';
 import { post } from '../lib/api';
 import { useApp } from '../lib/app';
 import type { IdeaBoard, IdeaItem } from '../lib/types';
 import { cx, plural } from '../lib/util';
 import { Avatar, Badge, Button, Empty, Field, ListEditor, Segmented, Working } from '../components/ui';
+import { fieldTarget, MicButton, useDictation } from '../components/dictate';
 
 const KIND: Record<IdeaItem['kind'], string> = {
   'what-if': 'What if',
@@ -377,23 +378,43 @@ const STARTERS = [
 function TalkPanel({ board, onBoard, beforeSend, focus, setFocus, inputRef }: { board: IdeaBoard; onBoard: (b: IdeaBoard) => void; beforeSend: () => Promise<void>; focus: string | null; setFocus: (f: string | null) => void; inputRef: RefObject<HTMLTextAreaElement | null> }) {
   const { job: run } = useApp();
   const [text, setText] = useState('');
+  const textRef = useRef(text);
+  textRef.current = text;
+  const putText = useCallback((v: string) => {
+    textRef.current = v;
+    setText(v);
+  }, []);
+  // Talk instead of typing: long takes are cut at pauses and land in the box as you go.
+  const dictation = useDictation({ target: useMemo(() => fieldTarget(() => inputRef.current, () => textRef.current, putText), [inputRef, putText]), long: true });
   const [pending, setPending] = useState<string | null>(null);
   const log = useRef<HTMLDivElement>(null);
   useEffect(() => {
     log.current?.scrollTo({ top: log.current.scrollHeight, behavior: 'smooth' });
   }, [board.talk.length, pending]);
 
+  const sending = useRef(false);
   const send = async () => {
-    const message = text.trim();
-    if (!message || pending) return;
+    // A ref, not `pending`: a second Enter while the last words are still landing must not send twice.
+    if (sending.current) return;
+    sending.current = true;
+    try {
+      // Everything said before pressing send is part of the message: wait for the last piece to land.
+      await dictation.stop();
+      const message = textRef.current.trim();
+      if (message) await talk(message);
+    } finally {
+      sending.current = false;
+    }
+  };
+  const talk = async (message: string) => {
     setPending(message);
-    setText('');
+    putText('');
     try {
       await beforeSend();
       onBoard(await run<IdeaBoard>('/idea/talk', { message, focus }, 'Thinking partner'));
       setFocus(null);
     } catch {
-      setText(message); // Nothing typed is lost to a failed call.
+      putText(message); // Nothing typed is lost to a failed call.
     } finally {
       setPending(null);
       inputRef.current?.focus();
@@ -502,6 +523,7 @@ function TalkPanel({ board, onBoard, beforeSend, focus, setFocus, inputRef }: { 
           <span className="faint grow" style={{ fontSize: 'var(--fs-caption)' }}>
             Enter to send · Shift+Enter for a new line
           </span>
+          <MicButton dictation={dictation} label="Talk" compact />
           <Button variant="primary" size="sm" icon={<SendHorizontal />} onClick={send} disabled={!text.trim() || !!pending}>
             Send
           </Button>

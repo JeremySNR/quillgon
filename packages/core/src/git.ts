@@ -72,12 +72,15 @@ export class Repo {
     await this.ensureIdentity();
   }
 
-  /** The index, proposals and exports never belong in history, even in a pre-existing repo. */
-  ensureIgnored() {
+  /**
+   * The index, proposals and exports never belong in history, even in a pre-existing repo.
+   * `extra` adds more (a life story's recordings, audio/).
+   */
+  ensureIgnored(extra: string[] = []) {
     const ignore = path.join(this.dir, '.gitignore');
     const text = fs.existsSync(ignore) ? fs.readFileSync(ignore, 'utf8') : '';
     const lines = new Set(text.split(/\r?\n/).map((l) => l.trim()));
-    const missing = ['.engine/', 'export/'].filter((e) => !lines.has(e) && !lines.has(e.slice(0, -1)) && !lines.has('/' + e));
+    const missing = ['.engine/', 'export/', ...extra].filter((e) => !lines.has(e) && !lines.has(e.slice(0, -1)) && !lines.has('/' + e));
     if (missing.length) fs.writeFileSync(ignore, text + (text && !text.endsWith('\n') ? '\n' : '') + missing.join('\n') + '\n');
   }
 

@@ -10,6 +10,11 @@ import {
   Intent,
   IdeaBoard,
   Locations,
+  Notebook,
+  Questions,
+  SceneNotes,
+  Session,
+  Story,
   Obligation,
   PlotPoint,
   StyleSheet,
@@ -33,6 +38,8 @@ export interface SceneEntry {
   card: SceneCard;
   prose: ProseFile | null;
   facts: SceneFacts | null;
+  /** Life stories: the ghostwriter's margin notes on the draft. */
+  notes?: SceneNotes | null;
 }
 
 export interface CharacterEntry {
@@ -64,6 +71,11 @@ export interface Project {
   locations: Locations;
   factGlossary: FactGlossary;
   idea: IdeaBoard;
+  // Life stories (empty for a novel).
+  stories: Map<string, Story>;
+  sessions: Map<string, Session>;
+  questions: Questions;
+  notebook: Notebook;
 }
 
 export interface Issue {
@@ -94,6 +106,13 @@ export const paths = {
   card: (id: string) => `scenes/${id}/card.yaml`,
   prose: (id: string) => `scenes/${id}/prose.md`,
   facts: (id: string) => `scenes/${id}/facts.yaml`,
+  notes: (id: string) => `scenes/${id}/notes.yaml`,
+  story: (id: string) => `stories/${id}.yaml`,
+  session: (id: string) => `sessions/${id}.yaml`,
+  /** Recordings stay out of git (see Repo.ensureIgnored): large, and the most private thing in the book. */
+  audio: (session: string, file: string) => `audio/${session}/${file}`,
+  questions: 'ghostwriter/questions.yaml',
+  notebook: 'ghostwriter/notebook.yaml',
   samples: 'style/samples.md',
   banned: 'style/banned-patterns.md',
   reports: 'reports',
@@ -309,8 +328,28 @@ export function loadProject(dir: string): LoadResult {
       if (r.value) prose = { meta: r.value, body: parsed.body };
     }
     const facts = readIf(root, paths.facts(id)) !== null ? yamlFile(SceneFacts, paths.facts(id), {}) : null;
-    scenes.set(id, { id, card, prose, facts });
+    const notes = readIf(root, paths.notes(id)) !== null ? yamlFile(SceneNotes, paths.notes(id), {}) : null;
+    scenes.set(id, { id, card, prose, facts, ...(notes ? { notes } : {}) });
   }
+
+  const stories = new Map<string, Story>();
+  for (const f of listFiles(path.join(root, 'stories'), '.yaml')) {
+    const rel = `stories/${f}`;
+    const st = yamlFile(Story, rel, null);
+    if (!st) continue;
+    if (st.id !== f.replace(/\.yaml$/, '')) issues.push({ severity: 'error', file: rel, path: 'id', message: `id "${st.id}" does not match file name` });
+    stories.set(st.id, st);
+  }
+  const sessions = new Map<string, Session>();
+  for (const f of listFiles(path.join(root, 'sessions'), '.yaml')) {
+    const rel = `sessions/${f}`;
+    const se = yamlFile(Session, rel, null);
+    if (!se) continue;
+    if (se.id !== f.replace(/\.yaml$/, '')) issues.push({ severity: 'error', file: rel, path: 'id', message: `id "${se.id}" does not match file name` });
+    sessions.set(se.id, se);
+  }
+  const questions = yamlFile(Questions, paths.questions, {}) ?? Questions.parse({});
+  const notebook = yamlFile(Notebook, paths.notebook, {}) ?? Notebook.parse({});
 
   const sheet = yamlFile(StyleSheet, paths.styleSheet, {}) ?? StyleSheet.parse({});
   const samples = readIf(root, paths.samples) ?? '';
@@ -337,6 +376,10 @@ export function loadProject(dir: string): LoadResult {
     locations,
     factGlossary,
     idea,
+    stories,
+    sessions,
+    questions,
+    notebook,
   };
   issues.push(...validateReferences(project));
   return { project, issues };
@@ -420,9 +463,28 @@ export function validateReferences(p: Project): Issue[] {
     }
   }
 
-  p.timeline.events.forEach((e, i) =>
-    e.scenes.forEach((s, j) => !p.scenes.has(s) && err(paths.timeline, `events.${i}.scenes.${j}`, `scene "${s}" does not exist`)),
+  p.timeline.events.forEach((e, i) => {
+    e.scenes.forEach((s, j) => !p.scenes.has(s) && err(paths.timeline, `events.${i}.scenes.${j}`, `scene "${s}" does not exist`));
+    (e.stories ?? []).forEach((s, j) => !p.stories.has(s) && warn(paths.timeline, `events.${i}.stories.${j}`, `story "${s}" does not exist`));
+    (e.people ?? []).forEach((c, j) => !hasChar(c) && warn(paths.timeline, `events.${i}.people.${j}`, `person "${c}" does not exist`));
+  });
+
+  // Life stories: stories, chapters and cards point at each other and at people.
+  const chapters = new Set(p.structure.acts.flatMap((a) => a.chapters.map((c) => c.id)));
+  for (const st of p.stories.values()) {
+    const f = paths.story(st.id);
+    st.people.forEach((c, i) => !hasChar(c) && warn(f, `people.${i}`, `person "${c}" does not exist`));
+    if (st.chapter && !chapters.has(st.chapter)) warn(f, 'chapter', `chapter "${st.chapter}" does not exist`);
+    [...st.quotes, ...st.details, ...st.versions].forEach((x) => {
+      if (x.from && !p.sessions.has(x.from.session)) warn(f, '', `session "${x.from.session}" does not exist`);
+    });
+  }
+  p.structure.acts.forEach((a, ai) =>
+    a.chapters.forEach((c, ci) => (c.stories ?? []).forEach((s, si) => !p.stories.has(s) && warn(paths.structure, `acts.${ai}.chapters.${ci}.stories.${si}`, `story "${s}" does not exist`))),
   );
+  for (const s of p.scenes.values()) (s.card.stories ?? []).forEach((st, i) => !p.stories.has(st) && warn(paths.card(s.id), `stories.${i}`, `story "${st}" does not exist`));
+  const narrator = p.book.life.narrator;
+  if (p.book.kind !== 'novel' && narrator && !hasChar(narrator)) err(paths.book, 'life.narrator', `character "${narrator}" does not exist`);
 
   return issues;
 }

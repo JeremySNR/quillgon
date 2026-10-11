@@ -35,34 +35,35 @@ export function Threads({ id }: { id?: string }) {
   }, [id, p?.threads]);
   if (!p) return null;
   const order = p.scenes.map((s) => s.id);
-  const kindLabel: Record<string, string> = { mystery: 'Mystery', arc: 'Arc', 'setup-payoff': 'Setup → payoff', relationship: 'Relationship' };
+  const life = !!p.life;
+  const kindLabel: Record<string, string> = life ? { mystery: 'Question', arc: 'Theme', 'setup-payoff': 'Motif', relationship: 'Relationship' } : { mystery: 'Mystery', arc: 'Arc', 'setup-payoff': 'Setup → payoff', relationship: 'Relationship' };
   return (
     <div className="page">
       <div className="page-inner wide">
         <div className="page-head">
           <div>
-            <h1>Threads</h1>
-            <p className="sub">Mysteries, arcs, promises and relationships, and where each one is set up and paid off.</p>
+            <h1>{life ? 'Themes' : 'Threads'}</h1>
+            <p className="sub">{life ? 'What the book keeps coming back to: a person, an object, a question, a way of seeing things, and where each returns.' : 'Mysteries, arcs, promises and relationships, and where each one is set up and paid off.'}</p>
           </div>
           <div className="actions">
-            <Segmented
+            {!life && <Segmented
               value={tab}
               onChange={(v) => go('threads', v === 'ledger' ? 'ledger' : undefined)}
               options={[
                 { value: 'threads', label: `Threads · ${p.threads.length}` },
                 { value: 'ledger', label: <span className="row" style={{ gap: 6 }}>Setups and payoffs · {p.obligations.length}{p.obligationIssues.length > 0 && <span className="dot-warn" />}</span> },
               ]}
-            />
-            {tab === 'threads' && <Button icon={<Plus />} onClick={() => setEditing({ id: '', title: '', kind: 'setup-payoff', description: '', setup_scene: null, payoff_scene: null, setup_chapter: null, payoff_chapter: null, status: 'open', beats: [] })}>
-              New thread
+            />}
+            {tab === 'threads' && <Button icon={<Plus />} onClick={() => setEditing({ id: '', title: '', kind: life ? 'arc' : 'setup-payoff', description: '', setup_scene: null, payoff_scene: null, setup_chapter: null, payoff_chapter: null, status: 'open', beats: [] })}>
+              {life ? 'New theme' : 'New thread'}
             </Button>}
           </div>
         </div>
-        {tab === 'ledger' ? (
+        {tab === 'ledger' && !life ? (
           <Ledger onOffer={offer} />
         ) : !p.threads.length ? (
-          <Empty icon={<Spline />} title="No threads yet">
-            Threads come from the structure you pick in Build, or you can add your own.
+          <Empty icon={<Spline />} title={life ? 'No themes yet' : 'No threads yet'}>
+            {life ? 'Add the things your book keeps returning to, and mark the scenes where each comes back.' : 'Threads come from the structure you pick in Build, or you can add your own.'}
           </Empty>
         ) : (
           <table className="table">
@@ -218,8 +219,8 @@ export function Characters({ id }: { id?: string }) {
   if (!p.characters.length)
     return (
       <div className="page">
-        <Empty icon={<Users />} title="No characters yet">
-          The cast comes with the structure you pick in Build.
+        <Empty icon={<Users />} title={p.life ? 'No people yet' : 'No characters yet'}>
+          {p.life ? 'People are filed from your sessions as you mention them.' : 'The cast comes with the structure you pick in Build.'}
         </Empty>
       </div>
     );
@@ -228,8 +229,12 @@ export function Characters({ id }: { id?: string }) {
       <div className="page-inner wide">
         <div className="page-head">
           <div>
-            <h1>Characters</h1>
-            <p className="sub">Who they are, how they sound, and what they know when. Click any square in the grid to change what someone knows at that point; the book will be checked for knock-on effects.</p>
+            <h1>{p.life ? 'People' : 'Characters'}</h1>
+            <p className="sub">
+              {p.life
+                ? 'The real people in the book: how they relate to you, whether they are living, how they are named, and whether they know they are in it.'
+                : 'Who they are, how they sound, and what they know when. Click any square in the grid to change what someone knows at that point; the book will be checked for knock-on effects.'}
+            </p>
           </div>
         </div>
         <div className="char-grid">
@@ -238,7 +243,7 @@ export function Characters({ id }: { id?: string }) {
               <Avatar id={c.id} name={c.bio.name} size="lg" />
               <span>
                 <div className="n">{c.bio.name}</div>
-                <div className="r">{c.bio.role}</div>
+                <div className="r">{p.life ? c.bio.relationship || c.bio.role : c.bio.role}</div>
                 <div className="r">{plural(p.scenes.filter((s) => s.card.characters.includes(c.id)).length, 'scene')}</div>
               </span>
             </button>
@@ -292,7 +297,14 @@ function CharacterDetail({ c, onEdit }: { c: CharacterEntry; onEdit: () => void 
             <Avatar id={c.id} name={c.bio.name} size="xl" />
             <div className="grow">
               <h2 className="serif" style={{ fontSize: 'var(--fs-title-m)' }}>{c.bio.name}</h2>
-              <div className="muted">{c.bio.role}</div>
+              <div className="muted">{p!.life ? [c.bio.relationship || c.bio.role, c.bio.living === false ? `died ${c.bio.died || ''}`.trim() : c.bio.living ? 'living' : '', c.bio.born ? `born ${c.bio.born}` : ''].filter(Boolean).join(' · ') : c.bio.role}</div>
+              {p!.life && (
+                <div className="row wrap" style={{ marginTop: 6 }}>
+                  <Badge kind={c.bio.naming && c.bio.naming !== 'real' ? 'info' : 'outline'}>{c.bio.naming === 'pseudonym' ? 'Pseudonym' : c.bio.naming === 'composite' ? 'Composite' : 'Real name'}</Badge>
+                  <Badge kind={c.bio.consent === 'approved' || c.bio.consent === 'not-needed' ? 'success' : c.bio.consent === 'objected' ? 'danger' : 'warning'}>{CONSENT_LABEL[c.bio.consent ?? 'not-asked']}</Badge>
+                  {c.bio.sensitive && <Badge kind="warning">Sensitive</Badge>}
+                </div>
+              )}
             </div>
             <Button onClick={onEdit}>Edit</Button>
           </div>
@@ -321,7 +333,9 @@ function CharacterDetail({ c, onEdit }: { c: CharacterEntry; onEdit: () => void 
         </div>
       </div>
 
-      <div className="card" style={{ overflowX: 'auto' }}>
+      {p!.life && <PersonStories id={c.id} />}
+
+      {!p!.life && <div className="card" style={{ overflowX: 'auto' }}>
         <div className="card-head">
           <h3>What {c.bio.name.split(' ')[0]} knows, scene by scene</h3>
           <span className="faint" style={{ fontSize: 'var(--fs-label)' }}>Filled = knows by the end of that scene. Outlined = not in the scene.</span>
@@ -361,9 +375,9 @@ function CharacterDetail({ c, onEdit }: { c: CharacterEntry; onEdit: () => void 
         ) : (
           <p className="muted">No knowledge recorded yet. It fills in as scenes are written and read back.</p>
         )}
-      </div>
+      </div>}
 
-      {timeline.length > 0 && (
+      {timeline.length > 0 && !p!.life && (
         <div className="card">
           <div className="card-head">
             <h3>Where they are, what they want</h3>
@@ -408,8 +422,40 @@ function CharacterDetail({ c, onEdit }: { c: CharacterEntry; onEdit: () => void 
   );
 }
 
+const CONSENT_LABEL: Record<string, string> = { 'not-asked': 'Not asked', asked: 'Asked', approved: 'Agreed to be in it', objected: 'Objected', 'not-needed': 'No need to ask' };
+
+/** Life stories: the stories a person is in, from the interviews. */
+function PersonStories({ id }: { id: string }) {
+  const { project: p, go } = useApp();
+  const stories = p!.life!.stories.filter((s) => s.people.includes(id));
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h3>In your stories</h3>
+      </div>
+      {stories.length ? (
+        <div className="list">
+          {stories.map((s) => (
+            <button key={s.id} className="list-item" onClick={() => go('sessions')}>
+              <span className="mono faint" style={{ width: 52 }}>{s.when}</span>
+              <span className="grow">
+                <div className="primary-text">{s.title}</div>
+                <div className="secondary-text">{s.quotes.find((q) => q.who === id)?.text ?? s.summary}</div>
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="muted">Not in a story yet. Mention them in a session and the ghostwriter will ask about them.</p>
+      )}
+    </div>
+  );
+}
+
 function CharacterDrawer({ c, onClose }: { c: CharacterEntry; onClose: () => void }) {
   const offer = useRippleOffer();
+  const { project: p } = useApp();
+  const life = !!p?.life;
   const [bio, setBio] = useState(c.bio);
   const [voice, setVoice] = useState(c.voice);
   const save = async () => {
@@ -437,17 +483,61 @@ function CharacterDrawer({ c, onClose }: { c: CharacterEntry; onClose: () => voi
           <Field label="Name">
             <input className="input" value={bio.name} onChange={(e) => setBio({ ...bio, name: e.target.value })} />
           </Field>
-          <Field label="Role">
-            <input className="input" value={bio.role} onChange={(e) => setBio({ ...bio, role: e.target.value })} />
-          </Field>
+          {life ? (
+            <Field label="Who they are to you">
+              <input className="input" value={bio.relationship ?? ''} placeholder="Dad, workmate at Burton's…" onChange={(e) => setBio({ ...bio, relationship: e.target.value })} />
+            </Field>
+          ) : (
+            <Field label="Role">
+              <input className="input" value={bio.role} onChange={(e) => setBio({ ...bio, role: e.target.value })} />
+            </Field>
+          )}
         </div>
-        <Field label="Background">
+        {life && (
+          <div className="grid-2">
+            <Field label="Living?">
+              <select className="select" value={bio.living === true ? 'yes' : bio.living === false ? 'no' : ''} onChange={(e) => setBio({ ...bio, living: e.target.value === 'yes' ? true : e.target.value === 'no' ? false : null })}>
+                <option value="">Not sure</option>
+                <option value="yes">Living</option>
+                <option value="no">Died</option>
+              </select>
+            </Field>
+            <Field label="Born / died">
+              <div className="row">
+                <input className="input" value={bio.born ?? ''} placeholder="1921" aria-label="Born" onChange={(e) => setBio({ ...bio, born: e.target.value })} />
+                <input className="input" value={bio.died ?? ''} placeholder="1983" aria-label="Died" onChange={(e) => setBio({ ...bio, died: e.target.value })} />
+              </div>
+            </Field>
+            <Field label="In the book as" hint="A pseudonym or composite is mentioned in the author's note.">
+              <select className="select" value={bio.naming ?? 'real'} onChange={(e) => setBio({ ...bio, naming: e.target.value as typeof bio.naming })}>
+                <option value="real">Their real name</option>
+                <option value="pseudonym">A pseudonym</option>
+                <option value="composite">A composite of several people</option>
+              </select>
+            </Field>
+            <Field label="Do they know they are in it?">
+              <select className="select" value={bio.consent ?? 'not-asked'} onChange={(e) => setBio({ ...bio, consent: e.target.value as typeof bio.consent })}>
+                {Object.entries(CONSENT_LABEL).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <label className="row">
+              <input type="checkbox" checked={!!bio.sensitive} onChange={(e) => setBio({ ...bio, sensitive: e.target.checked })} /> Handle with care: keep them out of drafts until I say
+            </label>
+          </div>
+        )}
+        <Field label={life ? 'What to know about them' : 'Background'}>
           <textarea className="textarea prose" rows={5} value={bio.background} onChange={(e) => setBio({ ...bio, background: e.target.value })} />
         </Field>
-        <Field label="Goals">
-          <ListEditor items={bio.goals} onChange={(goals) => setBio({ ...bio, goals })} numbered={false} />
-        </Field>
-        <div className="section-title">Voice sheet</div>
+        {!life && (
+          <Field label="Goals">
+            <ListEditor items={bio.goals} onChange={(goals) => setBio({ ...bio, goals })} numbered={false} />
+          </Field>
+        )}
+        <div className="section-title">{life ? 'How they talked' : 'Voice sheet'}</div>
         <Field label="Speech patterns">
           <ListEditor items={voice.speech_patterns} onChange={(speech_patterns) => setVoice({ ...voice, speech_patterns })} numbered={false} />
         </Field>

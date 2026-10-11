@@ -16,7 +16,7 @@ import type {
   StructureAlternative,
   StructureOutput,
 } from '@quillgon/core';
-import { slugify } from '@quillgon/core';
+import { cleanDictation, joinToCursor, EMPTY_LADDER, enoughForScene, LADDER, nextRung, quotedSpeech, RUNG_QUESTION, slugify, touchesOffLimits, yearOf, type GhostDraftOutput, type GhostPlanOutput, type GhostReviseOutput, type GhostShapeOutput, type GhostTurnOutput, type GhostWrapOutput, type IntervieweeOutput, type Ladder } from '@quillgon/core';
 
 /**
  * A deterministic, model-free stand-in for every agent. It makes the whole app usable
@@ -26,6 +26,199 @@ import { slugify } from '@quillgon/core';
 const STOP = new Set('nobody somebody someone everyone anyone nothing everything never always about above after again against around because before being below between could every first other their there these thing those through under until where which while whose would should'.split(' '));
 
 export class OfflineSuite implements AgentSuite {
+  // ---------------------------------------------------------------- ghostwriter (life stories)
+  // Deterministic stand-ins: an interviewer that files what it can find by pattern and climbs
+  // the ladder with stock open questions. Enough to use and test every screen without a model.
+
+  async ghostPlan(i: Parameters<AgentSuite['ghostPlan']>[0]): Promise<GhostPlanOutput> {
+    const agenda: GhostPlanOutput['agenda'] = [];
+    const thin = i.stories.filter((s) => s.status === 'gathering' && !s.sensitive && s.next).sort((a, b) => a.depth - b.depth)[0];
+    if (thin) agenda.push({ topic: thin.title, why: 'This story is a gist so far, not yet a scene.', question: RUNG_QUESTION[thin.next as keyof typeof RUNG_QUESTION](thin.title), story: thin.id, question_id: null });
+    for (const q of [...i.questions].sort((a, b) => a.priority - b.priority)) {
+      if (agenda.length >= 3) break;
+      if (touchesOffLimits(q.text, i.off_limits)) continue;
+      agenda.push({ topic: shorten(q.text, 7), why: q.why || 'Next in the question queue.', question: q.text, story: null, question_id: q.id });
+    }
+    if (agenda.length < 3 && i.gaps[0]) agenda.push({ topic: `The years ${i.gaps[0]}`, why: 'Nothing is on the timeline for these years yet.', question: `What was happening in your life between ${i.gaps[0].replace(' to ', ' and ')}?`, story: null, question_id: null });
+    if (!agenda.length) agenda.push({ topic: 'Anything you would like to tell me', why: 'Your choice today.', question: 'What would you like to talk about today?', story: null, question_id: null });
+    return { title: agenda[0].topic, agenda, opening: agenda[0].question, technique: thin ? 'Picking up a story' : 'Opening question' };
+  }
+
+  async ghostTurn(i: Parameters<AgentSuite['ghostTurn']>[0]): Promise<GhostTurnOutput> {
+    const empty: GhostTurnOutput = { reply: '', technique: '', why: '', story: null, ladder: {}, details: [], quotes: [], then: null, now: null, people: [], events: [], questions: [], promises: [], voice: [], agenda_done: [] };
+    const current = i.agenda.findIndex((a) => !a.done);
+    const nextItem = (skip: number) => i.agenda.find((a, n) => !a.done && n !== skip);
+    const moveOn = (lead: string, done = current) => {
+      const next = nextItem(done);
+      return { ...empty, reply: `${lead} ${next ? next.question : 'Is there anything else you would like to tell me today?'}`.trim(), technique: 'Moving on', why: 'Following your lead.', agenda_done: done >= 0 ? [done] : [], story: null };
+    };
+    if (i.signal === 'off-record') return { ...moveOn('That stays off the record.', -1), agenda_done: [] };
+    if (i.signal === 'hard') return { ...empty, reply: 'Thank you for telling me that much. We can leave it there. Would you like to talk about something else, or stop for today?', technique: 'Check in', why: 'You said it is hard to talk about.' };
+    if (i.signal === 'dont-remember' || i.signal === 'move-on') return moveOn('That’s fine.');
+
+    const text = i.answer.trim();
+    const sentences = text.split(/(?<=[.!?])\s+/).filter((x) => x.split(/\s+/).length >= 3);
+    const known = new Set(i.people.flatMap((p) => [p.name.toLowerCase(), ...p.name.toLowerCase().split(/\s+/)]));
+    // People: a first and last name together ("Jean Pickles"), not a place ("Hudson Road").
+    const names = [...new Set([...text.matchAll(/\b([A-Z][a-z]{2,} [A-Z][a-z]{2,})\b/g)].map((m) => m[1]))].filter(
+      (n) => !n.split(' ').some((w) => STOP_NAMES.has(w) || PLACE_WORDS.has(w)) && !known.has(n.toLowerCase()) && !known.has(n.split(' ')[0].toLowerCase()),
+    );
+    const year = yearOf(text);
+    const story = i.story
+      ? { id: i.story.id, title: i.story.title, summary: null, when: !i.story.when && year ? String(year) : null, precision: null, place: null, key: null }
+      : { id: slugify(shorten(sentences[0] ?? text, 6)), title: shorten(sentences[0] ?? text, 6), summary: sentences[0] ?? text, when: year ? String(year) : null, precision: year ? ('year' as const) : null, place: null, key: null };
+    const quotes = quotedSpeech(text).map((q) => ({ text: q, who: '' }));
+    const ladder: Partial<Ladder> = { happened: 'yes' };
+    if (!/\b(always|used to|every)\b/i.test(text) && (i.story || text.split(/\s+/).length > 12)) ladder.instance = 'yes';
+    if (names.length || /\b(mum|mam|dad|mother|father|brother|sister|friend|teacher|we|they)\b/i.test(text)) ladder.people = 'some';
+    if (/\b(smell|smelled|sound|noise|heard|loud|quiet|saw|looked|cold|warm|bright|dark|taste)\b/i.test(text)) ladder.senses = 'some';
+    if (quotes.length) ladder.words = 'yes';
+    const felt = sentences.find((x) => /\b(felt|scared|happy|proud|ashamed|angry|frightened|excited|sad|lonely)\b/i.test(x)) ?? null;
+    const now = sentences.find((x) => /\b(looking back|now i|i think now|these days|i realise|i realize|i understand)\b/i.test(x)) ?? null;
+    if (felt) ladder.felt_then = 'some';
+    if (now) ladder.means_now = 'some';
+    const merged = { ...(i.story?.ladder ?? EMPTY_LADDER) } as Ladder;
+    for (const r of LADDER) if (ladder[r] && (merged[r] === 'no' || ladder[r] === 'yes')) merged[r] = ladder[r]!;
+    const generalised = i.probes.some((x) => x.includes('generalised'));
+    const enough = enoughForScene({ ladder: merged });
+    const rung = generalised ? 'instance' : nextRung(merged);
+    const base = {
+      ...empty,
+      story,
+      ladder,
+      details: sentences.filter((x) => x !== felt && x !== now).slice(0, 3).map((x) => ({ text: x, certainty: /\b(i think|maybe|probably|about|around)\b/i.test(x) ? ('think-so' as const) : ('sure' as const) })),
+      quotes,
+      then: felt,
+      now,
+      people: names.slice(0, 3).map((n) => ({ id: slugify(n), name: n, relationship: '' })),
+      events: year ? [{ when: String(year), description: shorten(sentences[0] ?? text, 10), precision: 'year' as const, key: null }] : [],
+    };
+    if (enough || !rung) return { ...base, ...moveOn('Thank you. That is enough to write it.'), story, ladder, details: base.details, quotes, then: felt, now, people: base.people, events: base.events };
+    return { ...base, reply: RUNG_QUESTION[rung](story.title), technique: RUNG_TECHNIQUE[rung], why: `Climbing the ladder: ${rung.replace('_', ' ')}.` };
+  }
+
+  async ghostShape(i: Parameters<AgentSuite['ghostShape']>[0]): Promise<GhostShapeOutput> {
+    // Chronological by decade; undated stories go with the chapter before them. Existing chapters keep their stories.
+    const placed = new Set(i.chapters.flatMap((c) => c.stories));
+    const chapters = i.chapters.map((c) => ({ id: c.id, title: c.title, summary: '', stories: [...c.stories] }));
+    const free = i.stories.filter((s) => !placed.has(s.id)).sort((a, b) => (yearOf(a.when) ?? 9999) - (yearOf(b.when) ?? 9999));
+    for (const st of free) {
+      const y = yearOf(st.when);
+      const title = y ? `The ${Math.floor(y / 10) * 10}s` : chapters.at(-1)?.title ?? 'Early days';
+      let ch = chapters.find((c) => c.title === title);
+      if (!ch) chapters.push((ch = { id: slugify(title), title, summary: '', stories: [] }));
+      ch.stories.push(st.id);
+    }
+    return { rationale: `Told in the order it was lived (${i.shape ?? 'chronological'}), a chapter for each decade with stories in it.`, chapters, left_out: [] };
+  }
+
+  async ghostDraft(i: Parameters<AgentSuite['ghostDraft']>[0]): Promise<GhostDraftOutput> {
+    // One scene per story, built only from what was filed: details as sentences, quotes as dialogue,
+    // the narrator-now at the end. Gaps become [TK] markers with notes.
+    const scenes = i.stories.slice(0, 4).map((st) => {
+      const notes: GhostDraftOutput['scenes'][number]['notes'] = [];
+      const paras: string[] = [];
+      const open = st.place ? `${st.when ? `In ${st.when}` : 'Then'}, at ${st.place}.` : `${st.when ? `In ${st.when}` : 'Then'}, [TK: where this happened].`;
+      if (!st.place) notes.push({ kind: 'gap', quote: '[TK: where this happened]', text: 'Where did this happen? I left it blank rather than guess.', options: [] });
+      paras.push([open, st.summary].filter(Boolean).join(' '));
+      const details = st.details.map((d) => d.text.replace(/[.!?]*$/, '.')).filter((d) => !st.summary.includes(d.replace(/\.$/, '')));
+      if (details.length) paras.push(details.join(' '));
+      for (const q of st.quotes) paras.push(`“${q.text}”`);
+      if (st.then) paras.push(st.then);
+      if (st.now) paras.push(st.now);
+      if (st.ladder.senses === 'no') notes.push({ kind: 'thin', quote: '', text: 'This tells me what happened but not what it was like. What could you see and hear?', options: [] });
+      for (const v of st.versions) notes.push({ kind: 'versions', quote: '', text: `${v.by || 'Another telling'} remembers it differently: “${v.text}”. Which is right?`, options: ['Mine', v.by || 'Theirs', 'Both, as they are'] });
+      return { title: st.title, stories: [st.id], when: st.when, place: st.place, people: st.people, then: st.then, now: st.now, prose: paras.join('\n\n'), notes };
+    });
+    return { scenes, needs_decision: [] };
+  }
+
+  async ghostRevise(i: Parameters<AgentSuite['ghostRevise']>[0]): Promise<GhostReviseOutput> {
+    // Acts on the answers to the notes, and turns "never say X" in the feedback into a rule.
+    const plan: GhostReviseOutput['plan'] = [];
+    const edits: GhostReviseOutput['edits'] = [];
+    const resolved: string[] = [];
+    const step = (text: string, extra: Partial<GhostReviseOutput['plan'][number]> = {}) => plan.push({ text, kind: 'edit', never: [], prefer: [], guidance: [], question: '', ...extra }) - 1;
+    for (const sc of i.scenes) {
+      for (const n of sc.notes) {
+        if (n.status !== 'answered' || !n.answer) continue;
+        const answer = n.answer.trim().replace(/[.!?]+$/, '');
+        if (n.kind === 'gap' && n.quote && sc.prose.includes(n.quote)) {
+          const before = sc.prose.slice(0, sc.prose.indexOf(n.quote));
+          edits.push({ scene: sc.id, find: n.quote, replace: joinToCursor(answer, before), reason: 'Your answer fills the gap.', plan: [step(`Fill the gap with what you told me: “${answer}”.`)] });
+          resolved.push(n.id);
+        } else if (n.kind === 'source' && /take it out/i.test(answer) && n.quote && sc.prose.includes(n.quote)) {
+          edits.push({ scene: sc.id, find: n.quote, replace: '', reason: 'You said it should go.', plan: [step('Take out the sentence you said was not right.')] });
+          resolved.push(n.id);
+        } else if (n.kind === 'thin') {
+          const paras = sc.prose.split(/\n\n/);
+          const last = paras.find((x) => x.trim()) ?? '';
+          if (last && sc.prose.indexOf(last) === sc.prose.lastIndexOf(last)) {
+            edits.push({ scene: sc.id, find: last, replace: `${last}\n\n${answer}.`, reason: 'The moment you gave me.', plan: [step('Add the moment you described.')] });
+            resolved.push(n.id);
+          }
+        } else resolved.push(n.id);
+      }
+    }
+    for (const m of i.feedback.matchAll(/(?:never|wouldn'?t ever|would never|i'?d never) (?:say|use|write) ['"‘“]?([\w'’-]+)['"’”]?/gi)) {
+      const word = m[1].toLowerCase();
+      step(`Never use “${word}”, here or in any chapter.`, { kind: 'rule', never: [word] });
+    }
+    if (i.feedback.trim() && !plan.some((p) => p.kind === 'rule'))
+      step(`Ask you next time for a moment that shows what you meant: “${i.feedback.trim().slice(0, 80)}”.`, { kind: 'question', question: `You said: “${i.feedback.trim().slice(0, 120)}”. Can you tell me about a moment that shows it?` });
+    if (!plan.length) step('Nothing to change: the answers so far need no edits.');
+    return { plan, edits, resolved, notes: [] };
+  }
+
+  /**
+   * A deterministic person with a hidden life: a broad question gets the gist of the nearest
+   * topic; a follow-up that names the right kind of detail (one time, who, what you heard, what
+   * was said, how it felt, what it means) gets that detail, if it exists.
+   */
+  async interviewee(i: Parameters<AgentSuite['interviewee']>[0]): Promise<IntervieweeOutput> {
+    const q = i.question.toLowerCase();
+    const told = new Set(i.told);
+    const want: (typeof i.facts)[number]['tier'][] = [];
+    if (/one particular|one time|one day|remember one|a particular|in particular/.test(q)) want.push('instance');
+    if (/who was there|who else|who were/.test(q)) want.push('people');
+    if (/see and hear|hear|smell|picture it|what could you see|weather/.test(q)) want.push('senses');
+    if (/said|say to you|words/.test(q)) want.push('words');
+    if (/feel|felt/.test(q)) want.push('feeling');
+    if (/looking back|make of it|mean|understand now|why do you think/.test(q)) want.push('meaning');
+    const words = new Set(q.match(/[a-z]{4,}/g) ?? []);
+    const recent = i.history.filter((t) => t.role === 'author').slice(-2).map((t) => t.text.toLowerCase()).join(' ');
+    const topicOf = (f: (typeof i.facts)[number]) => f.topic.toLowerCase();
+    // The topic in play: named in the question, or the one the last answers were about.
+    const inPlay = i.facts.filter((f) => words.has(topicOf(f)) || f.keywords.some((k) => words.has(k.toLowerCase())) || (want.length && f.keywords.some((k) => recent.includes(k.toLowerCase()))));
+    let pick = inPlay.filter((f) => !told.has(f.id) && (want.length ? want.includes(f.tier) : f.tier === 'gist'));
+    if (!pick.length && !want.length) pick = i.facts.filter((f) => !told.has(f.id) && f.tier === 'gist' && (words.has(topicOf(f)) || !inPlay.length)).slice(0, 1);
+    pick = pick.slice(0, 2);
+    // Something surprising on the same topic slips out once, in passing.
+    const aside = i.facts.find((f) => f.surprising && !told.has(f.id) && pick.some((x) => x.topic === f.topic) && !pick.includes(f));
+    const out = aside ? [...pick, aside] : pick;
+    if (!out.length) return { answer: /was it|did it|were you|was he|was she/.test(q) ? "I don't remember that. I couldn't say." : "I don't really remember, to be honest.", told: [] };
+    return { answer: out.map((f) => f.text).join(' '), told: out.map((f) => f.id) };
+  }
+
+  async ghostWrap(i: Parameters<AgentSuite['ghostWrap']>[0]): Promise<GhostWrapOutput> {
+    const covered = i.agenda.filter((a) => a.done).map((a) => a.topic);
+    const said = i.history.filter((t) => t.role === 'author').length;
+    return {
+      title: covered[0] ?? i.agenda[0]?.topic ?? 'Session',
+      summary: `We talked for ${said} answer${said === 1 ? '' : 's'}${covered.length ? `, covering ${covered.join(', ')}` : ''}. Everything you said is filed under the stories it belongs to.`,
+      questions: i.stories
+        .filter((s) => s.next && s.status === 'gathering' && !s.sensitive)
+        .slice(0, 3)
+        .map((s) => ({ text: RUNG_QUESTION[s.next as keyof typeof RUNG_QUESTION](s.title), why: `${s.title} is not yet a scene.`, about: `story:${s.id}`, ask: '', priority: 2 })),
+      promises: [],
+      voice: [],
+    };
+  }
+
+  async scribe({ raw, before, dictionary }: Parameters<AgentSuite['scribe']>[0]) {
+    return { text: cleanDictation(raw, { level: 'light', before, names: dictionary }) };
+  }
+
   async interview({ premise, answers, known }: Parameters<AgentSuite['interview']>[0]): Promise<InterviewOutput> {
     // Only what is not already settled is asked; answers are matched back by question.
     const asked = INTERVIEW.filter((q) => !known[q.key]?.length);
@@ -495,7 +688,7 @@ export class ScriptedSuite extends OfflineSuite {
   constructor(overrides: Partial<AgentSuite> = {}) {
     super();
     const self = this as unknown as Record<string, (i: unknown) => Promise<unknown>>;
-    for (const m of ['interview', 'plotPoints', 'structures', 'cards', 'write', 'voice', 'reviseLines', 'humanise', 'extract', 'reviseCard', 'reviseProse', 'read', 'continuity', 'judge', 'critique', 'sampleTurns', 'diverge', 'expand', 'talk'] as const) {
+    for (const m of ['interview', 'plotPoints', 'structures', 'cards', 'write', 'voice', 'reviseLines', 'humanise', 'extract', 'reviseCard', 'reviseProse', 'read', 'continuity', 'judge', 'critique', 'sampleTurns', 'diverge', 'expand', 'talk', 'scribe', 'ghostPlan', 'ghostTurn', 'ghostWrap', 'ghostShape', 'ghostDraft', 'ghostRevise', 'interviewee'] as const) {
       const base = (overrides[m] as ((i: unknown) => Promise<unknown>) | undefined) ?? self[m].bind(this);
       self[m] = (i: unknown) => {
         this.calls.push({ method: m, input: i });
@@ -506,4 +699,23 @@ export class ScriptedSuite extends OfflineSuite {
   count(method: keyof AgentSuite) {
     return this.calls.filter((c) => c.method === method).length;
   }
+}
+
+const STOP_NAMES = new Set(['The', 'And', 'But', 'Then', 'When', 'There', 'That', 'This', 'They', 'We', 'She', 'He', 'It', 'My', 'Our', 'Mum', 'Mam', 'Dad', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December', 'Christmas', 'Easter', 'English', 'God']);
+
+const PLACE_WORDS = new Set(['Road', 'Street', 'Lane', 'Avenue', 'Park', 'Hall', 'Church', 'School', 'Mill', 'Square', 'Hill', 'Terrace', 'Close', 'Way', 'Bridge', 'Station', 'Hospital', 'College', 'University', 'Market', 'House', 'Farm', 'Green']);
+
+const RUNG_TECHNIQUE: Record<string, string> = {
+  happened: 'What happened',
+  instance: 'One particular time',
+  people: 'Who was there',
+  senses: 'Go back to the place',
+  words: 'What was said',
+  felt_then: 'Then and now',
+  means_now: 'Then and now',
+};
+
+function shorten(text: string, words: number): string {
+  const w = text.replace(/[.!?]+$/, '').split(/\s+/);
+  return w.slice(0, words).join(' ') + (w.length > words ? '…' : '');
 }

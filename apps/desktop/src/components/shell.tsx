@@ -34,6 +34,9 @@ import {
   Download,
   Feather,
   ChevronRight,
+  Mic,
+  CalendarDays,
+  NotebookPen,
 } from 'lucide-react';
 import { useApp, type View } from '../lib/app';
 import { get, post } from '../lib/api';
@@ -42,7 +45,8 @@ import { Button, Kbd, stageName } from './ui';
 import { usePrompt } from './confirm';
 import { menuKeyDown, useEscape } from '../lib/layers';
 
-const NAV: { view: View; label: string; icon: typeof LayoutDashboard; shortcut: string }[] = [
+type NavEntry = { view: View; label: string; icon: typeof LayoutDashboard; shortcut: string };
+const NAV: NavEntry[] = [
   { view: 'dashboard', label: 'Writing desk', icon: LayoutDashboard, shortcut: '1' },
   { view: 'build', label: 'Story planning', icon: Hammer, shortcut: '2' },
   { view: 'outline', label: 'Manuscript', icon: ListTree, shortcut: '3' },
@@ -53,6 +57,27 @@ const NAV: { view: View; label: string; icon: typeof LayoutDashboard; shortcut: 
   { view: 'covers', label: 'Book covers', icon: BookOpen, shortcut: '8' },
 ];
 
+/** A life story's sidebar: the same shell, with sessions, a timeline, people and a pre-publication check. */
+const LIFE_NAV: NavEntry[] = [
+  { view: 'dashboard', label: 'Writing desk', icon: LayoutDashboard, shortcut: '1' },
+  { view: 'sessions', label: 'Sessions', icon: Mic, shortcut: '2' },
+  { view: 'build', label: 'Shaping the book', icon: Hammer, shortcut: '3' },
+  { view: 'outline', label: 'Manuscript', icon: ListTree, shortcut: '4' },
+  { view: 'timeline', label: 'Timeline', icon: CalendarDays, shortcut: '5' },
+  { view: 'characters', label: 'People', icon: Users, shortcut: '6' },
+  { view: 'threads', label: 'Themes', icon: Spline, shortcut: '7' },
+  { view: 'share', label: 'Before you share', icon: ShieldCheck, shortcut: '8' },
+  { view: 'ripple', label: 'Ripple review', icon: Waves, shortcut: '' },
+  { view: 'notebook', label: 'Ghostwriter’s notebook', icon: NotebookPen, shortcut: '' },
+  { view: 'covers', label: 'Book covers', icon: BookOpen, shortcut: '' },
+];
+
+/** The sidebar for this kind of book, split into the workspace and review groups. */
+export function navFor(kind: string | undefined): { all: NavEntry[]; workspace: NavEntry[]; review: NavEntry[]; reviewLabel: string } {
+  if (kind && kind !== 'novel') return { all: LIFE_NAV, workspace: LIFE_NAV.slice(0, 4), review: LIFE_NAV.slice(4), reviewLabel: 'Life & review' };
+  return { all: NAV, workspace: NAV.slice(0, 3), review: NAV.slice(3), reviewLabel: 'Story & review' };
+}
+
 export function Sidebar({ rail, onToggle }: { rail: boolean; onToggle: () => void }) {
   const { project, route, go, setPalette } = useApp();
   if (!project) return null;
@@ -61,7 +86,14 @@ export function Sidebar({ rail, onToggle }: { rail: boolean; onToggle: () => voi
     ripple: project.ripple ? { n: (project.ripple.counts.pending ?? 0) + (project.ripple.counts.conflicts ?? 0), alert: true } : undefined,
     threads: { n: project.threads.length },
     characters: { n: project.characters.length },
+    ...(project.life
+      ? {
+          sessions: project.life.sessions.some((x) => !x.ended) ? { n: 1, alert: true } : { n: project.life.questions.filter((q) => q.status === 'queued' && !q.ask).length },
+          outline: { n: project.scenes.reduce((n, x) => n + x.notes, 0), alert: true },
+        }
+      : {}),
   };
+  const nav = navFor(project.book.kind);
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -73,13 +105,13 @@ export function Sidebar({ rail, onToggle }: { rail: boolean; onToggle: () => voi
       <button className="book-switch" onClick={() => go('settings', 'book')} title={project.dir}>
         <span className="eyebrow">CURRENT MANUSCRIPT</span><span className="book-title">{project.book.title}</span>
         <span className="faint" style={{ fontSize: 'var(--fs-caption)' }}>
-          {plural(project.totals.words, 'word')} · {project.book.genre || 'novel'}
+          {plural(project.totals.words, 'word')} · {project.book.genre || (project.book.kind === 'novel' ? 'novel' : 'life story')}
         </span>
       </button>
       <button className="sidebar-search" onClick={() => setPalette(true)} title="Search and commands"><Search size={15} /><span>Find anything</span><Kbd>{keys('K')}</Kbd></button>
       <nav className="nav" aria-label="Main">
         <div className="nav-group">Workspace</div>
-        {NAV.slice(0, 3).map((n) => (
+        {nav.workspace.map((n) => (
           <NavItem key={n.view} {...n} current={route.view === n.view || (n.view === 'outline' && route.view === 'scene')} count={counts[n.view]} onClick={() => go(n.view)} />
         ))}
         {!rail && project.structure.acts.length > 0 && <div className="manuscript-tree">
@@ -89,8 +121,8 @@ export function Sidebar({ rail, onToggle }: { rail: boolean; onToggle: () => voi
             {c.scenes.map(id => { const scene = project.scenes.find(s => s.id === id); return scene ? <button key={id} aria-current={route.view === 'scene' && route.id === id ? 'page' : undefined} onClick={() => go('scene', id)}><span className={`tree-dot ${scene.sync === 'unwritten' ? '' : 'written'}`} /><span>{scene.card.title || 'Untitled scene'}</span></button> : null; })}
           </details>)}
         </div>}
-        <div className="nav-group">Story & review</div>
-        {NAV.slice(3).map((n) => (
+        <div className="nav-group">{nav.reviewLabel}</div>
+        {nav.review.map((n) => (
           <NavItem key={n.view} {...n} current={route.view === n.view} count={counts[n.view]} onClick={() => go(n.view)} />
         ))}
       </nav>
@@ -116,6 +148,8 @@ function NavItem({ label, icon: Icon, current, count, onClick }: { view: View; l
   );
 }
 
+const LIFE_TITLES: Partial<Record<View, string>> = { build: 'Shaping the book', characters: 'People', threads: 'Themes' };
+
 const TITLES: Record<View, string> = {
   dashboard: 'Writing desk',
   build: 'Story planning',
@@ -128,6 +162,11 @@ const TITLES: Record<View, string> = {
   covers: 'Book covers',
   history: 'History',
   settings: 'Settings',
+  sessions: 'Sessions',
+  timeline: 'Timeline',
+  notebook: 'Ghostwriter’s notebook',
+  share: 'Before you share',
+  revision: 'Revision',
 };
 
 export function TopBar() {
@@ -200,7 +239,7 @@ export function TopBar() {
   return (
     <header className="topbar">
       <div className="crumbs">
-        <button className="crumb-book" onClick={() => go('dashboard')}>{project.book.title}</button><span className="sep">/</span><span className="muted">{TITLES[route.view]}</span>
+        <button className="crumb-book" onClick={() => go('dashboard')}>{project.book.title}</button><span className="sep">/</span><span className="muted">{(project.life && LIFE_TITLES[route.view]) || TITLES[route.view]}</span>
         {scene && (
           <>
             <span className="sep">/</span>
@@ -395,13 +434,15 @@ export function CommandPalette() {
         <Command.List>
           <Command.Empty>Nothing matches.</Command.Empty>
           <Command.Group heading="Go to">
-            {NAV.map((n) => (
+            {navFor(project?.book.kind).all.map((n) => (
               <Command.Item key={n.view} value={`go ${n.label}`} onSelect={run(() => go(n.view))}>
                 <n.icon /> {n.label}
-                <span className="end">
-                  <Kbd>{mod}</Kbd>
-                  <Kbd>{n.shortcut}</Kbd>
-                </span>
+                {n.shortcut && (
+                  <span className="end">
+                    <Kbd>{mod}</Kbd>
+                    <Kbd>{n.shortcut}</Kbd>
+                  </span>
+                )}
               </Command.Item>
             ))}
             <Command.Item value="go history" onSelect={run(() => go('history'))}>
@@ -490,7 +531,7 @@ export function useShortcuts(toggleRail: () => void) {
         a.setFocus(!a.focus);
       } else if (/^[1-8]$/.test(e.key)) {
         e.preventDefault();
-        a.go(NAV[Number(e.key) - 1].view);
+        a.go(navFor(a.project?.book.kind).all[Number(e.key) - 1].view);
       } else if (e.key === ',') {
         e.preventDefault();
         a.go('settings');

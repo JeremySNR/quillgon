@@ -1,0 +1,41 @@
+# Frozen set for `quillgon eval-life`: invented lives, each a list of facts the simulated
+# interviewee knows and reveals only when asked well. The ghostwriter is scored on how much
+# it draws out, whether it leads, whether it follows up what is surprising, and whether its
+# drafts invent. Do not edit lives between runs you want to compare; add new ones instead.
+lives:
+  - id: margaret
+    narrator: Margaret Ellis
+    born: '1948'
+    title: The House on Harehills Lane
+    off_limits: [the divorce]
+    facts:
+      - { id: m-burtons, topic: work, tier: gist, text: "I started at Burton's in 1962, on the felling, when I was fourteen.", keywords: [burton, felling, fourteen], when: '1962' }
+      - { id: m-belt, topic: work, tier: instance, text: "There was the day the belt came off the big machine. It went with a crack like a gun and everybody screamed.", keywords: [belt, machine, crack], when: '1962' }
+      - { id: m-jean, topic: work, tier: people, text: "Jean Pickles sat next to me. She'd been there since she was fifteen.", keywords: [jean, pickles] }
+      - { id: m-noise, topic: work, tier: senses, text: "Forty machines going at once and Radio Luxembourg over the top of them.", keywords: [forty, radio, luxembourg] }
+      - { id: m-quote, topic: work, tier: words, text: "Jean leaned over and said \"Don't you dare cry in front of him, love.\"", keywords: [dare, cry] }
+      - { id: m-froze, topic: work, tier: feeling, text: "I froze. I couldn't have moved if I'd wanted to.", keywords: [froze] }
+      - { id: m-now, topic: work, tier: meaning, text: "I think she knew what Mr Hirst was like with the young girls. I didn't, then.", keywords: [hirst, young, girls] }
+      - { id: m-docked, topic: work, tier: gist, surprising: true, text: "Mind you, nobody told me he docked our pay if he didn't like your face.", keywords: [docked, pay] }
+      - { id: m-scarborough, topic: holidays, tier: gist, text: "We went to Scarborough every August on the train.", keywords: [scarborough, august, train], when: '1955' }
+      - { id: m-donkey, topic: holidays, tier: instance, text: "The year I was seven our Peter fell off a donkey on the sands and Mum laughed till she cried.", keywords: [donkey, sands, peter] }
+      - { id: m-mecca, topic: dancing, tier: gist, text: "Saturdays we went dancing at the Mecca in town.", keywords: [mecca, dancing, saturday], when: '1965' }
+      - { id: m-alan, topic: dancing, tier: instance, text: "That's where I met Alan, on New Year's Eve. He stood on my foot twice.", keywords: [alan, foot, year] }
+      - { id: m-dad, topic: family, tier: gist, text: "Dad worked on the buses. He wasn't a talker.", keywords: [buses, talker] }
+      - { id: m-club, topic: family, tier: instance, surprising: true, text: "There was one night he didn't come home from the club at all, and nobody ever said where he'd been.", keywords: [club, night, home] }
+  - id: tomas
+    narrator: Tomas Kowalski
+    born: '1952'
+    title: Two Kitchens
+    off_limits: []
+    facts:
+      - { id: t-arrival, topic: arrival, tier: gist, text: "We came to Bradford in 1961 with one suitcase between four of us.", keywords: [bradford, suitcase], when: '1961' }
+      - { id: t-station, topic: arrival, tier: instance, text: "At the station a man gave my mother an orange and walked off before she could thank him.", keywords: [orange, station] }
+      - { id: t-cold, topic: arrival, tier: senses, text: "It was the coldest I've ever been, and everything smelled of coal.", keywords: [coldest, coal] }
+      - { id: t-school, topic: school, tier: gist, text: "At school they called me Tom because nobody could say my name.", keywords: [school, tom, name] }
+      - { id: t-fight, topic: school, tier: instance, text: "I had one fight, with a lad called Barry Hirst, and after that he was my best friend.", keywords: [fight, barry] }
+      - { id: t-kitchen, topic: work, tier: gist, text: "I cooked in hotel kitchens for thirty years.", keywords: [cooked, hotel, kitchens], when: '1970' }
+      - { id: t-chef, topic: work, tier: words, text: "The head chef said \"You cook like your grandmother, that's why they come back.\"", keywords: [grandmother, come, back] }
+      - { id: t-proud, topic: work, tier: feeling, text: "I was proud, but I never told my father I'd become a cook.", keywords: [proud, father, cook] }
+      - { id: t-letter, topic: work, tier: gist, surprising: true, text: "There's a letter from my father I've never opened.", keywords: [letter, never, opened] }
+      - { id: t-meaning, topic: work, tier: meaning, text: "Looking back, the two kitchens, his and mine, were the same kitchen.", keywords: [same, kitchen] }

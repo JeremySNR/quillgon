@@ -13,6 +13,12 @@ import { ReaderReport } from './views/reader';
 import { HistoryView } from './views/history';
 import { SettingsView } from './views/settings';
 import { Covers } from './views/covers';
+import { Sessions } from './views/sessions';
+import { Shaping } from './views/shaping';
+import { RevisionReview } from './views/revision';
+import { TimelineView } from './views/timeline';
+import { NotebookView } from './views/notebook';
+import { ShareView } from './views/share';
 import { cx, isMac, loadPref } from './lib/util';
 
 function Shell() {
@@ -40,7 +46,7 @@ function Shell() {
   const view = (() => {
     switch (route.view) {
       case 'build':
-        return <Build step={route.id} />;
+        return project.life ? <Shaping /> : <Build step={route.id} />;
       case 'outline':
         return <Outline />;
       case 'scene':
@@ -59,6 +65,16 @@ function Shell() {
         return <SettingsView tab={route.id} />;
       case 'covers':
         return <Covers key={project.dir} />;
+      case 'timeline':
+        return project.life ? <TimelineView /> : <Dashboard />;
+      case 'notebook':
+        return project.life ? <NotebookView /> : <Dashboard />;
+      case 'share':
+        return project.life ? <ShareView /> : <Dashboard />;
+      case 'revision':
+        return project.life && route.id ? <RevisionReview key={route.id} chapter={route.id} /> : <Dashboard />;
+      case 'sessions':
+        return project.life ? <Sessions id={route.id} /> : <Dashboard />;
       default:
         return <Dashboard />;
     }

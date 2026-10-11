@@ -107,7 +107,7 @@ export function ReaderReport() {
                   {ago(report.ran_at)}
                 </span>
               </div>
-              <div className="tile">
+              {!p.life && <div className="tile">
                 <span className="tile-label">
                   <Target /> Twists called early
                 </span>
@@ -115,7 +115,7 @@ export function ReaderReport() {
                   {report.predictions.length}
                 </span>
                 <span className="tile-foot">{report.predictions.length ? 'The single most useful signal here' : 'Nothing was guessed before its reveal'}</span>
-              </div>
+              </div>}
               <div className="tile">
                 <span className="tile-label">
                   <CircleHelp /> Confusion left open
@@ -176,12 +176,12 @@ export function ReaderReport() {
               )}
             </div>
 
-            {report.twists?.length > 0 && <TwistTable twists={report.twists} />}
+            {!p.life && report.twists?.length > 0 && <TwistTable twists={report.twists} />}
 
             <div className="two-col">
               <div className="card">
                 <div className="card-head">
-                  <h3>Twists the reader saw coming</h3>
+                  <h3>{p.life ? 'What the reader saw coming' : 'Twists the reader saw coming'}</h3>
                 </div>
                 {report.predictions.length ? (
                   <div className="stack">

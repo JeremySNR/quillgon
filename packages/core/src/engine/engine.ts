@@ -9,6 +9,8 @@ import { runVoiceReport } from '../quality/voice.js';
 import { runReader } from '../quality/reader.js';
 import { estimate } from './estimate.js';
 import { Ideation } from './ideation.js';
+import { Interviews } from './interview.js';
+import { LifeBook } from './lifebook.js';
 import { critiquePlan, critiqueAlternatives, predictability } from './critics.js';
 import { runStyleCheck } from '../style-report.js';
 import type { StructureAlternative } from '../agents/contracts.js';
@@ -20,12 +22,16 @@ import { uniq } from '../util.js';
 export class Engine {
   readonly pipeline: Pipeline;
   readonly ideation: Ideation;
+  readonly interviews: Interviews;
+  readonly life: LifeBook;
   constructor(
     readonly store: GraphStore,
     readonly agents: AgentSuite,
   ) {
     this.pipeline = new Pipeline(store, agents);
     this.ideation = new Ideation(store, agents);
+    this.interviews = new Interviews(store, agents);
+    this.life = new LifeBook(store, agents);
   }
 
   critique() {

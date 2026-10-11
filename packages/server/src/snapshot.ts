@@ -15,6 +15,7 @@ import {
   type GraphStore,
 } from '@quillgon/core';
 import { suiteMode } from '@quillgon/agents';
+import { voiceStatus } from './dictation.js';
 
 export function excerpt(text: string, n = 220): string {
   const t = text.replace(/\s+/g, ' ').trim();
@@ -54,6 +55,7 @@ export async function projectSnapshot(engine: Engine) {
       issues: issuesByScene.get(id) ?? [],
       engagement: reader?.engagement.find((e) => e.scene === id)?.engagement ?? null,
       style: styleStatus[id] ?? null,
+      notes: (s.notes?.notes ?? []).filter((n) => n.status === 'open').length,
     };
   });
   const unplaced = [...p.scenes.keys()].filter((id) => !order.includes(id));
@@ -61,6 +63,7 @@ export async function projectSnapshot(engine: Engine) {
   return {
     dir: store.dir,
     mode: suiteMode(store),
+    dictation: voiceStatus(p),
     book: p.book,
     intent: p.intent,
     structure: p.structure,
@@ -71,6 +74,17 @@ export async function projectSnapshot(engine: Engine) {
     obligations: [...p.obligations.values()],
     obligationIssues: obligationIssues(p),
     idea: p.idea,
+    life:
+      p.book.kind === 'novel'
+        ? null
+        : {
+            stories: [...p.stories.values()],
+            sessions: [...p.sessions.values()]
+              .map((x) => ({ id: x.id, title: x.title, started: x.started, ended: x.ended, minutes: x.minutes, speaker: x.speaker, turns: x.turns.length, summary: x.summary }))
+              .sort((a, b) => b.started.localeCompare(a.started)),
+            questions: p.questions.questions,
+            notebook: p.notebook,
+          },
     characters: [...p.characters.values()].map((c) => ({ id: c.id, bio: c.bio, voice: c.voice, state: c.state })),
     timeline: p.timeline,
     locations: p.locations.locations,
@@ -114,6 +128,7 @@ export function sceneDetail(store: GraphStore, id: string) {
     sync: sceneSync(s),
     prev: idx > 0 ? order[idx - 1] : null,
     next: idx >= 0 && idx < order.length - 1 ? order[idx + 1] : null,
+    notes: s.notes?.notes ?? [],
     states: s.card.characters.map((c) => ({
       character: c,
       before: store.stateBefore(c, id)?.snapshot ?? null,

@@ -12,6 +12,9 @@ const TOKEN = document.querySelector<HTMLMetaElement>('meta[name="quillgon-token
 /** Images and downloads cannot send headers, so cover URLs carry the token as a query parameter. */
 export const coverImageUrl = (id: string, download = false) => `${BASE}/api/covers/${encodeURIComponent(id)}/image?token=${encodeURIComponent(TOKEN)}${download ? '&download=1' : ''}`;
 
+/** A kept interview recording; <audio> cannot send headers either. */
+export const audioUrl = (session: string, file: string) => `${BASE}/api/sessions/${encodeURIComponent(session)}/audio/${encodeURIComponent(file)}?token=${encodeURIComponent(TOKEN)}`;
+
 export class ApiError extends Error {
   constructor(public status: number, message: string, public data?: any) {
     super(message);

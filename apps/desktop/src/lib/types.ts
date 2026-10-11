@@ -1,5 +1,11 @@
 import type {
   Book,
+  Chapter,
+  Notebook,
+  Question,
+  Story,
+  Session,
+  MarginNote,
   Change,
   CharacterBio,
   CharacterVoice,
@@ -88,6 +94,12 @@ export type {
   ShapeFinding,
   Predictability,
   TwistCheck,
+  Notebook,
+  Question,
+  Story,
+  Session,
+  MarginNote,
+  Chapter,
 };
 
 export interface SceneSummary {
@@ -103,6 +115,8 @@ export interface SceneSummary {
   issues: ContinuityIssue[];
   engagement: number | null;
   style: { enforced: number; guided: number; checked_at: string } | null;
+  /** Open margin notes from the ghostwriter (life stories). */
+  notes: number;
 }
 
 export interface CharacterEntry {
@@ -112,9 +126,39 @@ export interface CharacterEntry {
   state: Record<string, StateSnapshot>;
 }
 
+/** Which speech recogniser dictation would use (packages/server/src/dictation.ts). */
+export interface DictationStatus {
+  ready: boolean;
+  provider: 'openai' | 'local' | 'offline' | null;
+  model: string;
+  local: boolean;
+  reason?: string;
+}
+
+export interface SessionSummary {
+  id: string;
+  title: string;
+  started: string;
+  ended: string | null;
+  minutes: number;
+  speaker: string;
+  turns: number;
+  summary: string;
+}
+
+/** Life stories only (null for a novel). */
+export interface LifeSnapshot {
+  stories: Story[];
+  sessions: SessionSummary[];
+  questions: Question[];
+  notebook: Notebook;
+}
+
 export interface Snapshot {
   dir: string;
+  life: LifeSnapshot | null;
   mode: 'offline' | 'live';
+  dictation: DictationStatus;
   book: Book;
   intent: Intent;
   structure: Structure;
@@ -152,6 +196,8 @@ export interface SceneDetail {
   prev: string | null;
   next: string | null;
   states: { character: string; before: StateSnapshot | null; after: StateSnapshot | null }[];
+  /** The ghostwriter's margin notes (life stories). */
+  notes: MarginNote[];
 }
 
 export interface Job {
