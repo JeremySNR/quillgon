@@ -5,6 +5,8 @@ October 2026. Two questions:
 1. Could Quillgon help someone write an autobiography or memoir with AI, as well as a novel?
 2. Would Wispr-Flow-style dictation be worth adding, and how would we build it?
 
+Part 5 adds a third: guides that teach what the author knows, and research for every book.
+
 The answer to both is yes. This document covers what the research says, how each finding maps onto the current code, and a phased plan.
 
 **How this was researched:**
@@ -583,6 +585,82 @@ Extend `quillgon eval` with **simulated interviewees**. Each is a model given a 
 - **follow-up rate:** probes after answers that were seeded as surprising;
 - **invented-fact rate:** draft claims found in neither the transcript nor the hidden life;
 - **voice match:** the both-orders judge comparing drafts with the interviewee's transcripts.
+
+## Part 5: Guides and research
+
+October 2026, after the life-story work shipped. The question: could the same ghostwriter help an expert write a book that teaches what they know (a sales coaching book, a personal finance guide, self-help), and could the app research the topic itself, learning from the books already on the shelf?
+
+This part draws on established practice in non-fiction publishing and expert interviewing. It is not a new web research pass, and it cites no figures.
+
+### How prescriptive non-fiction is built
+
+Books that change what a reader does share a skeleton:
+- **The promise:** who the reader is, where they start, and where they end.
+- **Why the usual advice fails.**
+- **A framework:** the author's method, often named.
+- **One chapter per part of the method.** Chapters repeat a beat sheet: a story or case, the principle, the steps, a worked example, common mistakes, an exercise, a summary.
+
+Book proposals for these books include a comparison with the titles already on the shelf: what each promises, how it is built, and what readers complain about. That last part is where a new book finds its reason to exist.
+
+### How experts are interviewed
+
+Experts know more than they say: the steps they find obvious are the ones they skip. Knowledge-elicitation methods, such as the critical-incident and critical-decision interviews used in cognitive task analysis, ask about one specific recent case rather than the general rule. They walk through it in order and probe the decisions along the way. Ghostwriters of business books do the same informally:
+- "Walk me through the last deal where that happened."
+- They play the beginner.
+- They ask for the exact words said to a client.
+- They put a contrary view to the expert, because disagreeing draws out a method better than agreeing.
+
+This is the same "one particular time" move as in a life story, so the lesson ladder mirrors the story ladder.
+
+### What changes for money and wellbeing books
+
+Readers act on these books, so three things matter more than style:
+- **Sourcing:** a statistic nobody can trace undermines the rest.
+- **Dates:** tax allowances, rates and thresholds change every year and differ by country.
+- **Wording:** a sentence that reads as a personal recommendation, or promises returns, is a liability. Rules on financial promotions differ by country, and a published finance book needs a proper review.
+
+So the checks are made in code, and the share review says that it is information, not advice.
+
+### Research, and what it must not do
+
+Research should learn how the books on the shelf are built and what their readers want, without reproducing their text. Every fact it brings in should carry the exact words that support it and the page they came from, so the author can check it. Three risks shaped the design:
+- **Invented citations:** a model can cite a page it never read, or paraphrase into a "quote".
+- **Prompt injection:** a web page can carry instructions.
+- **Cost:** searches are billed per search, on top of tokens.
+
+### What was built
+
+| Piece | Built | Where |
+| --- | --- | --- |
+| Guide book kind | `kind: guide` with settings (preset, reader, promise, method, jurisdiction, as of). It reuses sessions, drafting, notes and revision. Opening questions: the reader, the promise, the usual advice, the method, the origin story, a client case, beginners' mistakes, limits, plus preset extras. | `packages/core/src/schemas/index.ts`, `packages/core/src/guide.ts`, `packages/core/src/init.ts` |
+| Lesson ladder | idea, case, when, steps, mistakes, why, practice. Details carry their `part` (step, case, script, claim…). Memoir files are unchanged: each ladder keeps only its own rungs. | `schemas/index.ts` (`GUIDE_LADDER`, `rungsOf`), `life.ts` |
+| Guide prompts | A shared prompt for guides (the author's knowledge first; outside facts only from evidence; explaining allowed; never promise results). Ghostwriter guidance on expert interviews, guide shapes and drafting with evidence. | `packages/agents/src/agents/shared-guide.md`, `ghostwriter/prompt.md` |
+| Guide checks | Statistics with no support in the author's words or the evidence; finance figures with no date; advice wording; worked examples recomputed. Each is a margin note and is listed under Before you publish. A note to the reader is written from the author's choices. | `guide.ts`, `engine/lifebook.ts` |
+| Research engine | Plan, then catalogue (Open Library, with contents pages), then web search through the provider's own tool (OpenAI `web_search`, Anthropic `web_search_20260209` with `pause_turn` handled, Codex live search), then quote checks, then shelf analysis. Then the merge into `research/library.yaml`, a run log, and a single commit. | `packages/core/src/research.ts`, `engine/research.ts`, `packages/agents/src/adapter/*` |
+| Quote checking | The app fetches each page, extracts its visible text, and looks for the quote word for word (or nearly all of its six-word runs). It fetches public addresses only, re-checks every redirect, and sends no page text to a model. A fact whose quote is not on its page is dropped. A fact whose page cannot be read is kept only if the search really returned that page. | `research.ts` (`checkQuote`, `publicUrl`) |
+| The author's material | Text and Markdown uploads, read in parts. Facts are kept only when their quote is really in the file; headings and mentions become questions. Works offline. | `engine/research.ts` (`addMaterial`) |
+| Research in the book | Reader questions and gaps go to the session queue. Guide sessions get attributed views to react to, and words from them are not counted as leading. Guide drafts get only relevant, usable evidence. Shaping sees the shelf's patterns. | `interview.ts`, `lifebook.ts`, `research.ts` (`researchPrompts`, `draftEvidence`) |
+| Cost | Searches are logged and priced per search. Runs show an estimate first. | `adapter/structured.ts`, `engine/research.ts` (`estimate`) |
+| UI and CLI | A Research page for every book. Guide creation, sidebar, shapes and settings. `quillgon init --guide`, `quillgon research [add|show]`. | `apps/desktop/src/views/research.tsx`, `packages/cli/src/main.ts` |
+
+**Verification.** Unit tests cover:
+- quote checking, including blocking private addresses and redirects;
+- the catalogue client and the library merge;
+- a full research run with a fake network: good quotes kept, invented ones dropped, the shelf filled;
+- offline research reading only the author's material;
+- per-search pricing;
+- the guide checks;
+- an offline guide from interview to draft to share review.
+
+`scripts/e2e-guide.ts` (`pnpm e2e:guide`) drives a guide and its research in Chromium.
+
+**Not built yet:**
+- A live-model research run. The web path has been tested only with a fake network and scripted model output.
+- A simulated-expert eval like `eval-life`, for guides.
+- PDF and Word uploads (text and Markdown only).
+- Google Books as a second catalogue.
+- A "reader who tries to apply it" pass that tests a chapter's steps.
+- Allowed-domain lists for finance research (official sources only).
 
 ## Suggested order
 

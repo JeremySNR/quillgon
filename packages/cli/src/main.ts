@@ -131,11 +131,13 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
   },
 
   init: {
-    help: 'init <dir> [--title T] [--words 12000] [--offline | --codex] [--life | --memoir] [--about "Name"] [--born 1948]   Create a new book (OpenAI API by default); --life or --memoir for a true story, --about for someone else\'s life',
+    help: 'init <dir> [--title T] [--words 12000] [--offline | --codex] [--life | --memoir] [--about "Name"] [--born 1948]   Create a new book (OpenAI API by default); --life or --memoir for a true story, --about for someone else\'s life\n        init <dir> --guide [--preset coaching|finance|self-help] [--reader "…"] [--promise "…"] [--where UK] [--about "Your name"]   A guide that teaches what you know',
     async run() {
       const dir = args[0] ?? (await ask('Folder for the new book:', 'my-book'));
       const title = (flags.title as string) ?? (await ask('Title:', path.basename(dir)));
-      const kind = flags.memoir ? 'memoir' : flags.life ? 'life-story' : 'novel';
+      const kind = flags.guide ? 'guide' : flags.memoir ? 'memoir' : flags.life ? 'life-story' : 'novel';
+      const text = (k: string) => (typeof flags[k] === 'string' ? (flags[k] as string) : undefined);
+      const preset = ['coaching', 'finance', 'self-help', 'general'].includes(text('preset') ?? '') ? (text('preset') as 'coaching' | 'finance' | 'self-help' | 'general') : undefined;
       const store = await initProject(dir, {
         title,
         target_words: Number(flags.words) || undefined,
@@ -144,9 +146,11 @@ const commands: Record<string, { help: string; run: () => Promise<void> | void }
         kind,
         subject_name: typeof flags.about === 'string' ? flags.about : undefined,
         life: typeof flags.born === 'string' ? { born: flags.born } : {},
+        ...(kind === 'guide' ? { guide: { ...(preset ? { preset } : {}), reader: text('reader') ?? '', promise: text('promise') ?? '', jurisdiction: text('where') ?? '' } } : {}),
       });
       say(green(`Created ${store.dir}`));
       if (kind === 'novel') say(`Next: ${cyan(`quillgon spark --dir ${dir}`)} to develop an idea, or ${cyan(`quillgon intent --dir ${dir}`)} if you have a premise.`);
+      else if (kind === 'guide') say(`Next: ${cyan(`quillgon research --dir ${dir}`)} to see what is already on your shelf, then ${cyan(`quillgon session --dir ${dir}`)} for your first interview.`);
       else say(`Next: ${cyan(`quillgon session --dir ${dir}`)} to start the first interview with your ghostwriter.`);
       store.close();
     },

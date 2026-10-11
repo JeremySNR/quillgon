@@ -134,6 +134,8 @@ A command palette for every scene, character and thread, focus mode, and **keybo
 | Generates a cover from the story itself | ❌ | ✅ |
 | Judges compare both orderings to cancel position bias | ❌ | ✅ |
 | Interviews you and ghostwrites your life story, without inventing it | ❌ | ✅ |
+| Turns what you know into a guide, with every figure sourced and every sum checked | ❌ | ✅ |
+| Researches the books already on your shelf, with quotes checked against their pages | ❌ | ✅ |
 
 ## 📸 Take the tour
 
@@ -291,6 +293,36 @@ In the desktop app, only the app's own pages can use the microphone. On macOS th
 
 The research behind this mode, covering how memoirs are structured, how ghostwriters work, and how Wispr Flow-style dictation is built, is in [docs/life-stories-and-dictation.md](docs/life-stories-and-dictation.md).
 
+## 📚 Guides: teach what you know
+
+Choose **A guide** when you create a book (or `quillgon init --guide`) to write non-fiction from your own expertise: a sales coaching book, a personal finance guide, a self-help book, a how-to. It works like a ghostwriter for business books. It interviews you, drafts the chapters, and revises them with you, using the same sessions, margin notes and revision rounds as a life story. The menu becomes Sessions, Research, Shaping the book, Manuscript, People, and Before you publish.
+
+- **It starts with your reader.** The first questions are who the book is for, what they will be able to do after reading it, where the usual advice goes wrong, and how you actually do what you teach. Each idea becomes a lesson and climbs its own ladder: the idea, a real case, when to use it, the steps, what beginners get wrong, why it works, and something to try. What you say is filed by part, so steps stay steps and scripts stay word for word.
+- **It interviews like a business-book ghostwriter.** It plays the beginner, because experts skip the steps they find obvious. It asks about the last real time rather than the general rule, and it asks for the exact words you say to clients. It can also put another book's view to you, attributed ("One popular book says always lead with price. Where do you stand?"), because disagreeing draws out a method.
+- **Shapes for teaching.** Framework (a chapter per part of your method), problem by problem, a step-by-step programme, standalone principles, or the questions readers ask. Chapters usually run: a case, the idea, the steps, a worked example, what goes wrong, why it works, something to try.
+- **Checks a reader's trust depends on.** The ghostwriter may write connecting explanation in your voice, but code checks the rest:
+  - **Every guide:** a statistic or a "studies show" needs your own words or a fact in the research library behind it, and worked examples are added up again ("10% of £2,000 is £200").
+  - **Money guides:** figures that change each year (allowances, rates, thresholds) need a date and a country, and wording that reads as personal advice or a promise of returns is flagged.
+
+  Each problem becomes a margin note, and all of them are listed under **Before you publish**. That list is information, not legal or regulatory advice.
+- **A note to the reader** is written from your choices: where the knowledge comes from, how clients are disguised and, for money and wellbeing books, what the book is not.
+
+## 🔎 Research
+
+Every book has a **Research** page (`quillgon research` on the command line). Tell it what to look into, choose quick or deep, and see the estimated cost before it starts. A run does these steps:
+
+1. **The shelf.** It looks books up in [Open Library](https://openlibrary.org): most-published first, with their descriptions and contents pages. For each book it records what it promises, its framework, how it is built, and what readers praise and complain about. It then lists the patterns the strongest books share and suggests where yours can sit, and you note how yours differs. It learns structure, never wording.
+2. **The web.** It searches through your model provider's own search tool (OpenAI, Anthropic or Codex). It looks for the questions readers keep asking and for facts, each stored with the exact words that support it and the page they came from.
+3. **Checking.** For every fact, the app fetches the page itself and looks for the quote word for word. A quote that is not on its page is dropped. So is a fact whose page cannot be read, unless the search really returned that page. Pages are compared by code and never sent to a model, so a page cannot give the app instructions. Only public addresses are fetched, and each redirect is checked again.
+4. **Your own material.** Add your course notes, talk transcripts or old posts as text. Facts are quoted from them exactly, and anything they mention that the book does not yet explain becomes a question for you. This works offline too: an offline book never touches the network, so research reads only your own files.
+
+Everything lands in `research/library.yaml`, for you to keep or dismiss. Research feeds the ghostwriter:
+- Reader questions and gaps can be sent to your next session.
+- A guide's drafts may state only facts from the library, and cite them.
+- The shelf's patterns inform the proposed chapters.
+
+Each run keeps its step-by-step log under `research/runs/`.
+
 ## 💻 CLI
 
 The same engine, headless. `quillgon` lives at `packages/cli/bin/quillgon.mjs`; `pnpm quillgon <command>` also works.
@@ -301,7 +333,10 @@ The same engine, headless. `quillgon` lives at `packages/cli/bin/quillgon.mjs`; 
 ```
 quillgon init <dir> [--title T] [--words 12000] [--offline]
         [--life | --memoir] [--about "Name"] [--born 1948]   a true story; --about for someone else's life
-quillgon session [--minutes 30] [--speaker Name]   life stories: an interview with your ghostwriter
+quillgon session [--minutes 30] [--speaker Name]   life stories and guides: an interview with your ghostwriter
+quillgon init <dir> --guide [--preset coaching|finance|self-help] [--reader "…"] [--promise "…"] [--where UK]   a guide
+quillgon research ["what to look into"] [--deep]   the shelf, reader questions and sourced facts
+quillgon research add <notes.md> | research show
 quillgon validate [dir]                 schema + reference check with file/field-precise errors
 quillgon status | sync | log | costs
 quillgon spark ["seed"] [--genre G]     idea → premise: diverge, keep/bin, logline → synopsis → cast
@@ -366,6 +401,7 @@ The UI design follows the research brief in [docs/design.md](docs/design.md); th
 pnpm test           # unit, integration, CLI and UI tests, no model calls
 pnpm e2e            # drives the real UI in Chromium (offline models)
 pnpm e2e:life       # the life-story workflow in Chromium, with a fake microphone
+pnpm e2e:guide      # a guide and its research in Chromium
 pnpm scale-check    # prompt sizes and write latency on a 96-scene book
 pnpm quillgon eval --offline --limit 2   # the eval harness, offline (see below)
 pnpm screenshots    # regenerates docs/screenshots
