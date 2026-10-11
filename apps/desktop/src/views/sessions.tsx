@@ -176,6 +176,7 @@ function SessionView({ id }: { id: string }) {
   textRef.current = text;
   const heardRef = useRef(heard);
   heardRef.current = heard;
+  const sending = useRef(false);
   const log = useRef<HTMLDivElement>(null);
 
   const load = useCallback(() => get<Session>(`/sessions/${id}`).then(setS, fail('Could not load the session')), [id, fail]);
@@ -193,27 +194,33 @@ function SessionView({ id }: { id: string }) {
   const dictation = useDictation({ target: ended ? null : target, long: true, session: id, onText });
 
   const send = async (signal: string | null = null) => {
-    if (pending || !s) return;
-    // Finish the mic and wait for every in-flight segment so text/heard include the latest words.
-    if (dictation.state !== 'idle') await dictation.stop();
-    const message = textRef.current.trim();
-    if (!message && !signal) return;
-    setPending(message || SIGNALS.find((x) => x.signal === signal)?.label || '');
-    setText('');
-    textRef.current = '';
-    const h = heardRef.current;
-    setHeard({ raw: [], audio: [], seconds: 0 });
-    heardRef.current = { raw: [], audio: [], seconds: 0 };
+    // Lock before awaiting stop — pending stays null while transcription finishes.
+    if (sending.current || pending || !s) return;
+    sending.current = true;
     try {
-      setS(await job<Session>(`/sessions/${id}/answer`, { text: message, signal, raw: h.raw.join(' ') || null, audio: h.audio, seconds: h.seconds }, 'The ghostwriter'));
-    } catch {
-      setText(message); // nothing said is lost to a failed call
-      textRef.current = message;
-      setHeard(h);
-      heardRef.current = h;
+      // Finish the mic and wait for every in-flight segment so text/heard include the latest words.
+      if (dictation.state !== 'idle') await dictation.stop();
+      const message = textRef.current.trim();
+      if (!message && !signal) return;
+      setPending(message || SIGNALS.find((x) => x.signal === signal)?.label || '');
+      setText('');
+      textRef.current = '';
+      const h = heardRef.current;
+      setHeard({ raw: [], audio: [], seconds: 0 });
+      heardRef.current = { raw: [], audio: [], seconds: 0 };
+      try {
+        setS(await job<Session>(`/sessions/${id}/answer`, { text: message, signal, raw: h.raw.join(' ') || null, audio: h.audio, seconds: h.seconds }, 'The ghostwriter'));
+      } catch {
+        setText(message); // nothing said is lost to a failed call
+        textRef.current = message;
+        setHeard(h);
+        heardRef.current = h;
+      } finally {
+        setPending(null);
+        inputRef.current?.focus();
+      }
     } finally {
-      setPending(null);
-      inputRef.current?.focus();
+      sending.current = false;
     }
   };
   const undo = (turn: number) => post<Session>(`/sessions/${id}/undo`, { turn }).then((x) => (setS(x), refresh()), fail('Could not undo'));

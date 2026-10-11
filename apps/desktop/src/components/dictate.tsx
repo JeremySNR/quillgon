@@ -68,6 +68,7 @@ export function useDictation({ target, scene = null, long = false, session, onTe
   const [level, setLevel] = useState(0);
   const rec = useRef<Recorder | null>(null);
   const chain = useRef<Promise<void>>(Promise.resolve());
+  const flushing = useRef<Promise<void> | null>(null);
   const pending = useRef(0);
   const targetRef = useRef(target);
   targetRef.current = target;
@@ -118,18 +119,25 @@ export function useDictation({ target, scene = null, long = false, session, onTe
     }
   }, [ready, long, send, fail]);
 
-  const stop = useCallback(async () => {
-    const r = rec.current;
-    if (r) {
-      rec.current = null;
-      // Leave listening immediately so a second click cannot start another capture mid-flush.
-      setState('tidying');
-      const last = await r.stop();
-      if (last) send(last.wav);
-      else if (!pending.current) setState('idle');
-    }
-    // Wait for every queued segment to land (or fail) before callers snapshot the field.
-    await chain.current;
+  const stop = useCallback(() => {
+    // Share one flush so a nested stop waits for the last WAV to join the chain.
+    if (flushing.current) return flushing.current;
+    flushing.current = (async () => {
+      const r = rec.current;
+      if (r) {
+        rec.current = null;
+        // Leave listening immediately so a second click cannot start another capture mid-flush.
+        setState('tidying');
+        const last = await r.stop();
+        if (last) send(last.wav);
+        else if (!pending.current) setState('idle');
+      }
+      // Wait for every queued segment to land (or fail) before callers snapshot the field.
+      await chain.current;
+    })().finally(() => {
+      flushing.current = null;
+    });
+    return flushing.current;
   }, [send]);
 
   const toggle = useCallback(() => {
